@@ -25,8 +25,8 @@ const SITE_URL = "https://nonnisplacement.example";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Nonni's Placement Services — Right Care. Right Placement. Right Time.",
-    template: "%s · Nonni's Placement Services",
+    default: "Nonnie's Placement Services — Right Care. Right Placement. Right Time.",
+    template: "%s · Nonnie's Placement Services",
   },
   description:
     "RN-led care placement for Washington State. Nonni's connects families, hospitals, discharge planners, and providers through human-reviewed, intelligent matching.",
