@@ -1,0 +1,11 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport:{width:1280,height:1000}, reducedMotion:"reduce" });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/families#find-a-bed",{waitUntil:"networkidle"});
+await p.waitForTimeout(1500);
+await p.evaluate(()=>document.getElementById("find-a-bed")?.scrollIntoView());
+await p.waitForTimeout(800);
+await p.screenshot({ path:"docs/audit-screenshots/final/form-fields.png" });
+console.log("form shot done");
+await b.close();

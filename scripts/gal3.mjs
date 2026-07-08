@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ args:["--use-gl=angle","--use-angle=swiftshader","--ignore-gpu-blocklist"] });
+const ctx = await b.newContext({ viewport:{width:1440,height:900} });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/",{waitUntil:"load"});
+await p.waitForTimeout(4500);
+const y = await p.evaluate(()=>document.getElementById("care-story").offsetTop);
+await p.evaluate((yy)=>{ if(window.lenis) window.lenis.scrollTo(yy-40,{immediate:true}); else window.scrollTo(0,yy-40); }, y);
+await p.waitForTimeout(2200);
+await p.screenshot({ path:"docs/audit-screenshots/final/home-gallery-4-card-carousel.png" });
+console.log("captured at y=", y);
+await b.close();
