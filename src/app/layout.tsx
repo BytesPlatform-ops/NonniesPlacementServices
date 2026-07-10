@@ -6,6 +6,7 @@ import { ScrollProgressBar } from "@/components/animation/ScrollProgressBar";
 import { Preloader } from "@/components/layout/Preloader";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { StickyRnCallBar } from "@/components/layout/StickyRnCallBar";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -78,6 +79,7 @@ export default function RootLayout({
           <Navbar />
           <main id="main">{children}</main>
           <Footer />
+          <StickyRnCallBar />
         </SmoothScrollProvider>
       </body>
     </html>
