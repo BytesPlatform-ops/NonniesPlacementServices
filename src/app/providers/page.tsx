@@ -18,9 +18,9 @@ import type { Slide } from "@/components/media/VIPVideoCarousel";
 import { PROVIDER_FAQS } from "@/data/faqs";
 
 const PROVIDER_SLIDES: Slide[] = [
-  { type: "video", src: "/assets/videos/provider-care-loop.mp4", poster: "/assets/images/provider-facility-care.jpg", caption: "Care your team delivers, seen", sub: "Show the daily life residents will join" },
-  { type: "image", src: "/assets/images/provider-facility-care.jpg", caption: "Fill rooms with the right fit", sub: "RN-reviewed, better-matched inquiries" },
-  { type: "image", src: "/assets/images/assisted-living-community.jpg", caption: "Community activity & engagement", sub: "Highlight what makes you different" },
+  { type: "video", src: "/assets/videos/provider-care-loop.mp4", poster: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg", caption: "Care your team delivers, seen", sub: "Show the daily life residents will join" },
+  { type: "image", src: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg", caption: "Fill rooms with the right fit", sub: "RN-reviewed, better-matched inquiries" },
+  { type: "image", src: "/assets/nonnis/specialty-care/behavioral-health-placement-support2.jpg", caption: "Behavioral & memory care, ready", sub: "Highlight what makes you different" },
   { type: "image", src: "/assets/images/caregiver-resident-room.jpg", caption: "Availability in one clear view", sub: "Beds, pricing, and funding, live" },
 ];
 import { Target, LineChart, Workflow, ShieldCheck, Users2, Clock } from "lucide-react";
@@ -58,7 +58,7 @@ export default function ProvidersPage() {
         media={
           <div className="relative">
             <div className="overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl">
-              <Image src="/assets/images/provider-facility-care.jpg" alt="A care community" width={720} height={520} className="aspect-[4/3] w-full object-cover" />
+              <Image src="/assets/nonnis/specialty-care/provider-memory-care-room.jpg" alt="Provider room prepared for memory care placement" width={720} height={520} className="aspect-[4/3] w-full object-cover" />
             </div>
             <div className="absolute -bottom-6 -left-4 hidden w-72 sm:block">
               <DischargePlannerView tone="dark" />

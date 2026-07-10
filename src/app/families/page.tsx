@@ -28,10 +28,10 @@ const HELP = [
 ];
 
 const FAMILY_SLIDES: Slide[] = [
-  { type: "image", src: "/assets/images/hero-family-goldenhour.jpg", caption: "Discussing care options, together", sub: "We meet you where you are" },
-  { type: "video", src: "/assets/videos/home-care-checkup.mp4", poster: "/assets/images/nurse-tablet-care-plan.jpg", caption: "An RN assessment that fits", sub: "Clinical clarity before the search" },
-  { type: "image", src: "/assets/images/elderly-hands-care.jpg", caption: "Dignity at every step", sub: "Warm, respectful, unhurried" },
-  { type: "image", src: "/assets/images/family-portrait.jpg", caption: "Settled, and well cared for", sub: "45-day RN follow-up after move-in" },
+  { type: "image", src: "/assets/nonnis/specialty-care/family-placement-consultation.jpg", caption: "Discussing care options, together", sub: "We meet you where you are" },
+  { type: "video", src: "/assets/videos/home-care-checkup.mp4", poster: "/assets/nonnis/specialty-care/rn-tablet-care-review.jpg", caption: "An RN care assessment that fits", sub: "Clarity before the search" },
+  { type: "image", src: "/assets/nonnis/specialty-care/caregiver-helping-senior.jpg", caption: "Dignity at every step", sub: "Warm, respectful, unhurried" },
+  { type: "image", src: "/assets/nonnis/specialty-care/senior-safe-environment.jpg", caption: "Settled, and well cared for", sub: "45-day RN follow-up after move-in" },
 ];
 
 export default function FamiliesPage() {
@@ -50,7 +50,7 @@ export default function FamiliesPage() {
         ]}
         media={
           <div className="relative">
-            <ParallaxMedia src="/assets/images/hero-family-goldenhour.jpg" alt="A daughter with her elderly mother" className="aspect-[4/5] w-full shadow-card" rounded="rounded-[2rem]" speed={8} />
+            <ParallaxMedia src="/assets/nonnis/specialty-care/dementia-care-family-guidance.jpg" alt="Family discussing dementia care placement options with support" className="aspect-[4/5] w-full shadow-card" rounded="rounded-[2rem]" speed={8} />
             <div className="absolute -bottom-5 -left-4 max-w-[15rem] rounded-2xl border border-navy/10 bg-white p-4 shadow-card">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal">Peace of mind</p>
               <p className="mt-1 text-sm font-medium text-navy">The right care. The right place. For families.</p>
@@ -79,7 +79,7 @@ export default function FamiliesPage() {
       {/* RN assessment explainer */}
       <Section tone="ice" density="normal">
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-          <ParallaxMedia src="/assets/images/nurse-tablet-care-plan.jpg" alt="A nurse assessing a resident's care needs" className="aspect-[4/3] w-full shadow-card" speed={10} />
+          <ParallaxMedia src="/assets/nonnis/specialty-care/rn-memory-care-assessment.jpg" alt="Registered Nurse reviewing memory care needs with an older adult" className="aspect-[4/3] w-full shadow-card" speed={10} />
           <div>
             <SectionHeading eyebrow="A nurse's perspective matters" title="Why the RN assessment changes everything" description="We don't simply find an available bed. A Registered Nurse reviews diagnoses, mobility, medications, behavioral concerns, and safety risks — so the match can actually succeed." />
             <Reveal className="mt-6 rounded-2xl border border-navy/10 bg-white p-5 shadow-soft">

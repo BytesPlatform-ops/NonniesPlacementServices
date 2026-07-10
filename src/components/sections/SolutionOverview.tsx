@@ -25,8 +25,8 @@ export function SolutionOverview() {
       <div className="mt-12 grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="relative">
           <ParallaxMedia
-            src="/assets/images/senior-family-consultation.jpg"
-            alt="A care advisor reviewing options with a family on a tablet"
+            src="/assets/nonnis/specialty-care/family-placement-consultation.jpg"
+            alt="A care advisor reviewing placement options with a family"
             className="aspect-[4/3] w-full shadow-card"
             speed={10}
           />
