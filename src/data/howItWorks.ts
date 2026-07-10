@@ -23,17 +23,17 @@ export const howItWorksSteps: HowItWorksStep[] = [
   },
   {
     step: "02",
-    title: "RN clinical assessment",
+    title: "RN care assessment",
     description:
-      "A Registered Nurse reviews diagnoses, functional ability, behavioral concerns, mobility, safety risks, and medications — building an accurate care picture that drives the plan.",
+      "A Registered Nurse reviews clinical diagnoses, memory care needs, tracking/wandering behaviors, mental health history, and specialized medication protocols to build an accurate care picture.",
     icon: Stethoscope,
     accent: "brown",
   },
   {
     step: "03",
-    title: "Intelligent matching",
+    title: "Matching Your Loved One's Unique Story",
     description:
-      "The platform identifies communities that meet the clinical, behavioral, financial, geographic, and cultural criteria — generating 5 options and ranking the top 3.",
+      "We find communities that can truly help — matched on cognitive and behavioral needs, funding, location, and real availability — then surface 5 options and rank the strongest 3.",
     icon: Sparkles,
     accent: "gold",
   },

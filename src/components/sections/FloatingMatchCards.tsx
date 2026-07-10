@@ -20,7 +20,7 @@ type FloatCard = {
 };
 
 const CARDS: FloatCard[] = [
-  { title: "Clinical fit", detail: "Memory care · mobility · medication profile", icon: Activity, at: { x: 17, y: 22 }, from: { x: -120, y: 0 }, pos: "left-[2%] top-[8%]" },
+  { title: "A safer, more supportive fit", detail: "Memory care · behavioral support · medication protocol", icon: Activity, at: { x: 17, y: 22 }, from: { x: -120, y: 0 }, pos: "left-[2%] top-[8%]" },
   { title: "Funding fit", detail: "Medicaid + private contribution", icon: CircleDollarSign, at: { x: 83, y: 20 }, from: { x: 120, y: 0 }, pos: "right-[2%] top-[6%]" },
   { title: "Urgency window", detail: "Hospital discharge · 3 days", icon: Clock, at: { x: 85, y: 68 }, from: { x: 100, y: -90 }, pos: "right-[3%] bottom-[16%]" },
   { title: "Location radius", detail: "Tacoma, WA · 15 miles", icon: MapPin, at: { x: 15, y: 72 }, from: { x: 0, y: 120 }, pos: "left-[3%] bottom-[14%]" },

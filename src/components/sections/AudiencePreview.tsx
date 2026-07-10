@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ParallaxMedia } from "@/components/animation/ParallaxMedia";
 import { ProviderPortalPreview } from "@/components/product/ProviderPortalPreview";
+import { SpecialtyTag } from "@/components/ui/SpecialtyTag";
 import { cn } from "@/lib/utils";
 
 function Row({
@@ -13,6 +14,7 @@ function Row({
   badgeTone,
   title,
   points,
+  tags,
   cta,
   secondary,
   variant,
@@ -23,6 +25,7 @@ function Row({
   badgeTone: "teal" | "navy";
   title: string;
   points: string[];
+  tags?: string[];
   cta: { label: string; href: string };
   secondary: { label: string; href: string };
   variant: "primary" | "secondary";
@@ -41,6 +44,13 @@ function Row({
             </li>
           ))}
         </ul>
+        {tags && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <SpecialtyTag key={t} label={t} variant="gold" />
+            ))}
+          </div>
+        )}
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <Button href={cta.href} variant={variant}>
             {cta.label} <ArrowRight className="h-4 w-4" aria-hidden />
@@ -62,9 +72,10 @@ export function AudiencePreview() {
           badgeTone="teal"
           title="Find the right care for someone you love"
           points={[
-            "RN clinical assessment to clarify the real level of care",
-            "Options matched by location, funding, care level, and bed type",
-            "Guided tours, medication reconciliation, and follow-up — at $0 cost to families",
+            "RN review for medications, wandering, safety, and memory needs",
+            "Dementia and Alzheimer's placement guidance",
+            "Mental & behavioral health placement support",
+            "Guided tours and follow-up — at $0 cost to families",
           ]}
           cta={{ label: "Find Care", href: "/families#find-a-bed" }}
           secondary={{ label: "For Families", href: "/families" }}
@@ -90,6 +101,7 @@ export function AudiencePreview() {
             "RN-reviewed, better-fit inquiries — fewer wasted tours",
             "Digitized intake, license verification, and an inquiry queue",
           ]}
+          tags={["Behavioral Health", "Alzheimer's Care", "Psychiatric Support", "Dementia", "Memory Care", "Medication Support"]}
           cta={{ label: "List Your Beds", href: "/providers#list-your-beds" }}
           secondary={{ label: "For Providers", href: "/providers" }}
           variant="secondary"

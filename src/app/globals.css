@@ -272,6 +272,13 @@ h1, h2, h3, h4 {
   will-change: transform, opacity;
 }
 
+/* Specialty / capability chip hover glow (SpecialtyTag) */
+.specialty-tag:hover {
+  transform: translateY(-1px);
+  border-color: #d18f47;
+  box-shadow: 0 8px 24px rgba(209, 143, 71, 0.18);
+}
+
 /* ==========================================================================
    Reduced motion — mandatory (§21)
    ========================================================================== */

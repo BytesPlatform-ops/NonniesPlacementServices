@@ -10,7 +10,7 @@ const STAGES = [
   { icon: ClipboardList, label: "Family intake", state: "done" },
   { icon: Stethoscope, label: "RN assessment", state: "done" },
   { icon: ScanSearch, label: "Care needs parsed", state: "done" },
-  { icon: Network, label: "Provider matching", state: "active" },
+  { icon: Network, label: "Finding the fit", state: "active" },
   { icon: CalendarCheck, label: "Tour coordination", state: "pending" },
   { icon: HomeIcon, label: "Move-in support", state: "pending" },
 ] as const;

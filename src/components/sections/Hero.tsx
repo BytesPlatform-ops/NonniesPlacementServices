@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { ShieldCheck, HeartPulse, Users, Star, Stethoscope, ArrowDown } from "lucide-react";
+import { ShieldCheck, HeartPulse, Users, Star, Stethoscope, ArrowDown, Brain } from "lucide-react";
 import { gsap } from "@/lib/gsap";
 import { useGSAP } from "@gsap/react";
 import { onReady } from "@/lib/ready";
@@ -20,8 +20,9 @@ const LINES: { word: string; accent?: boolean }[][] = [
 ];
 
 const TRUST = [
-  { icon: HeartPulse, label: "RN-reviewed on every referral" },
-  { icon: ShieldCheck, label: "Behavioral & medical expertise" },
+  { icon: HeartPulse, label: "RN-reviewed specialty matching" },
+  { icon: Brain, label: "Mental & Behavioral Health" },
+  { icon: ShieldCheck, label: "Dementia & Alzheimer's" },
   { icon: Users, label: "Families, hospitals & providers" },
 ];
 

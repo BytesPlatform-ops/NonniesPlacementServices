@@ -29,7 +29,9 @@ const INTRO = [
   "Await outreach",
 ];
 const SILVER_ADD = [
-  "RN clinical assessment",
+  "RN care assessment",
+  "Specialty care matching — dementia, Alzheimer's & behavioral health",
+  "Mental & behavioral health review",
   "Digitized workflows — synced calendars & bookings",
   "Analytics — ETAs, fill rates & more",
   "Up to 3 AI-based matches",
@@ -38,7 +40,7 @@ const SILVER_ADD = [
 const GOLD_ADD = [
   "Unlimited search & AI matching until placement",
   "Accompanied facility tours",
-  "Medication reconciliation",
+  "Medication reconciliation & protocol review",
   "Move-in coordination",
   "30-day follow-up",
 ];

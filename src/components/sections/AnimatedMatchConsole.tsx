@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion, type Variants } from "motion/react";
 import { Check, Loader2, Activity, MapPin, CircleDollarSign, Clock, Stethoscope, Star, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { matchProfile, matchResults, progressSteps } from "@/data/matchConsole";
+import { matchProfile, matchResults, matchSpecialtyNeeds, progressSteps } from "@/data/matchConsole";
+import { SpecialtyTag } from "@/components/ui/SpecialtyTag";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -108,9 +109,9 @@ export function AnimatedMatchConsole() {
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-            {/* Patient profile */}
+            {/* Care profile */}
             <motion.div variants={container} initial={reduce ? "show" : "hidden"} whileInView="show" viewport={{ once: true, margin: "-100px" }} className="min-w-0 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-              <motion.p variants={rise} className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Patient profile</motion.p>
+              <motion.p variants={rise} className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Care profile</motion.p>
               <motion.p variants={rise} className="mt-1 font-display text-lg text-white">{matchProfile.caseId}</motion.p>
               <div className="mt-4 space-y-3">
                 {profileRows.map((r) => {
@@ -125,6 +126,15 @@ export function AnimatedMatchConsole() {
                   );
                 })}
               </div>
+              {/* Specialty needs — visible specialty positioning */}
+              <motion.div variants={rise} className="mt-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Specialty needs</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {matchSpecialtyNeeds.map((s) => (
+                    <SpecialtyTag key={s} label={s} variant="dark" className="px-2.5 py-1 text-[11px]" />
+                  ))}
+                </div>
+              </motion.div>
               <motion.div variants={rise} className="mt-4 flex items-start gap-2 rounded-xl border border-mint/20 bg-mint/8 px-3 py-2.5">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mint" aria-hidden />
                 <span className="text-[11px] leading-snug text-mint/90">{matchProfile.note}</span>
@@ -165,6 +175,12 @@ export function AnimatedMatchConsole() {
                         </div>
                         <p className="truncate text-[11px] text-white/45">{m.detail}</p>
                       </div>
+                    </div>
+                    {/* Specialty fit reasons */}
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {m.reasons.map((r) => (
+                        <SpecialtyTag key={r} label={r} variant="dark" className="px-2 py-0.5 text-[10px]" />
+                      ))}
                     </div>
                     <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/8">
                       <motion.div

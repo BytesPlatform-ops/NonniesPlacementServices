@@ -7,12 +7,12 @@ import { onInView } from "@/lib/inView";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
-  "Care level reviewed — heavy / memory",
-  "Medication needs checked & reconciled",
+  "Memory care needs reviewed",
+  "Wandering / tracking behaviors noted",
+  "Mental health history reviewed",
+  "Medication protocols checked",
   "Funding verified — Medicaid + private",
-  "Behavioral & safety risks assessed",
-  "Family preferences captured",
-  "Provider fit confirmed",
+  "Specialty provider fit confirmed",
 ];
 
 /** RN Review Checklist — items tick on with animated checkmarks. */

@@ -5,12 +5,13 @@ import { BedDouble, MapPin, ShieldCheck, Star, Filter } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { onInView } from "@/lib/inView";
 import { cn } from "@/lib/utils";
+import { SpecialtyTag } from "@/components/ui/SpecialtyTag";
 
 const FACILITIES = [
-  { name: "Cedar Grove AFH", type: "Adult Family Home", beds: 2, price: "$$", funding: "Private · Medicaid", dist: "6 mi", score: 92, tone: "from-teal/25 to-blue/20" },
-  { name: "Willow Bend Memory Care", type: "Memory Care", beds: 1, price: "$$$", funding: "Private", dist: "8 mi", score: 88, tone: "from-blue/25 to-navy/20" },
-  { name: "Harborlight Assisted Living", type: "Assisted Living", beds: 4, price: "$$$", funding: "Private · VA", dist: "9 mi", score: 84, tone: "from-coral/20 to-teal/20" },
-  { name: "Rainier Skilled Nursing", type: "Skilled Nursing", beds: 3, price: "$$$$", funding: "Medicare · Medicaid", dist: "12 mi", score: 80, tone: "from-navy/25 to-blue/15" },
+  { name: "Cedar Grove AFH", type: "Adult Family Home", beds: 2, price: "$$", funding: "Private · Medicaid", dist: "6 mi", score: 92, tone: "from-teal/25 to-blue/20", specialties: ["Behavioral Health", "Alzheimer's Care", "Psychiatric Support"] },
+  { name: "Willow Bend Memory Care", type: "Memory Care", beds: 1, price: "$$$", funding: "Private", dist: "8 mi", score: 88, tone: "from-blue/25 to-navy/20", specialties: ["Alzheimer's Care", "Dementia"] },
+  { name: "Harborlight Assisted Living", type: "Assisted Living", beds: 4, price: "$$$", funding: "Private · VA", dist: "9 mi", score: 84, tone: "from-coral/20 to-teal/20", specialties: ["Dementia", "Medication support"] },
+  { name: "Rainier Skilled Nursing", type: "Skilled Nursing", beds: 3, price: "$$$$", funding: "Medicare · Medicaid", dist: "12 mi", score: 80, tone: "from-navy/25 to-blue/15", specialties: ["Psychiatric Support", "Medication protocols"] },
 ];
 
 const FILTERS = ["Specialty", "Funding", "Price", "Distance", "Beds"];
@@ -96,6 +97,11 @@ export function ProviderAvailabilityBoard({
                 <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden /> {f.dist}</span>
                 <span className="font-semibold">{f.price}</span>
                 <span className="inline-flex items-center gap-1"><Star className="h-3 w-3 fill-current" aria-hidden /> {f.funding}</span>
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {f.specialties.map((s) => (
+                  <SpecialtyTag key={s} label={s} variant={dark ? "dark" : "default"} className="px-2 py-0.5 text-[0.62rem]" />
+                ))}
               </div>
             </div>
           </div>

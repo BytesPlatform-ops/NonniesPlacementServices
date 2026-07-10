@@ -14,11 +14,14 @@ import {
 import { gsap, useGSAP } from "@/lib/gsap";
 import { onInView } from "@/lib/inView";
 import { cn } from "@/lib/utils";
+import { SpecialtyTag } from "@/components/ui/SpecialtyTag";
+
+const SPECIALTY_NEEDS = ["Alzheimer's support", "Behavioral Health", "Wandering risk", "Medication protocol"];
 
 const MATCHES = [
-  { name: "Cedar Grove Adult Family Home", meta: "Memory care · Private · 6 mi", score: 92, tag: "Best fit" },
-  { name: "Harborlight Assisted Living", meta: "Assisted living · Medicaid · 9 mi", score: 87 },
-  { name: "Rainier Skilled Nursing", meta: "Skilled nursing · Medicare · 12 mi", score: 81 },
+  { name: "Cedar Grove Adult Family Home", meta: "Memory care · Private · 6 mi", score: 92, tag: "Best fit", reasons: ["Alzheimer's Care", "Behavioral Health", "Psychiatric Support"] },
+  { name: "Harborlight Assisted Living", meta: "Assisted living · Medicaid · 9 mi", score: 87, reasons: ["Dementia", "Medication support"] },
+  { name: "Rainier Skilled Nursing", meta: "Skilled nursing · Medicare · 12 mi", score: 81, reasons: ["Psychiatric Support", "Specialized medication protocols"] },
 ];
 
 /**
@@ -72,9 +75,9 @@ export function AIMatchDashboard({ className }: { className?: string }) {
       </div>
 
       <div className="grid gap-5 p-5 sm:grid-cols-[0.95fr_1.05fr]">
-        {/* Patient profile */}
+        {/* Care profile */}
         <div data-row className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-white/40">Patient profile</p>
+          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-white/40">Care profile</p>
           <p className="mt-1 font-display text-lg text-white">Case #WA-2048</p>
           <dl className="mt-4 space-y-2.5 text-sm">
             {[
@@ -91,6 +94,15 @@ export function AIMatchDashboard({ className }: { className?: string }) {
               </div>
             ))}
           </dl>
+          {/* Specialty needs */}
+          <div className="mt-4">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/40">Specialty needs</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {SPECIALTY_NEEDS.map((s) => (
+                <SpecialtyTag key={s} label={s} variant="dark" className="px-2.5 py-1 text-[11px]" />
+              ))}
+            </div>
+          </div>
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-mint/25 bg-mint/10 px-3 py-2">
             <ShieldCheck className="h-4 w-4 text-mint" aria-hidden />
             <span className="text-xs font-medium text-mint">RN review complete — cleared to connect</span>
@@ -124,6 +136,11 @@ export function AIMatchDashboard({ className }: { className?: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-white">{m.name}</p>
                   <p className="truncate text-xs text-white/50">{m.meta}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {m.reasons.map((r) => (
+                      <SpecialtyTag key={r} label={r} variant="dark" className="px-2 py-0.5 text-[10px]" />
+                    ))}
+                  </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <div data-bar={String(m.score)} className="h-full rounded-full bg-gradient-to-r from-blue to-mint" />
                   </div>

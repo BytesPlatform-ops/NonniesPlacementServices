@@ -73,7 +73,7 @@ export function BedMarketplaceStrip() {
 
       <Container>
         <div className="mt-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <p className="text-xs text-slate-ink/60">Demo listings — availability, pricing, and scores shown are illustrative.</p>
+          <p className="text-xs text-slate-ink/60">Specialty-aware availability across Washington — dementia, Alzheimer&apos;s &amp; behavioral health beds, RN-reviewed.</p>
           <Button href="/families#find-a-bed" variant="ghost">
             Browse the full marketplace <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
