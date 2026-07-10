@@ -1,10 +1,11 @@
 export type NavLink = { label: string; href: string };
 
+// The /pricing route is intentionally omitted from public navigation — the page
+// component is retained in the codebase for future use but is not linked here.
 export const NAV_LINKS: NavLink[] = [
   { label: "How it works", href: "/#how-it-works" },
   { label: "For Families", href: "/families" },
   { label: "For Providers", href: "/providers" },
-  { label: "Pricing", href: "/pricing" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -22,7 +23,7 @@ export const FOOTER_SECTIONS = [
       { label: "How it works", href: "/#how-it-works" },
       { label: "AI-assisted matching", href: "/#ai-matching" },
       { label: "Browse communities", href: "/#browse" },
-      { label: "Pricing", href: "/pricing" },
+      { label: "Find Care", href: "/families#find-a-bed" },
     ],
   },
   {
@@ -30,7 +31,7 @@ export const FOOTER_SECTIONS = [
     links: [
       { label: "For Families", href: "/families" },
       { label: "For Providers", href: "/providers" },
-      { label: "For Hospitals", href: "/pricing#hospitals" },
+      { label: "For Hospitals", href: "/providers#discharge" },
       { label: "Discharge planners", href: "/providers#discharge" },
     ],
   },

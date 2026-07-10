@@ -54,7 +54,7 @@ export default function ProvidersPage() {
         title="Fill vacancies with residents who truly fit"
         description="List your Adult Family Home, Assisted Living, Memory Care, Behavioral Health, Hospice, or Skilled Nursing community. Nonni's connects you with seekers whose needs match what you do best — RN-reviewed before they reach you."
         primary={{ label: "List Your Beds", href: "#list-your-beds" }}
-        secondary={{ label: "See pricing", href: "/pricing#communities" }}
+        secondary={{ label: "How it works", href: "/#how-it-works" }}
         media={
           <div className="relative">
             <div className="overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl">
