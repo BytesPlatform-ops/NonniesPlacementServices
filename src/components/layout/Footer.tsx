@@ -78,12 +78,12 @@ export function Footer() {
 
         <div className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-center text-xs leading-relaxed text-white/45">
           <p>© {new Date().getFullYear()} Nonni&apos;s Placement Services. All rights reserved.</p>
-          <p className="max-w-2xl text-white/40">
+          <p className="max-w-none text-white/40 lg:whitespace-nowrap">
             Nonni&apos;s provides RN-led placement guidance and intelligent
             matching support — not medical diagnosis, treatment, or guaranteed outcomes.
           </p>
           {/* Washington State elder & vulnerable adult referral compliance disclosure */}
-          <p className="max-w-2xl text-white/40">
+          <p className="max-w-none text-white/40 lg:whitespace-nowrap">
             Nonni&apos;s Placement Services operates in compliance with Chapter 18.330 RCW
             regarding elder and vulnerable adult referral services.
           </p>
