@@ -78,7 +78,7 @@ export function ContactForm() {
         />
         <Checkbox
           className="sm:col-span-2"
-          label="I consent to being contacted about my inquiry and understand this is a demonstration form."
+          label="I consent to being contacted about my inquiry."
           required
           error={errors.consent?.message}
           {...register("consent")}

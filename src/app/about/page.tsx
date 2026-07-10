@@ -108,7 +108,6 @@ export default function AboutPage() {
             <Reveal stagger={0.1} className="mt-8 grid grid-cols-2 gap-4">
               {TRUST_STATS.map((s) => <StatCard key={s.label} {...s} tone="dark" />)}
             </Reveal>
-            <p className="mt-6 text-sm text-white/50">Figures shown are illustrative for this demonstration frontend.</p>
           </div>
           <Reveal className="rounded-[2rem] border border-white/10 bg-midnight-800/60 p-6 backdrop-blur-sm">
             <div className="aspect-[100/62] w-full">

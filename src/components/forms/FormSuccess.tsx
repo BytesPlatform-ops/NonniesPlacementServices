@@ -18,9 +18,6 @@ export function FormSuccess({
       </span>
       <h3 className="mt-5 font-display text-2xl font-medium text-navy">{title}</h3>
       <p className="mt-2 max-w-md text-slate-ink">{message}</p>
-      <p className="mt-4 rounded-xl bg-ice px-4 py-2 text-xs font-medium text-slate-ink">
-        This is a demonstration frontend — no information was sent or stored.
-      </p>
       <Button onClick={onReset} variant="ghost" className="mt-6">
         Submit another response
       </Button>

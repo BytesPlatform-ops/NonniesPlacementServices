@@ -57,6 +57,6 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "Can I change tiers later?",
-    a: "This is a demonstration frontend, so billing isn't wired up — but the model is designed so families and providers can start small and move up only as their needs grow.",
+    a: "Yes. The model is designed so families and providers can start small and move up only as their needs grow — just reach out and we'll adjust your plan.",
   },
 ];

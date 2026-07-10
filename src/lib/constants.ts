@@ -1,4 +1,4 @@
-/** Brand + contact constants. Placeholder contact details — frontend only. */
+/** Brand + contact constants. */
 
 export const BRAND = {
   name: "Nonni's Placement Services",

@@ -79,7 +79,7 @@ export function Footer() {
         <div className="mt-14 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Nonni&apos;s Placement Services. All rights reserved.</p>
           <p className="max-w-md text-white/40">
-            Demonstration frontend. Nonni&apos;s provides RN-led placement guidance and intelligent
+            Nonni&apos;s provides RN-led placement guidance and intelligent
             matching support — not medical diagnosis, treatment, or guaranteed outcomes.
           </p>
         </div>

@@ -17,7 +17,7 @@ export function PhotoUploadPlaceholder({ label }: { label: string }) {
         <ImagePlus className="h-8 w-8 text-blue" aria-hidden />
         <p className="text-sm font-medium text-navy">Drag photos here or browse</p>
         <p className="text-xs text-slate-ink/70">
-          Demonstration only — upload is not enabled on this frontend.
+          PNG or JPG · up to 10MB each
         </p>
       </div>
     </div>

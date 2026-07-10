@@ -155,7 +155,7 @@ export function ListBedsForm() {
               />
               <Checkbox
                 className="sm:col-span-2"
-                label="I confirm I'm authorized to list this community and understand this is a demonstration form."
+                label="I confirm I'm authorized to list this community."
                 required
                 error={errors.consent?.message}
                 {...register("consent")}
