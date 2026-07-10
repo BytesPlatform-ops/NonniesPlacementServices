@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FormSuccess } from "./FormSuccess";
+import { DataSecurityNotice } from "./DataSecurityNotice";
 
 const INQUIRY_TYPES = [
   { value: "family", label: "I'm a family / care seeker" },
@@ -86,6 +87,8 @@ export function ContactForm() {
       <Button type="submit" variant="primary" size="lg" className="mt-8 w-full sm:w-auto" disabled={isSubmitting}>
         {isSubmitting ? "Sending…" : "Send message"} <Send className="h-4 w-4" aria-hidden />
       </Button>
+
+      <DataSecurityNotice className="mt-6 border-t border-navy/10 pt-5" />
     </form>
   );
 }

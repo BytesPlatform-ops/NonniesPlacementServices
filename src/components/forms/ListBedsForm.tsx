@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
 import { PhotoUploadPlaceholder } from "./PhotoUploadPlaceholder";
+import { DataSecurityNotice } from "./DataSecurityNotice";
 import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES } from "@/data/careTypes";
 
 const schema = z.object({
@@ -181,6 +182,8 @@ export function ListBedsForm() {
             </Button>
           )}
         </div>
+
+        <DataSecurityNotice className="mt-6 border-t border-navy/10 pt-5" />
         </form>
       </div>
     </div>

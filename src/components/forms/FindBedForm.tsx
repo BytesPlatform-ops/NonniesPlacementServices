@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
+import { DataSecurityNotice } from "./DataSecurityNotice";
 import {
   FACILITY_TYPES,
   CARE_LEVELS,
@@ -181,6 +182,8 @@ export function FindBedForm() {
             </Button>
           )}
         </div>
+
+        <DataSecurityNotice className="mt-6 border-t border-navy/10 pt-5" />
         </form>
       </div>
     </div>
