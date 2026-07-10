@@ -78,6 +78,14 @@ export function Footer() {
           </p>
         </div>
 
+        {/* Washington State elder & vulnerable adult referral compliance disclosure */}
+        <div className="mt-6 border-t border-white/10 pt-6 text-xs leading-relaxed text-white/40">
+          <p className="max-w-3xl">
+            Nonni&apos;s Placement Services operates in compliance with Chapter 18.330 RCW
+            regarding elder and vulnerable adult referral services.
+          </p>
+        </div>
+
         <div className="mt-6 border-t border-white/10 pt-6 text-center">
           <p className="inline-flex items-center justify-center gap-1.5 text-xs text-white/50">
             Made with <Heart className="h-3.5 w-3.5 fill-mint text-mint" aria-hidden /> by{" "}
