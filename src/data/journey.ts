@@ -16,8 +16,8 @@ export const journeyFrames: JourneyFrame[] = [
     title: "It starts with uncertainty",
     text: "A hospital call. A diagnosis. A family unsure where to turn.",
     microcopy: "You don't have to navigate the search — or the fear — alone.",
-    image: "/assets/images/elderly-hands-care.jpg",
-    alt: "A family member holding an older person's hand",
+    image: "/assets/nonnis/specialty-care/family-placement-consultation.jpg",
+    alt: "Family discussing care placement options together",
   },
   {
     id: "assessment",
@@ -25,8 +25,8 @@ export const journeyFrames: JourneyFrame[] = [
     title: "A nurse brings clarity",
     text: "A Registered Nurse listens, then translates the situation into a clear care plan.",
     microcopy: "Memory, behavioral, mobility, wandering, and medication needs — all reviewed.",
-    image: "/assets/images/nurse-tablet-care-plan.jpg",
-    alt: "A nurse assessing a resident's care needs",
+    image: "/assets/nonnis/specialty-care/rn-tablet-care-review.jpg",
+    alt: "Registered Nurse reviewing care needs on a tablet",
   },
   {
     id: "match",
@@ -34,8 +34,8 @@ export const journeyFrames: JourneyFrame[] = [
     title: "The right community, found",
     text: "We surface real openings matched to memory and behavioral needs — an RN clears the best fits.",
     microcopy: "Care level, funding, location, and a bed that's actually available.",
-    image: "/assets/images/assisted-living-community.jpg",
-    alt: "A warm care community room",
+    image: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg",
+    alt: "Provider room prepared for memory care placement",
   },
   {
     id: "comfort",
@@ -43,7 +43,7 @@ export const journeyFrames: JourneyFrame[] = [
     title: "Home, and cared for",
     text: "A calmer daily rhythm — with follow-up long after move-in.",
     microcopy: "Up to 45 days of RN case management once they're settled.",
-    image: "/assets/images/hero-family-goldenhour.jpg",
-    alt: "An older person settled and cared for, with family",
+    image: "/assets/nonnis/specialty-care/senior-safe-environment.jpg",
+    alt: "An older adult settled safely in a warm care environment",
   },
 ];

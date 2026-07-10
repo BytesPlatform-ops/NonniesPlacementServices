@@ -26,7 +26,7 @@ export const LISTINGS: Listing[] = [
     matchScore: 94,
     rnReviewed: true,
     price: "$$",
-    image: "/assets/images/caregiver-resident-room.jpg",
+    image: "/assets/nonnis/specialty-care/behavioral-health-placement-support.jpg",
   },
   {
     id: "cedar-view",
@@ -39,7 +39,7 @@ export const LISTINGS: Listing[] = [
     matchScore: 91,
     rnReviewed: true,
     price: "$$$",
-    image: "/assets/images/care-lifestyle-1.jpg",
+    image: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg",
   },
   {
     id: "lakewood-al",
@@ -78,7 +78,7 @@ export const LISTINGS: Listing[] = [
     matchScore: 89,
     rnReviewed: true,
     price: "$$$$",
-    image: "/assets/images/provider-staff.jpg",
+    image: "/assets/nonnis/specialty-care/medication-protocol-review.jpg",
   },
   {
     id: "harborlight-al",
