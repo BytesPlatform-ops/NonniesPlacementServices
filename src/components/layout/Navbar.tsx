@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, Hospital } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA } from "@/data/navigation";
+import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA, REFERRAL_CTA } from "@/data/navigation";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
 import { MagneticButton } from "@/components/animation/MagneticButton";
@@ -48,7 +48,7 @@ export function Navbar() {
           >
             <Logo tone={overDarkHero ? "dark" : "light"} size={scrolled ? 38 : 44} className="shrink-0 transition-all" />
 
-            <ul className="hidden items-center gap-1 lg:flex">
+            <ul className="hidden items-center gap-1 xl:flex">
               {NAV_LINKS.map((link) => {
                 const active = pathname === link.href;
                 return (
@@ -66,9 +66,23 @@ export function Navbar() {
                   </li>
                 );
               })}
+              {/* Dedicated professional tab — routes straight to the secure portal. */}
+              <li>
+                <Link
+                  href={REFERRAL_CTA.href}
+                  aria-current={pathname === REFERRAL_CTA.href ? "page" : undefined}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold text-teal ring-1 ring-teal/30 transition-all duration-200 hover:bg-teal/10 hover:ring-teal/50",
+                    pathname === REFERRAL_CTA.href && "bg-teal/10 ring-teal/60",
+                  )}
+                >
+                  <Hospital className="h-4 w-4" aria-hidden />
+                  {REFERRAL_CTA.label}
+                </Link>
+              </li>
             </ul>
 
-            <div className="hidden items-center gap-2 lg:flex">
+            <div className="hidden items-center gap-2 xl:flex">
               <Button href={SECONDARY_CTA.href} variant="ghost" size="sm">
                 {SECONDARY_CTA.label}
               </Button>
@@ -84,7 +98,7 @@ export function Navbar() {
               onClick={() => setMenuOpen(true)}
               aria-label="Open menu"
               aria-expanded={menuOpen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-navy transition-colors hover:bg-ice lg:hidden"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-navy transition-colors hover:bg-ice xl:hidden"
             >
               <Menu className="h-6 w-6" />
             </button>

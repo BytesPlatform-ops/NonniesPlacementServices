@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, Hospital } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA } from "@/data/navigation";
+import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA, REFERRAL_CTA } from "@/data/navigation";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
 
@@ -45,7 +45,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[70] overflow-hidden lg:hidden",
+        "fixed inset-0 z-[70] overflow-hidden xl:hidden",
         open ? "pointer-events-auto" : "pointer-events-none",
       )}
       aria-hidden={!open}
@@ -103,6 +103,17 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
                 </Link>
               </li>
             ))}
+            {/* Dedicated professional funnel — highlighted for discharge planners. */}
+            <li className="mt-2 border-t border-navy/10 pt-3">
+              <Link
+                href={REFERRAL_CTA.href}
+                onClick={onClose}
+                className="flex items-center gap-2.5 rounded-xl bg-teal/10 px-4 py-3.5 text-lg font-semibold text-teal ring-1 ring-teal/25 transition-colors hover:bg-teal/15"
+              >
+                <Hospital className="h-5 w-5 shrink-0" aria-hidden />
+                {REFERRAL_CTA.label}
+              </Link>
+            </li>
           </ul>
         </nav>
 
