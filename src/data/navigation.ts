@@ -12,6 +12,9 @@ export const NAV_LINKS: NavLink[] = [
 export const PRIMARY_CTA = { label: "Find Care", href: "/families#find-a-bed" };
 export const SECONDARY_CTA = { label: "List Your Beds", href: "/providers#list-your-beds" };
 
+// Click-to-call RN CTA — `tel:` href launches the native dialer on mobile.
+export const RN_PHONE = { label: "Talk to an RN Now", tel: "2065318890", href: "tel:2065318890" };
+
 export const FOOTER_SECTIONS = [
   {
     title: "Platform",

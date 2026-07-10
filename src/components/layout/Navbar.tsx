@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA } from "@/data/navigation";
+import { NAV_LINKS, PRIMARY_CTA, SECONDARY_CTA, RN_PHONE } from "@/data/navigation";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
 import { MagneticButton } from "@/components/animation/MagneticButton";
@@ -69,25 +69,48 @@ export function Navbar() {
             </ul>
 
             <div className="hidden items-center gap-2 lg:flex">
-              <Button href={SECONDARY_CTA.href} variant="ghost" size="sm">
+              <Button href={SECONDARY_CTA.href} variant="ghost" size="sm" className="hidden xl:inline-flex">
                 {SECONDARY_CTA.label}
               </Button>
+              <Button href={PRIMARY_CTA.href} variant="primary" size="sm">
+                {PRIMARY_CTA.label}
+              </Button>
+              {/* High-visibility click-to-call RN CTA — native dialer on mobile/tablet. */}
               <MagneticButton>
-                <Button href={PRIMARY_CTA.href} variant="primary" size="sm">
-                  {PRIMARY_CTA.label}
-                </Button>
+                <a
+                  href={RN_PHONE.href}
+                  className="group inline-flex items-center gap-2 rounded-full bg-navy px-4 py-2 text-sm font-semibold tracking-tight text-white shadow-soft transition-[transform,background-color,box-shadow] duration-200 ease-out hover:bg-navy-700 hover:shadow-card active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-navy"
+                >
+                  <span className="relative flex h-2.5 w-2.5" aria-hidden>
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-mint" />
+                  </span>
+                  <Phone className="h-4 w-4" aria-hidden />
+                  {RN_PHONE.label}
+                </a>
               </MagneticButton>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              aria-expanded={menuOpen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-navy transition-colors hover:bg-ice lg:hidden"
-            >
-              <Menu className="h-6 w-6" />
-            </button>
+            {/* Mobile: compact click-to-call in the fixed header (sticks to top) + menu. */}
+            <div className="flex items-center gap-1.5 lg:hidden">
+              <a
+                href={RN_PHONE.href}
+                aria-label={RN_PHONE.label}
+                className="inline-flex h-11 items-center gap-1.5 rounded-full bg-navy px-3.5 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-navy-700 active:scale-[0.98]"
+              >
+                <Phone className="h-4 w-4" aria-hidden />
+                RN
+              </a>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                aria-label="Open menu"
+                aria-expanded={menuOpen}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-navy transition-colors hover:bg-ice"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            </div>
           </nav>
         </div>
       </header>
