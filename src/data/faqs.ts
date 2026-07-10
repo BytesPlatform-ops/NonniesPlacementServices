@@ -3,7 +3,7 @@ export type Faq = { q: string; a: string };
 export const FAMILY_FAQS: Faq[] = [
   {
     q: "How much does it cost families to get started?",
-    a: "Starting is free. Our Intro tier gives you a profile, a directory search, and outreach at no cost. Paid tiers add RN-led assessment and hands-on coordination — you only engage one if and when you want that support.",
+    a: "It's free. Our core matching and placement service is $0 cost to families — you get a profile, a directory search, RN-reviewed matches, and outreach at no cost to you.",
   },
   {
     q: "Is a real nurse actually involved?",
@@ -30,7 +30,7 @@ export const PROVIDER_FAQS: Faq[] = [
   },
   {
     q: "What does it cost to list?",
-    a: "Listing starts free. Paid tiers add analytics, priority visibility, and coordination support, billed monthly per community. See the pricing page for details.",
+    a: "Listing starts free. Reach out and we'll walk you through added analytics, priority visibility, and coordination support for your communities.",
   },
   {
     q: "Who sees my pricing and availability?",
@@ -38,25 +38,25 @@ export const PROVIDER_FAQS: Faq[] = [
   },
   {
     q: "Do I have to manage everything manually?",
-    a: "No. Digitized intake and coordination tools reduce the back-and-forth, and higher tiers include hands-on transition and move-in coordination.",
+    a: "No. Digitized intake and coordination tools reduce the back-and-forth, and we also offer hands-on transition and move-in coordination.",
   },
 ];
 
 export const PRICING_FAQS: Faq[] = [
   {
-    q: "Why are there three different pricing structures?",
-    a: "Families, hospitals, and communities use the platform differently. Families pay a one-time service fee only when they engage a plan; hospitals and communities subscribe monthly, scaled to how many facilities or communities they serve.",
+    q: "How much does placement cost families?",
+    a: "Our core matching and placement service is $0 cost to families. You can search the directory, receive RN-reviewed matches, and connect with verified providers at no cost to you.",
   },
   {
     q: "What's included for free?",
-    a: "Every audience has an Intro tier at $0: a profile, a directory listing, and the ability to connect. You only move up a tier when you want RN assessment, coordination, or added visibility.",
+    a: "Everything families need to find care: a profile, a full directory search, RN-reviewed matching, and the ability to connect with providers.",
   },
   {
-    q: "Do the tiers stack?",
-    a: "Yes. Each tier includes everything in the tiers below it, then adds more — from RN assessment at Silver up to full RN case management at Platinum.",
+    q: "Is a real nurse involved at no cost?",
+    a: "Yes. Nonni's is RN-led. A registered nurse reviews the care picture and the matched options before they reach you — part of our free service to families.",
   },
   {
-    q: "Can I change tiers later?",
-    a: "Yes. The model is designed so families and providers can start small and move up only as their needs grow — just reach out and we'll adjust your plan.",
+    q: "How do providers and communities work with Nonni's?",
+    a: "Providers can list availability for free and get discovered by the right seekers. For added analytics, priority visibility, and coordination support, just reach out and we'll help.",
   },
 ];
