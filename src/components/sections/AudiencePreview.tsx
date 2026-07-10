@@ -66,7 +66,7 @@ export function AudiencePreview() {
             "Options matched by location, funding, care level, and bed type",
             "Guided tours, medication reconciliation, and follow-up — at $0 cost to families",
           ]}
-          cta={{ label: "Find a Bed", href: "/families#find-a-bed" }}
+          cta={{ label: "Find Care", href: "/families#find-a-bed" }}
           secondary={{ label: "For Families", href: "/families" }}
           variant="primary"
           media={

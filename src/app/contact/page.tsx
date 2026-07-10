@@ -28,7 +28,7 @@ export default function ContactPage() {
         eyebrow="Contact"
         title="Let's talk through the care you need"
         description="Whether you're a family beginning a search, a hospital coordinating a discharge, or a provider with beds to fill — we're here to help you take the next step. Based in Tacoma, serving all of Washington State."
-        primary={{ label: "Find a Bed", href: "/families#find-a-bed" }}
+        primary={{ label: "Find Care", href: "/families#find-a-bed" }}
         secondary={{ label: "List Your Beds", href: "/providers#list-your-beds" }}
         media={
           <div className="rounded-[2rem] border border-navy/10 bg-midnight p-6 shadow-card">
@@ -79,7 +79,7 @@ export default function ContactPage() {
             </Reveal>
 
             <Reveal className="mt-6 flex flex-wrap gap-3">
-              <Button href="/families#find-a-bed" variant="primary"><Search className="h-4 w-4" aria-hidden /> Find a Bed</Button>
+              <Button href="/families#find-a-bed" variant="primary"><Search className="h-4 w-4" aria-hidden /> Find Care</Button>
               <Button href="/providers#list-your-beds" variant="secondary"><Building2 className="h-4 w-4" aria-hidden /> List Your Beds</Button>
             </Reveal>
           </div>

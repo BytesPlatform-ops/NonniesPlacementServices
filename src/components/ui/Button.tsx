@@ -10,7 +10,7 @@ const BASE =
   "active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 disabled:opacity-50 disabled:pointer-events-none";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  // Coral is reserved for primary "Get started / Find a Bed" CTAs (§5)
+  // Coral is reserved for primary "Get started / Find Care" CTAs (§5)
   primary: "cta-shine bg-coral text-white shadow-soft hover:bg-coral-600 hover:shadow-card focus-visible:outline-coral",
   secondary: "bg-navy text-white hover:bg-navy-700 focus-visible:outline-navy",
   ghost: "bg-transparent text-navy hover:bg-ice focus-visible:outline-navy",

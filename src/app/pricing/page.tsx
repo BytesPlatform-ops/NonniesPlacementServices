@@ -20,7 +20,7 @@ export default function PricingPage() {
         tone="dark"
         title="Pricing that fits how you use Nonni's"
         description="Three audiences, three simple structures — each with an Introductory, Silver, Gold, and Platinum tier. Families pay a one-time fee only when they engage a plan; hospitals and communities subscribe monthly. Everyone starts free."
-        primary={{ label: "Find a Bed", href: "/families#find-a-bed" }}
+        primary={{ label: "Find Care", href: "/families#find-a-bed" }}
         secondary={{ label: "List Your Beds", href: "/providers#list-your-beds" }}
         stats={[
           { v: "$0", l: "To start, every audience" },

@@ -9,7 +9,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Contact", href: "/contact" },
 ];
 
-export const PRIMARY_CTA = { label: "Find a Bed", href: "/families#find-a-bed" };
+export const PRIMARY_CTA = { label: "Find Care", href: "/families#find-a-bed" };
 export const SECONDARY_CTA = { label: "List Your Beds", href: "/providers#list-your-beds" };
 
 export const FOOTER_SECTIONS = [
@@ -46,7 +46,7 @@ export const FOOTER_SECTIONS = [
     links: [
       { label: "About us", href: "/about" },
       { label: "Contact", href: "/contact" },
-      { label: "Find a Bed", href: "/families#find-a-bed" },
+      { label: "Find Care", href: "/families#find-a-bed" },
       { label: "List Your Beds", href: "/providers#list-your-beds" },
     ],
   },

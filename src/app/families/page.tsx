@@ -41,7 +41,7 @@ export default function FamiliesPage() {
         eyebrow="For Families"
         title="Finding the right care, with someone by your side"
         description="When a loved one needs care, the search shouldn't fall on your shoulders alone. Nonni's pairs a Registered Nurse with intelligent matching to find a placement that truly fits — calmly, quickly, and at no cost to your family."
-        primary={{ label: "Find a Bed", href: "#find-a-bed" }}
+        primary={{ label: "Find Care", href: "#find-a-bed" }}
         secondary={{ label: "Talk to us", href: "/contact" }}
         stats={[
           { v: "$0", l: "Cost to families" },
@@ -99,11 +99,11 @@ export default function FamiliesPage() {
       {/* Care types — all 12 */}
       <CareTypesGrid id="care-types" showAll />
 
-      {/* Find a Bed form */}
+      {/* Find Care form */}
       <Section id="find-a-bed" tone="ice" density="normal">
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <div>
-            <SectionHeading eyebrow="Find a Bed" title="Start your placement request" description="Share a few details and an RN-led specialist can begin your assessment. It takes a couple of minutes — and starting is free." />
+            <SectionHeading eyebrow="Find Care" title="Start your placement request" description="Share a few details and an RN-led specialist can begin your assessment. It takes a couple of minutes — and starting is free." />
             <Reveal className="mt-6">
               <IntakeTimeline tone="light" />
             </Reveal>

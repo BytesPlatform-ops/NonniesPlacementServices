@@ -43,7 +43,7 @@ export default function AboutPage() {
         title="No family should navigate a care crisis alone"
         description="Nonni's Placement Services began with a simple conviction: care decisions are among the hardest a family will make, and they deserve a steady, clinical hand. We're an RN-led, Washington-focused platform pairing nursing judgment with intelligent matching — across behavioral and medical health."
         primary={{ label: "Talk to us", href: "/contact" }}
-        secondary={{ label: "Find a Bed", href: "/families#find-a-bed" }}
+        secondary={{ label: "Find Care", href: "/families#find-a-bed" }}
         media={
           <ParallaxMedia src="/assets/images/rn-review-process.jpg" alt="A registered nurse clinical team" className="aspect-[4/3] w-full shadow-card" rounded="rounded-[2rem]" speed={8} />
         }
