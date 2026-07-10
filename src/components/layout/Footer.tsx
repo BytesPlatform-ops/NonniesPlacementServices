@@ -76,17 +76,14 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-center text-xs leading-relaxed text-white/45">
           <p>© {new Date().getFullYear()} Nonni&apos;s Placement Services. All rights reserved.</p>
-          <p className="max-w-md text-white/40">
+          <p className="max-w-2xl text-white/40">
             Nonni&apos;s provides RN-led placement guidance and intelligent
             matching support — not medical diagnosis, treatment, or guaranteed outcomes.
           </p>
-        </div>
-
-        {/* Washington State elder & vulnerable adult referral compliance disclosure */}
-        <div className="mt-6 border-t border-white/10 pt-6 text-xs leading-relaxed text-white/40">
-          <p className="max-w-3xl">
+          {/* Washington State elder & vulnerable adult referral compliance disclosure */}
+          <p className="max-w-2xl text-white/40">
             Nonni&apos;s Placement Services operates in compliance with Chapter 18.330 RCW
             regarding elder and vulnerable adult referral services.
           </p>
