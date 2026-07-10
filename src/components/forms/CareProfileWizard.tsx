@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useForm, type UseFormRegisterReturn } from "react-hook-form";
+import { useForm, useWatch, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, Check, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
@@ -235,7 +235,7 @@ export function CareProfileWizard() {
     register,
     handleSubmit,
     trigger,
-    watch,
+    control,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
@@ -252,8 +252,9 @@ export function CareProfileWizard() {
   });
 
   // Conditional routing — flag high urgency the moment Step 1 signals it.
-  const isHighUrgency =
-    watch("location") === LOCATION_HOSPITAL || watch("timeline") === TIMELINE_IMMEDIATE;
+  const location = useWatch({ control, name: "location" });
+  const timeline = useWatch({ control, name: "timeline" });
+  const isHighUrgency = location === LOCATION_HOSPITAL || timeline === TIMELINE_IMMEDIATE;
 
   useGSAP(
     () => {
