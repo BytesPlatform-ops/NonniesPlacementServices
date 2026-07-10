@@ -260,10 +260,11 @@ h1, h2, h3, h4 {
   background-size: 180px 180px;
 }
 
-/* Prevent scroll while preloader / mobile menu is open */
+/* Prevent scroll while the mobile menu is open. Overflow-only lock — Lenis is
+   paused alongside this, so no `height: 100vh` is needed. Forcing the body
+   height reflowed this whole (WebGL-heavy) page on open and hitched the slide. */
 .no-scroll {
   overflow: hidden;
-  height: 100vh;
 }
 
 /* Reveal base state (JS enhances; content still visible if JS/GSAP fails) */

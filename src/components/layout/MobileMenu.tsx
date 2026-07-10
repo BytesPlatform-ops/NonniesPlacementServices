@@ -15,14 +15,29 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
   // Lock scroll + basic focus handling while open (§21 accessible mobile menu).
   useEffect(() => {
     if (!open) return;
-    document.body.classList.add("no-scroll");
-    closeRef.current?.focus();
+    const lenis = (window as unknown as { lenis?: { stop: () => void; start: () => void } }).lenis;
+
+    // The scroll-lock (body reflow) + Lenis pause are the layout-heavy bits.
+    // Running them synchronously as the panel starts moving drops the slide's
+    // first frames (the "sudden" jump). Defer them one frame so the transition
+    // begins unblocked — the full-screen overlay hides any background scroll in
+    // that single frame anyway.
+    const raf = requestAnimationFrame(() => {
+      document.body.classList.add("no-scroll");
+      lenis?.stop();
+    });
+    // preventScroll: focusing normally scrolls the element into view, forcing a
+    // layout mid-slide. We don't need the scroll — the button is already visible.
+    closeRef.current?.focus({ preventScroll: true });
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
+      cancelAnimationFrame(raf);
       document.body.classList.remove("no-scroll");
+      lenis?.start();
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
@@ -42,7 +57,10 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
         tabIndex={open ? 0 : -1}
         onClick={onClose}
         className={cn(
-          "absolute inset-0 bg-midnight/50 backdrop-blur-sm transition-opacity duration-300",
+          // Plain translucent scrim — NO backdrop-blur. backdrop-filter re-blurs
+          // the whole page (WebGL + GSAP layers) every frame and is what made the
+          // panel slide lag on mobile. Opacity on a solid layer is GPU-cheap.
+          "absolute inset-0 bg-midnight/60 transition-opacity duration-300",
           open ? "opacity-100" : "opacity-0",
         )}
       />
@@ -53,7 +71,9 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
         aria-modal="true"
         aria-label="Site menu"
         className={cn(
-          "absolute right-0 top-0 flex h-full w-[86%] max-w-sm flex-col bg-white shadow-2xl transition-transform duration-300 ease-out",
+          // transform-gpu + will-change isolates the panel on its own compositor
+          // layer so the scrim's backdrop-filter can't drag it sideways mid-slide.
+          "absolute right-0 top-0 flex h-full w-[86%] max-w-sm transform-gpu flex-col bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
