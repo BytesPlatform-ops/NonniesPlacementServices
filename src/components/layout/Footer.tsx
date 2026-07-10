@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Phone, Mail, MapPin, Clock, Heart } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, Heart, ShieldCheck } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Logo } from "./Logo";
 import { FOOTER_SECTIONS } from "@/data/navigation";
@@ -38,9 +38,15 @@ export function Footer() {
                   </a>
                 </dd>
               </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="h-4 w-4 text-mint" aria-hidden />
-                <dd>{CONTACT.address}</dd>
+              <div className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 text-mint" aria-hidden />
+                <dd>
+                  {CONTACT.address}
+                  <span className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-mint">
+                    <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                    Licensed, Bonded, and Insured
+                  </span>
+                </dd>
               </div>
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 text-mint" aria-hidden />
