@@ -69,6 +69,24 @@ export const BED_TYPES: Option[] = [
   { value: "shared", label: "Shared" },
 ];
 
+/**
+ * Standardized specialties a community can offer — presented as checkboxes on
+ * the provider intake form so listings are structured and comparable (rather
+ * than free text). Mirrors the referral portal's standardized-options approach.
+ */
+export const PROVIDER_SPECIALTIES: Option[] = [
+  { value: "memory-care", label: "Memory care / dementia" },
+  { value: "behavioral-health", label: "Behavioral health" },
+  { value: "psychiatric", label: "Psychiatric / mental health" },
+  { value: "skilled-nursing", label: "Skilled nursing" },
+  { value: "hospice", label: "Hospice / end-of-life" },
+  { value: "respite", label: "Respite / short-term" },
+  { value: "diabetic-care", label: "Diabetic care" },
+  { value: "medication-management", label: "Medication management" },
+  { value: "mobility-fall-risk", label: "Mobility / fall-risk support" },
+  { value: "bariatric", label: "Bariatric care" },
+];
+
 export type CareTypeCard = {
   icon: LucideIcon;
   title: string;

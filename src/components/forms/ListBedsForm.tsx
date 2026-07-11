@@ -15,7 +15,7 @@ import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
 import { PhotoUploadPlaceholder } from "./PhotoUploadPlaceholder";
 import { DataSecurityNotice } from "./DataSecurityNotice";
-import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES } from "@/data/careTypes";
+import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES, PROVIDER_SPECIALTIES } from "@/data/careTypes";
 
 const schema = z.object({
   communityName: z.string().min(2, "Enter your community name"),
@@ -31,7 +31,7 @@ const schema = z.object({
     .min(0, "Enter a number")
     .max(9999, "That seems too high"),
   bedType: z.string().min(1, "Select a bed type"),
-  specialties: z.string().min(2, "List at least one specialty"),
+  specialties: z.array(z.string()).min(1, "Select at least one specialty"),
   pricingRange: z.string().min(1, "Enter a pricing range"),
   funding: z.string().min(1, "Select accepted funding"),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -58,7 +58,11 @@ export function ListBedsForm() {
     trigger,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), mode: "onTouched" });
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    mode: "onTouched",
+    defaultValues: { specialties: [] },
+  });
 
   useGSAP(
     () => {
@@ -135,7 +139,35 @@ export function ListBedsForm() {
               <FormField label="Location" required hint="City or area in Washington" error={errors.location?.message} {...register("location")} />
               <FormField label="Beds currently available" type="number" min={0} required error={errors.availableBeds?.message} {...register("availableBeds", { valueAsNumber: true })} />
               <Select label="Primary bed type" required options={BED_TYPES} error={errors.bedType?.message} {...register("bedType")} />
-              <FormField label="Specialties" required className="sm:col-span-2" hint="e.g. memory care, diabetic care, hospice-friendly" error={errors.specialties?.message} {...register("specialties")} />
+              <div className="flex flex-col gap-2.5 sm:col-span-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold text-navy">
+                    Specialties<span className="ml-0.5 text-coral">*</span>
+                  </span>
+                  <span className="text-xs text-slate-ink/75">Select all the care needs your community is equipped to support.</span>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {PROVIDER_SPECIALTIES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-navy/15 bg-[#fffdf9] px-4 py-3 text-sm font-medium text-navy transition-colors hover:border-blue/50 hover:bg-blue/5 has-[:checked]:border-blue has-[:checked]:bg-blue/10 has-[:checked]:ring-1 has-[:checked]:ring-blue/40"
+                    >
+                      <input
+                        type="checkbox"
+                        value={opt.value}
+                        className="h-5 w-5 shrink-0 rounded-md border-navy/30 text-blue accent-blue focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-coral"
+                        {...register("specialties")}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {errors.specialties?.message && (
+                  <p role="alert" className="text-sm font-medium text-coral">
+                    {errors.specialties.message}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
