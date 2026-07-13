@@ -4,7 +4,6 @@ import { Reveal } from "@/components/animation/Reveal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ParallaxMedia } from "@/components/animation/ParallaxMedia";
-import { ProviderPortalPreview } from "@/components/product/ProviderPortalPreview";
 import { SpecialtyTag } from "@/components/ui/SpecialtyTag";
 import { cn } from "@/lib/utils";
 
@@ -93,19 +92,32 @@ export function AudiencePreview() {
 
         <Row
           reverse
-          badge="For Bed Providers"
-          badgeTone="navy"
-          title="Fill vacancies with residents who truly fit"
+          badge="Mental & Behavioral Health"
+          badgeTone="teal"
+          title="Support beyond age"
           points={[
-            "Showcase specialties, real-time availability, and pricing",
-            "RN-reviewed, better-fit inquiries — fewer wasted tours",
-            "Digitized intake, license verification, and an inquiry queue",
+            "RN-led review of memory, mental health history, and behavioral needs",
+            "Placement guidance for emotional stability and everyday safety",
+            "Therapy-related coordination and RN-led placement support",
           ]}
-          tags={["Behavioral Health", "Alzheimer's Care", "Psychiatric Support", "Dementia", "Memory Care", "Medication Support"]}
-          cta={{ label: "List Your Beds", href: "/providers#list-your-beds" }}
-          secondary={{ label: "For Providers", href: "/providers" }}
-          variant="secondary"
-          media={<ProviderPortalPreview />}
+          tags={["Mental & Behavioral Health", "Emotional Support Needs", "Therapy-Related Coordination"]}
+          cta={{ label: "Start a Care Profile", href: "/#care-profile" }}
+          secondary={{ label: "Talk to us", href: "/contact" }}
+          variant="primary"
+          media={
+            <div className="relative">
+              <ParallaxMedia
+                src="/assets/images/mental2.jpg"
+                alt="A person receiving mental and behavioral health support in a calm care setting"
+                className="aspect-[4/3] w-full shadow-card"
+                speed={10}
+              />
+              <div className="absolute -bottom-5 right-4 max-w-[15rem] rounded-2xl border border-navy/10 bg-white p-4 shadow-card">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal">RN-led review</p>
+                <p className="mt-1 text-sm font-medium text-navy">The full care picture — behavioral, emotional &amp; memory needs.</p>
+              </div>
+            </div>
+          }
         />
       </div>
     </Section>
