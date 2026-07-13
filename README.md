@@ -1,4 +1,4 @@
-# Nonni's Placement Services — Frontend.
+# Nonni's Placement Services — Frontend
 
 A premium, animation-rich marketing frontend for **Nonni's Placement Services**, an RN-led care-placement platform for Washington State. Built to hold two registers at once: **warm trust** where families make care decisions, and **modern AI-health-tech sophistication** where the platform shows off its matching engine.
 
