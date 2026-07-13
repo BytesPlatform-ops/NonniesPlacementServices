@@ -130,10 +130,10 @@ export default function HomeHealthCarePage() {
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-ice text-blue">
               <BedDouble className="h-6 w-6" aria-hidden />
             </span>
-            <h3 className="mt-5 font-display text-xl font-medium text-navy">Nonni's</h3>
+            <h3 className="mt-5 font-display text-xl font-medium text-navy">Nonni&apos;s</h3>
             <p className="mt-2 text-[0.95rem] leading-relaxed text-slate-ink">
-              Nonni's helps families find the right care bed or community — RN-reviewed placement into
-              adult family homes, assisted living, memory care, and more.
+              Nonni&apos;s helps families find the right care bed or community — RN-reviewed placement
+              into adult family homes, assisted living, memory care, and more.
             </p>
             <Button href="/families#find-a-bed" variant="secondary" className="mt-6 self-start">
               Find a placement <ArrowRight className="h-4 w-4" aria-hidden />
