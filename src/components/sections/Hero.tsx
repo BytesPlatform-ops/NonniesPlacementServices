@@ -77,11 +77,16 @@ export function Hero() {
               RN-led placement · Washington State
             </div>
 
-            <h1 className="mt-6 font-display text-[clamp(2.7rem,6.6vw,5.1rem)] font-medium leading-[1.12] tracking-tight text-white">
+            {/* Inline lineHeight overrides the unlayered `h1{line-height:1.05}` base
+                rule (which otherwise beats Tailwind's leading utility). */}
+            <h1
+              className="mt-6 font-display text-[clamp(2.7rem,6.6vw,5.1rem)] font-medium tracking-tight text-white"
+              style={{ lineHeight: 1.12 }}
+            >
               {LINES.map((line, li) => (
                 <span key={li} className="block">
                   {line.map(({ word, accent }, wi) => (
-                    <span key={wi} className="mr-[0.22em] inline-block overflow-hidden align-bottom pb-[0.15em] -mb-[0.15em]">
+                    <span key={wi} className="mr-[0.22em] inline-block overflow-hidden align-bottom pt-[0.22em] -mt-[0.22em] pb-[0.15em] -mb-[0.15em]">
                       <span data-word className={"inline-block " + (accent ? "gradient-text-mint italic pr-[0.1em]" : "")}>
                         {word}
                       </span>
