@@ -39,6 +39,7 @@ export const FOOTER_SECTIONS = [
       { label: "For Providers", href: "/providers" },
       { label: "For Hospitals", href: "/providers#discharge" },
       { label: "Discharge planners", href: "/providers#discharge" },
+      { label: "Submit a Facilities Referral", href: "/hospital-referral" },
     ],
   },
   {
