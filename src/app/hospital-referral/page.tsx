@@ -13,61 +13,64 @@ export const metadata: Metadata = {
 
 export default function HospitalReferralPage() {
   return (
-    <section className="relative overflow-hidden bg-ice pt-32 pb-16 sm:pt-36 sm:pb-24">
-      {/* Soft ambient light so the secure portal keeps a calm, clinical feel. */}
-      <div className="pointer-events-none absolute -top-24 right-0 h-80 w-80 rounded-full bg-teal/15 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-10 h-80 w-80 rounded-full bg-blue/10 blur-3xl" />
+    <>
+      {/* Dark umber hero — intro + compliance text on top. */}
+      <section className="relative overflow-hidden bg-midnight pt-32 pb-16 text-white sm:pt-36">
+        <div className="pointer-events-none absolute inset-0 hero-gradient-fallback opacity-70" />
+        <div className="pointer-events-none absolute inset-0 bg-midnight/45" />
 
-      <Container className="relative">
-        <div className="mx-auto max-w-6xl">
-          {/* Intro + compliance text — full width on top. */}
+        <Container className="relative">
           <div className="max-w-[820px]">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="teal">
+              <Badge tone="mint">
                 <Lock className="h-3.5 w-3.5" aria-hidden /> Secure Portal
               </Badge>
-              <Badge tone="navy">
+              <Badge tone="neutral">
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> HIPAA Compliant Interface
               </Badge>
             </div>
 
-            <h1 className="mt-4 font-display text-[clamp(2rem,4.5vw,3.1rem)] font-medium leading-[1.05] tracking-tight text-navy text-balance">
+            <h1 className="mt-4 font-display text-[clamp(2rem,4.5vw,3.1rem)] font-medium leading-[1.05] tracking-tight text-white text-balance">
               Secure Hospital Placement Portal
             </h1>
-            <p className="mt-2 text-sm font-semibold uppercase tracking-[0.16em] text-teal">
+            <p className="mt-2 text-sm font-semibold uppercase tracking-[0.16em] text-mint">
               WA State Care Transition Network
             </p>
 
-            <p className="mt-4 text-lg leading-relaxed text-slate-ink text-pretty">
+            <p className="mt-4 text-lg leading-relaxed text-white/75 text-pretty">
               A streamlined, single-screen referral for hospital case managers and social workers
               operating under acute discharge timelines.
             </p>
 
-            <p className="mt-4 text-base leading-relaxed text-slate-ink">
+            <p className="mt-4 text-base leading-relaxed text-white/70">
               Our RN-led clinical placement pipeline operates in strict accordance with{" "}
-              <strong className="font-semibold text-navy">RCW 70.41.320</strong> patient discharge
-              guidelines and <strong className="font-semibold text-navy">RCW 70.41.322</strong> lay
+              <strong className="font-semibold text-white">RCW 70.41.320</strong> patient discharge
+              guidelines and <strong className="font-semibold text-white">RCW 70.41.322</strong> lay
               caregiver notification mandates. Patient choice is documented.
             </p>
           </div>
 
           {/* Compliance messaging band — built for professional trust with case managers. */}
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-teal/25 bg-white/70 p-4 shadow-soft">
-            <Scale className="mt-0.5 h-5 w-5 shrink-0 text-teal" aria-hidden />
-            <p className="text-sm leading-relaxed text-slate-ink">
+          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-mint/25 bg-white/5 p-4 backdrop-blur-sm">
+            <Scale className="mt-0.5 h-5 w-5 shrink-0 text-mint" aria-hidden />
+            <p className="text-sm leading-relaxed text-white/85">
               Our RN team understands the{" "}
-              <strong className="font-semibold text-navy">RCW 70.41.320 hospital discharge guidelines</strong>{" "}
+              <strong className="font-semibold text-white">RCW 70.41.320 hospital discharge guidelines</strong>{" "}
               and coordinates every transition around them — so discharge planners and hospital case
               managers can move quickly with clinical and regulatory confidence.
             </p>
           </div>
+        </Container>
+      </section>
 
-          {/* Form — full width below the intro. */}
-          <div className="mt-10">
+      {/* Form — full width below the hero, on a calm light surface. */}
+      <section className="bg-porcelain py-14 sm:py-20">
+        <Container>
+          <div className="mx-auto max-w-6xl">
             <HospitalReferralForm />
           </div>
-        </div>
-      </Container>
-    </section>
+        </Container>
+      </section>
+    </>
   );
 }
