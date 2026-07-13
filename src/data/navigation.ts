@@ -28,6 +28,7 @@ export const FOOTER_SECTIONS = [
       { label: "How it works", href: "/#how-it-works" },
       { label: "AI-assisted matching", href: "/#ai-matching" },
       { label: "Browse communities", href: "/#browse" },
+      { label: "Home Health Care", href: "/home-health-care" },
       { label: "Find Care", href: "/families#find-a-bed" },
     ],
   },
