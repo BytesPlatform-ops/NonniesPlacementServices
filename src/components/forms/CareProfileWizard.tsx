@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useForm, useWatch, type UseFormRegisterReturn } from "react-hook-form";
+import { useForm, useWatch, type UseFormRegister, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, Check, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
@@ -18,10 +18,15 @@ import { DataSecurityNotice } from "./DataSecurityNotice";
 type Opt = { value: string; desc?: string };
 const o = (value: string, desc?: string): Opt => ({ value, desc });
 
+// Every selectable question ends with an "Other" escape hatch; choosing it
+// reveals a free-text field (see OtherInput) so nothing falls outside the list.
+const OTHER = "Other";
+
 const FILLED_BY = [
   o("Family Member / Legal Guardian"),
   o("Hospital Discharge Planner"),
   o("Case Manager / Social Worker"),
+  o(OTHER),
 ];
 
 // Values that trigger the high-priority (high_urgency) flag.
@@ -34,6 +39,7 @@ const LOCATION = [
   o(LOCATION_HOSPITAL),
   o("Psychiatric Facility"),
   o("Rehab / Skilled Nursing Facility"),
+  o(OTHER),
 ];
 
 const TIMELINE = [
@@ -41,6 +47,7 @@ const TIMELINE = [
   o("Within 1 to 2 Weeks"),
   o("Within 30 Days"),
   o("Planning for the Future"),
+  o(OTHER),
 ];
 
 const COGNITIVE = [
@@ -48,6 +55,7 @@ const COGNITIVE = [
   o("Dementia (Lewy Body, Vascular, Frontotemporal, etc.)"),
   o("Traumatic Brain Injury (TBI)"),
   o("No formal diagnosis, but experiencing severe short-term memory loss"),
+  o(OTHER),
 ];
 
 const SAFETY = [
@@ -55,6 +63,7 @@ const SAFETY = [
   o("Sundowning", "Increased confusion, anxiety, or agitation in the late afternoon/evening."),
   o("Orientation", "Disoriented to time, place, or recognizing familiar family members."),
   o("Requires a fully secured, locked memory care perimeter or community structure."),
+  o(OTHER),
 ];
 
 const MENTAL = [
@@ -63,6 +72,7 @@ const MENTAL = [
   o("Schizophrenia / Schizoaffective Disorder"),
   o("PTSD (Post-Traumatic Stress Disorder)"),
   o("History of Substance Use / Addiction Support Needs"),
+  o(OTHER),
 ];
 
 const BEHAVIORAL = [
@@ -70,6 +80,7 @@ const BEHAVIORAL = [
   o("Physical Aggression", "Pushing, scratching, or combative behavior during hands-on care (bathing/dressing)."),
   o("Hallucinations / Delusions", "Sees or hears things that aren't there, or holds fixed false beliefs."),
   o("Hoarding / Shadows", "Collects items obsessively or exhibits intense pacing."),
+  o(OTHER),
 ];
 
 const MOBILITY = [
@@ -78,6 +89,7 @@ const MOBILITY = [
   o("Requires 1-person physical assistance to stand/transfer"),
   o("Requires 2-person assistance or a mechanical lift (Hoyer Lift)"),
   o("Bedbound"),
+  o(OTHER),
 ];
 
 const MEDICAL = [
@@ -86,12 +98,14 @@ const MEDICAL = [
   o("Wound Care (Stage 2, 3, or 4 pressure ulcers)"),
   o("Catheter / Ostomy care management"),
   o("Hospice Care or Palliative Comfort Care services"),
+  o(OTHER),
 ];
 
 const MEDICATION = [
   o("Manages own medications"),
   o("Needs reminders"),
   o("Requires full administration, crushing, or locked storage due to refusal or safety risks"),
+  o(OTHER),
 ];
 
 const FINANCING = [
@@ -100,6 +114,7 @@ const FINANCING = [
   o("Medicaid Pending (Financial spend-down currently in progress)"),
   o("VA Benefits (Aid & Attendance)"),
   o("Long-Term Care Insurance Policy"),
+  o(OTHER),
 ];
 
 const BUDGET = [
@@ -107,6 +122,7 @@ const BUDGET = [
   o("$4,000 to $6,000 / mo"),
   o("$6,000 to $8,000 / mo"),
   o("$8,000+ / mo"),
+  o(OTHER),
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -117,25 +133,56 @@ const BUDGET = [
 const multi = () =>
   z.preprocess((v) => (Array.isArray(v) ? v : v ? [v] : []), z.array(z.string())).default([]);
 
-const schema = z.object({
-  // Step 1 — required for routing.
-  filledBy: z.string().min(1, "Please choose one"),
-  location: z.string().min(1, "Please choose one"),
-  timeline: z.string().min(1, "Please choose one"),
-  // Step 2
-  cognitiveConditions: multi(),
-  safetyBehaviors: multi(),
-  // Step 3
-  mentalHealth: multi(),
-  behavioralExpressions: multi(),
-  // Step 4
-  mobility: z.string().min(1, "Please choose one"),
-  medicalInterventions: multi(),
-  medicationAssistance: z.string().min(1, "Please choose one"),
-  // Step 5
-  financing: multi(),
-  budget: z.string().min(1, "Please choose one"),
-});
+const schema = z
+  .object({
+    // Step 1 — required for routing.
+    filledBy: z.string().min(1, "Please choose one"),
+    filledByOther: z.string().optional(),
+    location: z.string().min(1, "Please choose one"),
+    locationOther: z.string().optional(),
+    timeline: z.string().min(1, "Please choose one"),
+    timelineOther: z.string().optional(),
+    // Step 2
+    cognitiveConditions: multi(),
+    cognitiveConditionsOther: z.string().optional(),
+    safetyBehaviors: multi(),
+    safetyBehaviorsOther: z.string().optional(),
+    // Step 3
+    mentalHealth: multi(),
+    mentalHealthOther: z.string().optional(),
+    behavioralExpressions: multi(),
+    behavioralExpressionsOther: z.string().optional(),
+    // Step 4
+    mobility: z.string().min(1, "Please choose one"),
+    mobilityOther: z.string().optional(),
+    medicalInterventions: multi(),
+    medicalInterventionsOther: z.string().optional(),
+    medicationAssistance: z.string().min(1, "Please choose one"),
+    medicationAssistanceOther: z.string().optional(),
+    // Step 5
+    financing: multi(),
+    financingOther: z.string().optional(),
+    budget: z.string().min(1, "Please choose one"),
+    budgetOther: z.string().optional(),
+  })
+  // When "Other" is chosen for a question, its free-text field is required.
+  .superRefine((data, ctx) => {
+    const d = data as Record<string, unknown>;
+    const requireOther = (selected: boolean, otherKey: string) => {
+      if (!selected) return;
+      const v = d[otherKey];
+      if (typeof v !== "string" || v.trim().length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please add a short description", path: [otherKey] });
+      }
+    };
+    for (const k of ["filledBy", "location", "timeline", "mobility", "medicationAssistance", "budget"]) {
+      requireOther(d[k] === OTHER, `${k}Other`);
+    }
+    for (const k of ["cognitiveConditions", "safetyBehaviors", "mentalHealth", "behavioralExpressions", "medicalInterventions", "financing"]) {
+      const arr = d[k];
+      requireOther(Array.isArray(arr) && arr.includes(OTHER), `${k}Other`);
+    }
+  });
 
 type FormValues = z.input<typeof schema>;
 
@@ -148,11 +195,11 @@ const STEPS = [
 ] as const;
 
 const STEP_FIELDS: (keyof FormValues)[][] = [
-  ["filledBy", "location", "timeline"],
-  [],
-  [],
-  ["mobility", "medicationAssistance"],
-  ["budget"],
+  ["filledBy", "filledByOther", "location", "locationOther", "timeline", "timelineOther"],
+  ["cognitiveConditionsOther", "safetyBehaviorsOther"],
+  ["mentalHealthOther", "behavioralExpressionsOther"],
+  ["mobility", "mobilityOther", "medicalInterventionsOther", "medicationAssistance", "medicationAssistanceOther"],
+  ["financingOther", "budget", "budgetOther"],
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -200,6 +247,7 @@ function Question({
   error,
   children,
   span = 1,
+  other,
 }: {
   label: string;
   hint?: string;
@@ -207,18 +255,58 @@ function Question({
   children: React.ReactNode;
   /** Span both columns of the form-body grid on desktop. */
   span?: 1 | 2;
+  /** Conditional "Other" free-text field, rendered below the options. */
+  other?: React.ReactNode;
 }) {
   return (
     <fieldset className={cn("flex min-w-0 flex-col rounded-2xl bg-ice/40 p-4 ring-1 ring-navy/[0.08] sm:p-5", span === 2 && "lg:col-span-2")}>
       <legend className="px-1 text-sm font-semibold text-navy">{label}</legend>
       {hint && <p className="text-xs text-slate-ink/70">{hint}</p>}
       <div className={cn("mt-3 grid gap-2.5", span === 2 && "sm:grid-cols-2")}>{children}</div>
+      {other}
       {error && (
         <p role="alert" className="mt-2 text-sm font-medium text-coral">
           {error}
         </p>
       )}
     </fieldset>
+  );
+}
+
+/** Free-text field revealed when a question's "Other" option is selected. */
+function OtherInput({
+  name,
+  placeholder,
+  register,
+  error,
+  multiline = false,
+}: {
+  name: keyof FormValues;
+  placeholder: string;
+  register: UseFormRegister<FormValues>;
+  error?: string;
+  multiline?: boolean;
+}) {
+  const id = `other-${name}`;
+  const base =
+    "mt-3 w-full rounded-xl border border-navy/20 bg-ivory px-4 py-3 text-sm text-navy placeholder:text-slate-ink/55 " +
+    "transition-[border-color,box-shadow] duration-150 focus:border-mint focus:outline-none focus:ring-4 focus:ring-mint/25";
+  return (
+    <div>
+      <label htmlFor={id} className="sr-only">
+        {placeholder}
+      </label>
+      {multiline ? (
+        <textarea id={id} rows={2} placeholder={placeholder} aria-invalid={!!error} className={cn(base, "resize-y", error && "border-coral")} {...register(name)} />
+      ) : (
+        <input id={id} type="text" placeholder={placeholder} aria-invalid={!!error} className={cn(base, error && "border-coral")} {...register(name)} />
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-sm font-medium text-coral">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -252,10 +340,11 @@ export function CareProfileWizard() {
     },
   });
 
-  // Conditional routing — flag high urgency the moment Step 1 signals it.
-  const location = useWatch({ control, name: "location" });
-  const timeline = useWatch({ control, name: "timeline" });
-  const isHighUrgency = location === LOCATION_HOSPITAL || timeline === TIMELINE_IMMEDIATE;
+  // Watch all values — drives urgency routing and each question's "Other" reveal.
+  const w = useWatch({ control });
+  const isHighUrgency = w.location === LOCATION_HOSPITAL || w.timeline === TIMELINE_IMMEDIATE;
+  const pickedOther = (v: unknown) => v === OTHER;
+  const checkedOther = (v: unknown) => Array.isArray(v) && v.includes(OTHER);
 
   useGSAP(
     () => {
@@ -364,17 +453,42 @@ export function CareProfileWizard() {
             {/* Step 1 — The Basics */}
             {step === 0 && (
               <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
-                <Question label="Who is filling out this form?" error={errors.filledBy?.message}>
+                <Question
+                  label="Who is filling out this form?"
+                  error={errors.filledBy?.message}
+                  other={
+                    pickedOther(w.filledBy) && (
+                      <OtherInput name="filledByOther" placeholder="Please describe your role" register={register} error={errors.filledByOther?.message} />
+                    )
+                  }
+                >
                   {FILLED_BY.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("filledBy")} />
                   ))}
                 </Question>
-                <Question label="Where is the individual currently located?" error={errors.location?.message}>
+                <Question
+                  label="Where is the individual currently located?"
+                  error={errors.location?.message}
+                  other={
+                    pickedOther(w.location) && (
+                      <OtherInput name="locationOther" placeholder="Please describe the current setting" register={register} error={errors.locationOther?.message} />
+                    )
+                  }
+                >
                   {LOCATION.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("location")} />
                   ))}
                 </Question>
-                <Question label="Target move-in timeline" error={errors.timeline?.message} span={2}>
+                <Question
+                  label="Target move-in timeline"
+                  error={errors.timeline?.message}
+                  span={2}
+                  other={
+                    pickedOther(w.timeline) && (
+                      <OtherInput name="timelineOther" placeholder="Please describe the timeline" register={register} error={errors.timelineOther?.message} />
+                    )
+                  }
+                >
                   {TIMELINE.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("timeline")} />
                   ))}
@@ -388,12 +502,25 @@ export function CareProfileWizard() {
                 <Question
                   label="Does the individual have a diagnosed cognitive condition?"
                   hint="Select all that apply"
+                  other={
+                    checkedOther(w.cognitiveConditions) && (
+                      <OtherInput name="cognitiveConditionsOther" placeholder="Please describe the cognitive condition" register={register} error={errors.cognitiveConditionsOther?.message} multiline />
+                    )
+                  }
                 >
                   {COGNITIVE.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("cognitiveConditions")} />
                   ))}
                 </Question>
-                <Question label="Safety & cognitive behaviors" hint="Select all that apply">
+                <Question
+                  label="Safety & cognitive behaviors"
+                  hint="Select all that apply"
+                  other={
+                    checkedOther(w.safetyBehaviors) && (
+                      <OtherInput name="safetyBehaviorsOther" placeholder="Please describe the behavior" register={register} error={errors.safetyBehaviorsOther?.message} multiline />
+                    )
+                  }
+                >
                   {SAFETY.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("safetyBehaviors")} />
                   ))}
@@ -407,12 +534,25 @@ export function CareProfileWizard() {
                 <Question
                   label="Are there active mental health diagnoses requiring specialized tracking?"
                   hint="Select all that apply"
+                  other={
+                    checkedOther(w.mentalHealth) && (
+                      <OtherInput name="mentalHealthOther" placeholder="Please describe the diagnosis" register={register} error={errors.mentalHealthOther?.message} multiline />
+                    )
+                  }
                 >
                   {MENTAL.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("mentalHealth")} />
                   ))}
                 </Question>
-                <Question label="Current behavioral care expressions" hint="Select all that apply">
+                <Question
+                  label="Current behavioral care expressions"
+                  hint="Select all that apply"
+                  other={
+                    checkedOther(w.behavioralExpressions) && (
+                      <OtherInput name="behavioralExpressionsOther" placeholder="Please describe the behavior" register={register} error={errors.behavioralExpressionsOther?.message} multiline />
+                    )
+                  }
+                >
                   {BEHAVIORAL.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("behavioralExpressions")} />
                   ))}
@@ -423,17 +563,42 @@ export function CareProfileWizard() {
             {/* Step 4 — Medical & Physical Level of Care */}
             {step === 3 && (
               <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
-                <Question label="Mobility support level" error={errors.mobility?.message}>
+                <Question
+                  label="Mobility support level"
+                  error={errors.mobility?.message}
+                  other={
+                    pickedOther(w.mobility) && (
+                      <OtherInput name="mobilityOther" placeholder="Please describe the mobility need" register={register} error={errors.mobilityOther?.message} />
+                    )
+                  }
+                >
                   {MOBILITY.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("mobility")} />
                   ))}
                 </Question>
-                <Question label="Specialized medical interventions required" hint="Select all that apply">
+                <Question
+                  label="Specialized medical interventions required"
+                  hint="Select all that apply"
+                  other={
+                    checkedOther(w.medicalInterventions) && (
+                      <OtherInput name="medicalInterventionsOther" placeholder="Please describe the care need" register={register} error={errors.medicalInterventionsOther?.message} multiline />
+                    )
+                  }
+                >
                   {MEDICAL.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("medicalInterventions")} />
                   ))}
                 </Question>
-                <Question label="Medication assistance" error={errors.medicationAssistance?.message} span={2}>
+                <Question
+                  label="Medication assistance"
+                  error={errors.medicationAssistance?.message}
+                  span={2}
+                  other={
+                    pickedOther(w.medicationAssistance) && (
+                      <OtherInput name="medicationAssistanceOther" placeholder="Please describe the medication need" register={register} error={errors.medicationAssistanceOther?.message} />
+                    )
+                  }
+                >
                   {MEDICATION.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("medicationAssistance")} />
                   ))}
@@ -444,12 +609,28 @@ export function CareProfileWizard() {
             {/* Step 5 — Financial Capabilities */}
             {step === 4 && (
               <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
-                <Question label="How will care be financed?" hint="Select all that apply">
+                <Question
+                  label="How will care be financed?"
+                  hint="Select all that apply"
+                  other={
+                    checkedOther(w.financing) && (
+                      <OtherInput name="financingOther" placeholder="Please describe the funding source" register={register} error={errors.financingOther?.message} multiline />
+                    )
+                  }
+                >
                   {FINANCING.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("financing")} />
                   ))}
                 </Question>
-                <Question label="Estimated monthly care budget" error={errors.budget?.message}>
+                <Question
+                  label="Estimated monthly care budget"
+                  error={errors.budget?.message}
+                  other={
+                    pickedOther(w.budget) && (
+                      <OtherInput name="budgetOther" placeholder="Please describe the budget" register={register} error={errors.budgetOther?.message} />
+                    )
+                  }
+                >
                   {BUDGET.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("budget")} />
                   ))}
