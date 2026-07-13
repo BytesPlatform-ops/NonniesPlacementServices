@@ -8,8 +8,9 @@ import { StatCard } from "@/components/ui/StatCard";
 import { ParallaxMedia } from "@/components/animation/ParallaxMedia";
 import { WashingtonMap } from "@/components/product/WashingtonMap";
 import { FinalCTA } from "@/components/sections/FinalCTA";
+import { Button } from "@/components/ui/Button";
 import { TRUST_STATS } from "@/data/features";
-import { Stethoscope, HeartHandshake, Scale, Eye, MapPinned, Brain, ClipboardList, Search, Home, HandHeart } from "lucide-react";
+import { Stethoscope, HeartHandshake, Scale, Eye, MapPinned, Brain, ClipboardList, Search, Home, HandHeart, ArrowRight } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "About",
@@ -57,6 +58,37 @@ export default function AboutPage() {
           <div>
             <SectionHeading eyebrow="A nurse's perspective matters" title="We don't simply find an available bed" description="Unlike traditional placement agencies, every referral receives a clinical review by a Registered Nurse with extensive behavioral and medical health experience. We identify communities that can successfully meet the individual's medical, behavioral, mobility, medication, cognitive, financial, and long-term-care needs — to reduce placement failures and improve transitions." />
           </div>
+        </div>
+      </Section>
+
+      {/* Care beyond age — mental & behavioral health support (image right, text left) */}
+      <Section density="normal">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+          <div>
+            <SectionHeading
+              eyebrow="Beyond age"
+              title="Care for more than one kind of need"
+              description="Nonni's understands that care placement is not only about age. Some individuals need support for memory care, mental health history, behavioral needs, emotional stability, or therapy-related coordination. Our RN-led process helps families understand the full care picture and connect with settings that can support the person safely and respectfully."
+            />
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              {["Mental & Behavioral Health", "Emotional Support Needs", "Therapy-Related Coordination"].map((chip) => (
+                <span key={chip} className="inline-flex items-center gap-1.5 rounded-full border border-navy/12 bg-white px-3.5 py-1.5 text-sm font-medium text-navy shadow-soft">
+                  <span className="h-1.5 w-1.5 rounded-full bg-teal" aria-hidden /> {chip}
+                </span>
+              ))}
+            </div>
+            <Reveal className="mt-7">
+              <Button href="/#care-profile" variant="primary">
+                Start a Care Profile <ArrowRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </Reveal>
+          </div>
+          <ParallaxMedia
+            src="/assets/images/mental2.jpg"
+            alt="Nurse-led support for a person with mental and behavioral health needs in a calm care setting"
+            className="aspect-[4/3] w-full shadow-card"
+            speed={10}
+          />
         </div>
       </Section>
 

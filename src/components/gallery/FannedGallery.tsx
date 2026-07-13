@@ -106,7 +106,7 @@ export function FannedGallery({ slides, className }: { slides: Slide[]; classNam
                   <source src={s.src} type="video/mp4" />
                 </video>
               ) : (
-                <Image src={s.src} alt={s.caption} fill className="object-cover transition-transform duration-700 group-hover:scale-105" sizes="(max-width:640px) 80vw, 420px" />
+                <Image src={s.src} alt={s.alt ?? s.caption} fill className="object-cover transition-transform duration-700 group-hover:scale-105" sizes="(max-width:640px) 80vw, 420px" />
               )}
 
               {/* Warm umber overlay */}

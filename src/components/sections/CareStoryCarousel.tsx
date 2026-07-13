@@ -9,6 +9,7 @@ const NEW = "/assets/new";
 const HOME_SLIDES: Slide[] = [
   { type: "video", src: `${NEW}/hd-8944262.mp4`, poster: `${NEW}/pexels-babydov-7789647.jpg`, eyebrow: "Care moments", caption: "RN-reviewed specialty care", sub: "A nurse's review on every referral" },
   { type: "image", src: `${NEW}/pexels-babydov-7789609.jpg`, eyebrow: "Memory care", caption: "Memory care, matched safely", sub: "Care level, funding & location" },
+  { type: "image", src: "/assets/images/mental.jpg", eyebrow: "Mental & Behavioral Health", caption: "Support beyond age", sub: "Care guidance for behavioral, emotional & mental health needs.", alt: "Person receiving mental and behavioral health support in a calm care setting" },
   { type: "video", src: `${NEW}/hd-6011438.mp4`, poster: `${NEW}/pexels-fernando-capetillo-94107723-38167593.jpg`, eyebrow: "Guidance", caption: "Families guided with clarity", sub: "Calm, jargon-free support" },
   { type: "image", src: `${NEW}/pexels-fernando-capetillo-94107723-38167593.jpg`, eyebrow: "Behavioral health", caption: "Behavioral health placement", sub: "Verified, RN-reviewed listings" },
   { type: "video", src: `${NEW}/hd-7522352.mp4`, poster: `${NEW}/pexels-timothy-huliselan-205951426-12081340.jpg`, eyebrow: "Follow-up", caption: "Support beyond move-in", sub: "Up to 45 days of RN case management" },

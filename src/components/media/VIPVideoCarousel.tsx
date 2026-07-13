@@ -9,8 +9,8 @@ import { onInView } from "@/lib/inView";
 import { cn } from "@/lib/utils";
 
 export type Slide =
-  | { type: "image"; src: string; caption: string; sub?: string; eyebrow?: string }
-  | { type: "video"; src: string; poster?: string; caption: string; sub?: string; eyebrow?: string };
+  | { type: "image"; src: string; caption: string; sub?: string; eyebrow?: string; alt?: string }
+  | { type: "video"; src: string; poster?: string; caption: string; sub?: string; eyebrow?: string; alt?: string };
 
 /**
  * Premium 4-up media carousel (Embla + Autoplay).
