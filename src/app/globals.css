@@ -25,6 +25,7 @@
   --color-teal-400: #d18f47;    /* antique gold — lighter accent end of gradients */
   --color-coral: #b56f28;       /* bronze — the primary CTA accent */
   --color-coral-600: #d18f47;   /* antique gold — CTA hover (brighter, per brand) */
+  --color-gold: #d18f47;        /* antique gold — selected states, gradient ends */
 
   /* ---- Warm light surfaces ---- */
   --color-ice: #f2e8db;         /* soft cream — section washes */
