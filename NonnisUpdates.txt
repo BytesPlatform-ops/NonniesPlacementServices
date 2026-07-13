@@ -1,0 +1,204 @@
+To: Web Development Team
+From: Nonni's Placement Services Leadership
+Project: Live Launch Preparation, UI/UX Refinements, & Secure Portal Expansion
+
+Compliance Baseline: HIPAA Data Security, Washington State Elder Referral Agency Laws (RCW 18.330), and Hospital Discharge Guidelines (RCW 70.41.320)
+
+Part 1:
+
+Main Website Layout, UI/UX, & Copy Revisions
+
+1. Top Header, Navigation, & Call to Action (CTA) Updates       (DONE)
+
+* Global Navigation Button Wording: Replace all instances of "Find a Bed" with "Find Care" across the entire website navigation menu, body section headings, context components, and footer link columns.
+* Primary Header Phone CTA: Embed a prominent, high-visibility button in the upper-right corner of the global header that reads: "Talk to an RN Now".
+* Direct Dialing Action: Configure this new button as an active click-to-call link (href="tel:2065318890"), ensuring mobile clients launch their native phone dialer instantly upon interaction.
+* Mobile Sticky Layout: Apply fixed CSS positioning to the "Talk to an RN Now" component on mobile viewports so it remains stickied to either the top header or a bottom dock while scrolling.
+
+2. Pricing Section Removal             (FUTURE)
+
+* Delete Component: Completely purge the "Simple tiers for every audience" dashboard component, including its multi-column layout arrays for Families, Hospitals, and Communities.
+* Strip Dollar Values: Erase all hardcoded financial references and dollar amounts (including $1,500, $2,500, and $5,000) from the website code and copy.
+* Retain Free Messaging: Ensure clear, supportive messaging across consumer-facing layout blocks stating that our core matching and placement service is $0 cost to families.
+
+3. Mental Health, Dementia, & Alzheimer’s Expansion.  
+
+* Specialty Tags Addition: Explicitly insert "Mental & Behavioral Health", "Dementia", and "Alzheimer's" to all visible lists detailing our care, referral, and provider capabilities.
+* Revise Step 02 (RN Clinical Assessment) Copy: Update the step description to highlight cognitive and behavioral tracking:
+
+"A Registered Nurse reviews clinical diagnoses, memory care needs, tracking/wandering behaviors, mental health history, and specialized medication protocols to build an accurate care picture."       (FUTURE)
+
+* Update Graphic Artifacts: Ensure the frontend provider dashboard portal mockups (such as the Cedar Grove AFH visualization) display visible tags for "Behavioral Health", "Alzheimer's Care", and "Psychiatric Support".
+* De-clinicalize Headings: Soften heavy technical headers (e.g., change "Clinical Fit" or "Intelligent Matching") to friendlier, reassuring terminology such as "Matching Your Loved One's Unique Story" or "Finding a Safe, Welcoming Environment."
+
+4. Hospital Discharge Planner Optimization
+
+* Dedicated Professional Sub-tab: Add a secondary button or dedicated tab within the primary navigation menu specifically labeled "Submit a Hospital Referral", linking straight to the new portal specified in Part 3.
+* Compliance Messaging: Incorporate clear inline layout text stating that our RN team understands RCW 70.41.320 hospital discharge guide to quickly capture professional trust from hospital case managers.
+
+5. Legal, Compliance, & Trust Footer Adjustments   (DONE)
+
+* Washington State Elder Referral Disclosure: Insert the following mandatory compliance text into the global footer:
+
+"Nonni’s Placement Services operates in compliance with Chapter 18.330 RCW regarding elder and vulnerable adult referral services."
+
+* Data Security Notice: Display a secure operational notice near the submission fields confirming that patient data is processed and stored using secure, HIPAA-compliant data storage frameworks.
+* Footer Trust Badges: Explicitly display text stating "Licensed, Bonded, and Insured" directly alongside our physical corporate address block.
+
+------------------------------
+Part 2: Multistep Client Intake Flow
+
+Please refactor our public onboarding form into a multi-step wizard component featuring persistent progress bars, conditional logical routing, and simple form controls to minimize typing for stressed families.
+
+Step 1: The Basics (Who & Where)
+
+* Who is filling out this form?
+* UI Control: Radio Buttons
+   * Options: Family Member / Legal Guardian | Hospital Discharge Planner | Case Manager / Social Worker
+* Where is the individual currently located?
+* UI Control: Radio Buttons
+   * Options: At Home (Safe) | At Home (In Crisis) | Hospital ER / Med-Surg Unit | Psychiatric Facility | Rehab / Skilled Nursing Facility
+* Target Move-In Timeline:
+* UI Control: Radio Buttons
+   * Options: Immediate (Hospital Discharge / Emergency) | Within 1 to 2 Weeks | Within 30 Days | Planning for the Future
+* Conditional Logic Rule: If "Hospital ER" or "Immediate" options are toggled positive, flag this submission with a high-priority tag (status: high_urgency) on our backend administrative interface.
+
+Step 2: Cognitive & Memory Support Needs (Dementia/Alzheimer's)
+
+* Does the individual have a diagnosed cognitive condition? (Select all that apply)
+* UI Control: Checkboxes
+   * Options: Alzheimer's Disease | Dementia (Lewy Body, Vascular, Frontotemporal, etc.) | Traumatic Brain Injury (TBI) | No formal diagnosis, but experiencing severe short-term memory loss
+* Safety & Cognitive Behaviors (Select all that apply):
+* UI Control: Checkboxes
+   * Options:
+   * [ ] Exit-Seeking / Wandering: Attempts to leave the home environment or gets lost easily.
+      * [ ] Sundowning: Experiences increased confusion, anxiety, or agitation in the late afternoon/evening.
+      * [ ] Orientation: Disoriented to time, place, or recognizing familiar family members.
+      * [ ] Requires a fully secured, locked memory care perimeter or community structure.
+   
+Step 3: Mental & Behavioral Health Profiles
+
+* Are there active mental health diagnoses requiring specialized tracking? (Select all that apply)
+* UI Control: Checkboxes
+   * Options: Chronic Depression / Anxiety | Bipolar Disorder | Schizophrenia / Schizoaffective Disorder | PTSD (Post-Traumatic Stress Disorder) | History of Substance Use / Addiction Support Needs
+* Current Behavioral Care Expressions (Select all that apply):
+* UI Control: Checkboxes
+   * Options:
+   * [ ] Verbal Aggression: Frequent shouting, resistance to care routines, or repetitive vocalizations.
+      * [ ] Physical Aggression: Pushing, scratching, or combative behavior during hands-on care (bathing/dressing).
+      * [ ] Hallucinations / Delusions: Sees or hears things that aren't there, or holds fixed false beliefs.
+      * [ ] Hoarding / Shadows: Collects items obsessively or exhibits intense pacing.
+   
+Step 4: Medical & Physical Level of Care
+
+* Mobility Support Level:
+* UI Control: Radio Buttons
+   * Options: Walks independently | Uses walker/wheelchair independently | Requires 1-person physical assistance to stand/transfer | Requires 2-person assistance or a mechanical lift (Hoyer Lift) | Bedbound
+* Specialized Medical Interventions Required (Select all that apply):
+* UI Control: Checkboxes
+   * Options: Insulin-Dependent Diabetes Management (Sliding scale / RN injection) | Continuous Oxygen Therapy or CPAP | Wound Care (Stage 2, 3, or 4 pressure ulcers) | Catheter / Ostomy care management | Hospice Care or Palliative Comfort Care services
+* Medication Assistance:
+* UI Control: Radio Buttons
+   * Options: Manages own medications | Needs reminders | Requires full administration, crushing, or locked storage due to refusal or safety risks
+
+Step 5: Financial Capabilities & Submission
+
+* How will care be financed? (Select all that apply)
+* UI Control: Checkboxes
+   * Options: Private Pay (Savings, home sale, assets) | WA State Medicaid (Long-Term Care / COPES program active) | Medicaid Pending (Financial spend-down currently in progress) | VA Benefits (Aid & Attendance) | Long-Term Care Insurance Policy
+* Estimated Monthly Care Budget:
+* UI Control: Radio Buttons
+   * Options: Under $4,000 / mo | $4,000 to $6,000 / mo | $6,000 to $8,000 / mo | $8,000+ / mo
+* Form Action Submit Button: Text label must read exactly: [ Lock In Profile & Connect with an RN ]
+
+------------------------------
+Part 3: Secure Hospital Referral Portal Specification
+
+A highly streamlined, fast, transactional single-screen interface optimized for hospital case managers and social workers operating under tight acute discharge timelines.
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                        SECURE PORTAL BANNER LAYER                      │
+│                                                                        │
+│   Secure Hospital Placement Portal - WA State Care Transition Network   │
+│   
+HIPAA Compliant Secure Interface                                  │
+│                                                                        │
+│   Our RN-led clinical placement pipeline operates in strict accordance   │
+│   with RCW 70.41.320 patient discharge guidelines and RCW 70.41.322    │
+│   lay caregiver notification mandates. Patient choice is documented.   │
+└────────────────────────────────────────────────────────────────────────┘
+
+## 📋 Form Fields Array##
+
+Professional Contact Information
+
+* Referring Professional Name: [ Text Input Box ]
+* Hospital / Corporate Facility Name: [ Dropdown Menu: MultiCare Tacoma General, MultiCare Good Samaritan, Providence, Swedish, Harborview, St. Joseph, St. Anthony, St. Clare, Virginia Mason, Other ]
+* Department / Working Unit: [ Text Input Box - e.g., Med-Surg, ICU, Geropsych, Emergency Dept ]
+* Direct Phone / Pager Contact: [ Text Input Box ]
+* Secure Business Email Address: [ Text Input Box ]
+
+## Patient Baseline Metrics
+
+* Patient Initials Only: [ Text Input Box - Maximum 3 Characters ] (Required to maintain high data privacy protocols before secure document vaulting)
+* Current Location / Room Number: [ Text Input Box ]
+* Target Discharge Window: [ Native Calendar Date Picker ]
+* Discharge Urgency Status:
+* ( ) Urgent Case: Discharge scheduled within 24–48 hours.
+   * ( ) Standard Case: Step-down or alternate level of care placement planning (3+ days out).
+
+## Primary Clinical & Placement Drivers
+
+* Required Care Destination Type (Select Best Fit):
+* [ ] Memory Care: Advanced Dementia / Alzheimer's requiring a secured perimeter layout.
+   * [ ] Behavioral Health: Active psychiatric diagnoses, history of exit-seeking, or combativeness during care actions.
+   * [ ] Adult Family Home (AFH): Residential 6-bed high-acuity environment.
+   * [ ] Assisted Living / Respite: Light to moderate physical Activities of Daily Living (ADLs) assistance.
+* Financial Status Routing:
+* [ ] Straight Medicaid Active: COPES / LTC programs cross-validated.
+   * [ ] Medicaid Pending: Documented financial asset spend-down in progress.
+   * [ ] Medicare Days Remaining: Post-acute short-term rehab transition.
+   * [ ] Private Pay Verified: Complete private family funds available.
+
+
+Similar thinking can be deployed for the community provider intake form though in a simplified manner — especially the checkboxes and standardized options for their intake info.
+
+------------------------------
+
+Secure Document Upload Implementation
+
+Implement a dedicated drag-and-drop file staging target built to handle sensitive documentation:
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                  🔒 SECURE CLINICAL DOCUMENT UPLOAD BLOCK               │
+│                                                                        │
+│             Drag & Drop or Click to Upload Patient Charts              │
+│          (Accepted Formats: Secure PDFs, Word Docs, Image Scans)        │
+│                                                                        │
+│       [ Max File Size Limit: 25MB per document | AES-256 Secured ]      │
+└────────────────────────────────────────────────────────────────────────┘
+
+Form Hint Wording Placed Directly Beneath Target Block:
+💡 Recommended uploads for expedited RN clinical review: Hospital History & Physical (H&P), Current Medication Administration Record (MAR), PASRR Level 1 evaluation, or Physical/Occupational Therapy mobility notes.
+## 🚀 Primary Dispatch Button
+
+* Button Text Label: [ ⚡ Dispatch Referral to RN Clinical Queue ]
+
+------------------------------
+
+Part 4: Developer Verification Checklist
+
+- [ ] UI/UX: Deploy a sticky "Talk to an RN Now" header/footer element across all mobile breakpoints.
+- [ ] TEXT CONVERSION: Swap all "Find a Bed" programmatic labels, values, and copy strings to "Find Care".
+- [ ] REVENUE PURGE: Completely strip out the pricing tiers component block along with all explicit dollar fee values.
+- [ ] SPECIALTY ENHANCEMENT: Populate explicit tags for Behavioral Health and Memory Care in the copy and layout mockups.
+- [ ] DISCHARGE COMPLIANCE: Display references to WA State RCW laws (18.330 and 70.41.320) within public footer boundaries.
+- [ ] ARCHITECTURE: Ensure file upload targets use HTTPS protocols and write to storage endpoints with encryption at rest enabled.
+- [ ] WORKFLOW: Route incoming hospital portal form responses directly to the primary RN administrative panel using high-urgency visual notifications.
+
+
+
+
+
+
+murtaza mu se other wali cheez batae ga
