@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "https://nonnisplacement.netlify.app/*"
+  to = "https://bytes-test-3.com/:splat"
+  status = 301
+  force = true
