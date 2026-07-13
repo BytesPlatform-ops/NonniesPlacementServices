@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type UseFormRegister } from "react-hook-form";
+import { useForm, useWatch, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Send, Users, UserRound, ListChecks, CalendarClock } from "lucide-react";
@@ -56,20 +56,31 @@ const SCHEDULE = [
   "24-Hour Care",
 ];
 
-const schema = z.object({
-  contactName: z.string().min(2, "Enter the primary contact name"),
-  relationship: z.string().min(2, "Enter your relationship to the client"),
-  phone: z.string().min(7, "Enter a valid phone number"),
-  email: z.string().email("Enter a valid email address"),
-  clientName: z.string().min(2, "Enter the client's name"),
-  age: z.string().max(3, "Enter a valid age").optional().or(z.literal("")),
-  city: z.string().max(80).optional().or(z.literal("")),
-  livingSituation: z.string().min(1, "Select a current living situation"),
-  servicesNeeded: z.array(z.string()),
-  timeline: z.string().min(1, "Select how soon services are needed"),
-  schedule: z.array(z.string()),
-  notes: z.string().max(2000).optional().or(z.literal("")),
-});
+const schema = z
+  .object({
+    contactName: z.string().min(2, "Enter the primary contact name"),
+    relationship: z.string().min(2, "Enter your relationship to the client"),
+    phone: z.string().min(7, "Enter a valid phone number"),
+    email: z.string().email("Enter a valid email address"),
+    clientName: z.string().min(2, "Enter the client's name"),
+    age: z.string().max(3, "Enter a valid age").optional().or(z.literal("")),
+    city: z.string().max(80).optional().or(z.literal("")),
+    livingSituation: z.string().min(1, "Select a current living situation"),
+    servicesNeeded: z.array(z.string()),
+    servicesNeededOther: z.string().optional(),
+    timeline: z.string().min(1, "Select how soon services are needed"),
+    schedule: z.array(z.string()),
+    notes: z.string().max(2000).optional().or(z.literal("")),
+  })
+  // When "Other" is checked under Services Needed, its free-text field is required.
+  .superRefine((data, ctx) => {
+    if (data.servicesNeeded.includes("Other")) {
+      const v = data.servicesNeededOther;
+      if (typeof v !== "string" || v.trim().length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please describe the service needed", path: ["servicesNeededOther"] });
+      }
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -81,12 +92,15 @@ function CheckboxGroup({
   name,
   options,
   register,
+  other,
 }: {
   legend: string;
   icon: typeof ListChecks;
   name: "servicesNeeded" | "schedule";
   options: string[];
   register: Register;
+  /** Conditional free-text field rendered below the options (e.g. for "Other"). */
+  other?: React.ReactNode;
 }) {
   return (
     <fieldset className="min-w-0">
@@ -112,6 +126,7 @@ function CheckboxGroup({
           </label>
         ))}
       </div>
+      {other}
     </fieldset>
   );
 }
@@ -132,6 +147,7 @@ export function HomeCareInquiryForm() {
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
@@ -139,6 +155,9 @@ export function HomeCareInquiryForm() {
     mode: "onTouched",
     defaultValues: { servicesNeeded: [], schedule: [] },
   });
+
+  const servicesNeeded = useWatch({ control, name: "servicesNeeded" });
+  const showServicesOther = Array.isArray(servicesNeeded) && servicesNeeded.includes("Other");
 
   const onSubmit = async () => {
     // Frontend only — simulate the inquiry, then confirm.
@@ -195,7 +214,35 @@ export function HomeCareInquiryForm() {
         </fieldset>
 
         {/* Services Needed */}
-        <CheckboxGroup legend="Services Needed" icon={ListChecks} name="servicesNeeded" options={SERVICES_NEEDED} register={register} />
+        <CheckboxGroup
+          legend="Services Needed"
+          icon={ListChecks}
+          name="servicesNeeded"
+          options={SERVICES_NEEDED}
+          register={register}
+          other={
+            showServicesOther && (
+              <div className="mt-4">
+                <label htmlFor="servicesNeededOther" className="text-sm font-semibold text-navy">
+                  Please describe the service needed
+                </label>
+                <input
+                  id="servicesNeededOther"
+                  type="text"
+                  placeholder="Tell us what other support is needed"
+                  aria-invalid={!!errors.servicesNeededOther}
+                  className="mt-1.5 w-full rounded-xl border border-navy/20 bg-[#fffdf9] px-4 py-3 text-sm text-navy placeholder:text-slate-ink/55 transition-[border-color,box-shadow] duration-150 focus:border-teal focus:outline-none focus:ring-4 focus:ring-teal/20"
+                  {...register("servicesNeededOther")}
+                />
+                {errors.servicesNeededOther?.message && (
+                  <p role="alert" className="mt-2 text-sm font-medium text-coral">
+                    {errors.servicesNeededOther.message}
+                  </p>
+                )}
+              </div>
+            )
+          }
+        />
 
         {/* How soon */}
         <div className="max-w-md">
