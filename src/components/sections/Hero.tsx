@@ -77,12 +77,12 @@ export function Hero() {
               RN-led placement · Washington State
             </div>
 
-            <h1 className="mt-6 font-display text-[clamp(2.7rem,6.6vw,5.1rem)] font-medium leading-[1.0] tracking-tight text-white">
+            <h1 className="mt-6 font-display text-[clamp(2.7rem,6.6vw,5.1rem)] font-medium leading-[1.12] tracking-tight text-white">
               {LINES.map((line, li) => (
                 <span key={li} className="block">
                   {line.map(({ word, accent }, wi) => (
-                    <span key={wi} className="mr-[0.26em] inline-block overflow-hidden align-bottom">
-                      <span data-word className={"inline-block " + (accent ? "gradient-text-mint italic" : "")}>
+                    <span key={wi} className="mr-[0.22em] inline-block overflow-hidden align-bottom pb-[0.15em] -mb-[0.15em]">
+                      <span data-word className={"inline-block " + (accent ? "gradient-text-mint italic pr-[0.1em]" : "")}>
                         {word}
                       </span>
                     </span>
