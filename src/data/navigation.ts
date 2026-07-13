@@ -6,6 +6,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "How it works", href: "/#how-it-works" },
   { label: "For Families", href: "/families" },
   { label: "For Providers", href: "/providers" },
+  { label: "Home Health Care", href: "/home-health-care" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
