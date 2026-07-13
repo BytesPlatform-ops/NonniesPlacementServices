@@ -5,7 +5,7 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "dark" | "outlin
 export type ButtonSize = "sm" | "md" | "lg";
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 rounded-full font-semibold tracking-tight " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold tracking-tight " +
   "transition-[transform,background-color,color,box-shadow] duration-200 ease-out " +
   "active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 disabled:opacity-50 disabled:pointer-events-none";
 

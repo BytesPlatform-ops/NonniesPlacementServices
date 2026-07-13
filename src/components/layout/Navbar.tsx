@@ -57,7 +57,7 @@ export function Navbar() {
                       href={link.href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "rounded-full px-3.5 py-2 text-sm font-medium text-slate-ink transition-all duration-200 hover:text-navy hover:bg-ice hover:ring-1 hover:ring-coral/25",
+                        "whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium text-slate-ink transition-all duration-200 hover:text-navy hover:bg-ice hover:ring-1 hover:ring-coral/25",
                         active && "text-navy bg-ice ring-1 ring-coral/40",
                       )}
                     >
@@ -72,7 +72,7 @@ export function Navbar() {
                   href={REFERRAL_CTA.href}
                   aria-current={pathname === REFERRAL_CTA.href ? "page" : undefined}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold text-teal ring-1 ring-teal/30 transition-all duration-200 hover:bg-teal/10 hover:ring-teal/50",
+                    "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold text-teal ring-1 ring-teal/30 transition-all duration-200 hover:bg-teal/10 hover:ring-teal/50",
                     pathname === REFERRAL_CTA.href && "bg-teal/10 ring-teal/60",
                   )}
                 >
