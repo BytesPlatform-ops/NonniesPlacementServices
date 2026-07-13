@@ -171,16 +171,16 @@ function ChoiceCard({
   return (
     <label
       className={cn(
-        "group relative flex cursor-pointer items-start gap-3 rounded-2xl border border-navy/15 bg-white p-4 transition-all duration-150",
-        "hover:border-teal/50 hover:bg-ice/40",
-        "has-[:checked]:border-teal has-[:checked]:bg-teal/[0.07] has-[:checked]:ring-1 has-[:checked]:ring-teal/40",
+        "group relative flex cursor-pointer items-start gap-3 rounded-2xl border border-navy/15 bg-ivory p-3.5 transition-all duration-150",
+        "hover:border-mint hover:bg-mint/[0.05]",
+        "has-[:checked]:border-mint has-[:checked]:bg-mint/[0.10] has-[:checked]:ring-1 has-[:checked]:ring-mint/40",
         "has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-coral",
       )}
     >
       <input {...reg} type={type} value={option.value} className="peer sr-only" />
       <span
         className={cn(
-          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border border-navy/30 bg-white transition-colors peer-checked:border-teal peer-checked:bg-teal",
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border border-navy/30 bg-white transition-colors peer-checked:border-mint peer-checked:bg-mint",
           type === "radio" ? "rounded-full" : "rounded-md",
         )}
       >
@@ -199,19 +199,20 @@ function Question({
   hint,
   error,
   children,
-  cols = 1,
+  span = 1,
 }: {
   label: string;
   hint?: string;
   error?: string;
   children: React.ReactNode;
-  cols?: 1 | 2;
+  /** Span both columns of the form-body grid on desktop. */
+  span?: 1 | 2;
 }) {
   return (
-    <fieldset className="min-w-0">
-      <legend className="text-sm font-semibold text-navy">{label}</legend>
-      {hint && <p className="mt-0.5 text-xs text-slate-ink/70">{hint}</p>}
-      <div className={cn("mt-3 grid gap-2.5", cols === 2 && "sm:grid-cols-2")}>{children}</div>
+    <fieldset className={cn("flex min-w-0 flex-col rounded-2xl bg-ice/40 p-4 ring-1 ring-navy/[0.08] sm:p-5", span === 2 && "lg:col-span-2")}>
+      <legend className="px-1 text-sm font-semibold text-navy">{label}</legend>
+      {hint && <p className="text-xs text-slate-ink/70">{hint}</p>}
+      <div className={cn("mt-3 grid gap-2.5", span === 2 && "sm:grid-cols-2")}>{children}</div>
       {error && (
         <p role="alert" className="mt-2 text-sm font-medium text-coral">
           {error}
@@ -359,10 +360,10 @@ export function CareProfileWizard() {
 
       <div className="p-6 sm:p-8">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8" noValidate>
-          <div ref={panelRef} className="space-y-8">
+          <div ref={panelRef}>
             {/* Step 1 — The Basics */}
             {step === 0 && (
-              <>
+              <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
                 <Question label="Who is filling out this form?" error={errors.filledBy?.message}>
                   {FILLED_BY.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("filledBy")} />
@@ -373,17 +374,17 @@ export function CareProfileWizard() {
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("location")} />
                   ))}
                 </Question>
-                <Question label="Target move-in timeline" error={errors.timeline?.message}>
+                <Question label="Target move-in timeline" error={errors.timeline?.message} span={2}>
                   {TIMELINE.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("timeline")} />
                   ))}
                 </Question>
-              </>
+              </div>
             )}
 
             {/* Step 2 — Cognitive & Memory Support */}
             {step === 1 && (
-              <>
+              <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
                 <Question
                   label="Does the individual have a diagnosed cognitive condition?"
                   hint="Select all that apply"
@@ -397,12 +398,12 @@ export function CareProfileWizard() {
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("safetyBehaviors")} />
                   ))}
                 </Question>
-              </>
+              </div>
             )}
 
             {/* Step 3 — Mental & Behavioral Health */}
             {step === 2 && (
-              <>
+              <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
                 <Question
                   label="Are there active mental health diagnoses requiring specialized tracking?"
                   hint="Select all that apply"
@@ -416,12 +417,12 @@ export function CareProfileWizard() {
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("behavioralExpressions")} />
                   ))}
                 </Question>
-              </>
+              </div>
             )}
 
             {/* Step 4 — Medical & Physical Level of Care */}
             {step === 3 && (
-              <>
+              <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
                 <Question label="Mobility support level" error={errors.mobility?.message}>
                   {MOBILITY.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("mobility")} />
@@ -432,28 +433,28 @@ export function CareProfileWizard() {
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("medicalInterventions")} />
                   ))}
                 </Question>
-                <Question label="Medication assistance" error={errors.medicationAssistance?.message}>
+                <Question label="Medication assistance" error={errors.medicationAssistance?.message} span={2}>
                   {MEDICATION.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("medicationAssistance")} />
                   ))}
                 </Question>
-              </>
+              </div>
             )}
 
             {/* Step 5 — Financial Capabilities */}
             {step === 4 && (
-              <>
+              <div className="grid gap-5 sm:gap-6 lg:grid-cols-2 lg:items-start">
                 <Question label="How will care be financed?" hint="Select all that apply">
                   {FINANCING.map((opt) => (
                     <ChoiceCard key={opt.value} type="checkbox" option={opt} reg={register("financing")} />
                   ))}
                 </Question>
-                <Question label="Estimated monthly care budget" error={errors.budget?.message} cols={2}>
+                <Question label="Estimated monthly care budget" error={errors.budget?.message}>
                   {BUDGET.map((opt) => (
                     <ChoiceCard key={opt.value} type="radio" option={opt} reg={register("budget")} />
                   ))}
                 </Question>
-              </>
+              </div>
             )}
           </div>
 

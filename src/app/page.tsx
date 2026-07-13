@@ -35,13 +35,25 @@ export default function Home() {
       <ServiceAreaBand />
       <PricingSection />
       <Section id="care-profile" tone="ice" density="normal">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+        <div className="mx-auto max-w-6xl">
+          {/* Intro sits full-width on top; the form spans the section below it. */}
           <SectionHeading
             eyebrow="Start your care profile"
             title="Tell us about your loved one"
             description="A few guided taps — no long forms. Share the care picture and an RN-led specialist can begin matching. Your information is private and HIPAA-secure."
+            className="max-w-[820px]"
           />
-          <CareProfileWizard />
+          <ul className="mt-5 flex flex-wrap items-center gap-2 text-sm font-medium text-slate-ink">
+            {["RN-led", "$0 to families", "HIPAA-secure"].map((pill) => (
+              <li key={pill} className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 ring-1 ring-navy/10">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal" aria-hidden />
+                {pill}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-10">
+            <CareProfileWizard />
+          </div>
         </div>
       </Section>
       <FinalCTA />
