@@ -40,6 +40,7 @@ export default function AboutPage() {
     <>
       <PageHero
         eyebrow="Our mission"
+        tone="dark"
         title="No family should navigate a care crisis alone"
         description="Nonni's Placement Services began with a simple conviction: care decisions are among the hardest a family will make, and they deserve a steady, clinical hand. We're an RN-led, Washington-focused platform pairing nursing judgment with intelligent matching — across behavioral and medical health."
         primary={{ label: "Talk to us", href: "/contact" }}

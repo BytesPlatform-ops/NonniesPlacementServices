@@ -26,6 +26,7 @@ export default function ContactPage() {
     <>
       <PageHero
         eyebrow="Contact"
+        tone="dark"
         title="Let's talk through the care you need"
         description="Whether you're a family beginning a search, a hospital coordinating a discharge, or a provider with beds to fill — we're here to help you take the next step. Based in Tacoma, serving all of Washington State."
         primary={{ label: "Find Care", href: "/families#find-a-bed" }}

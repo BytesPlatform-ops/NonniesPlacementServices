@@ -39,6 +39,7 @@ export default function FamiliesPage() {
     <>
       <PageHero
         eyebrow="For Families"
+        tone="dark"
         title="Finding the right care, with someone by your side"
         description="When a loved one needs care, the search shouldn't fall on your shoulders alone. Nonni's pairs a Registered Nurse with intelligent matching to find a placement that truly fits — calmly, quickly, and at no cost to your family."
         primary={{ label: "Find Care", href: "#find-a-bed" }}
