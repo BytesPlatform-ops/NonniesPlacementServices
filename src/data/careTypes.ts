@@ -36,8 +36,8 @@ export const CARE_LEVELS: Option[] = [
   { value: "independent", label: "Independent" },
   { value: "medium", label: "Medium Care" },
   { value: "heavy", label: "Heavy Care" },
-  { value: "memory", label: "Memory / cognitive care" },
-  { value: "behavioral", label: "Behavioral health" },
+  { value: "memory", label: "Memory Care — Dementia & Alzheimer's" },
+  { value: "behavioral", label: "Mental & Behavioral Health" },
   { value: "unsure", label: "Unsure — help me decide" },
 ];
 
@@ -75,8 +75,10 @@ export const BED_TYPES: Option[] = [
  * than free text). Mirrors the referral portal's standardized-options approach.
  */
 export const PROVIDER_SPECIALTIES: Option[] = [
-  { value: "memory-care", label: "Memory care / dementia" },
-  { value: "behavioral-health", label: "Behavioral health" },
+  { value: "mental-behavioral-health", label: "Mental & Behavioral Health" },
+  { value: "dementia", label: "Dementia" },
+  { value: "alzheimers", label: "Alzheimer's" },
+  { value: "memory-care", label: "Memory Care" },
   { value: "psychiatric", label: "Psychiatric / mental health" },
   { value: "skilled-nursing", label: "Skilled nursing" },
   { value: "hospice", label: "Hospice / end-of-life" },
@@ -98,10 +100,10 @@ export type CareTypeCard = {
 export const CARE_TYPE_CARDS: CareTypeCard[] = [
   { icon: Home, title: "Adult Family Home", description: "Small, licensed residential homes offering personalized assistance and supervision in a home-like setting.", image: "/assets/images/caregiver-resident-room.jpg" },
   { icon: Building, title: "Assisted Living", description: "Supportive communities for people who need help with daily activities while keeping their independence.", image: "/assets/images/assisted-living-community.jpg" },
-  { icon: Brain, title: "Memory Care", description: "Secured, specialized care for Alzheimer's and other forms of dementia, with trained staff and structured routines." },
+  { icon: Brain, title: "Memory Care — Dementia & Alzheimer's", description: "Secured, specialized care for Alzheimer's and other forms of dementia, with trained staff and structured routines." },
   { icon: Activity, title: "Skilled Nursing", description: "24-hour licensed nursing for higher-acuity medical needs and rehabilitation." },
   { icon: HeartPulse, title: "Hospice", description: "Comfort-focused, dignified care for end-of-life — centered on the person and their family.", image: "/assets/images/elderly-hands-care.jpg" },
-  { icon: ShieldPlus, title: "Behavioral Health", description: "Placements experienced with schizophrenia, bipolar, PTSD, depression, and substance-use recovery." },
+  { icon: ShieldPlus, title: "Mental & Behavioral Health", description: "Placements experienced with schizophrenia, bipolar, PTSD, depression, and substance-use recovery." },
   { icon: Brain, title: "Psychiatric & Mental Health", description: "Communities equipped for complex psychiatric and mental-health needs, matched with clinical review." },
   { icon: Hospital, title: "Long Term Acute Care", description: "Extended acute medical care for patients recovering from serious illness or injury." },
   { icon: Accessibility, title: "Rehabilitation", description: "Short-term rehab settings that restore strength, mobility, and independence after a hospital stay." },
@@ -112,6 +114,9 @@ export const CARE_TYPE_CARDS: CareTypeCard[] = [
 
 /** Clinical conditions Nonni's places for (deck slide 3). */
 export const CLINICAL_CONDITIONS = [
+  "Mental & Behavioral Health",
+  "Dementia",
+  "Alzheimer's",
   "Medication management",
   "Diabetes management",
   "Mobility assistance",

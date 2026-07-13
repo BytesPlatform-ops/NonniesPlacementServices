@@ -41,12 +41,12 @@ export const DISCHARGE_URGENCY: DriverOption[] = [
 export const CARE_DESTINATIONS: DriverOption[] = [
   {
     value: "memory-care",
-    label: "Memory Care",
+    label: "Memory Care — Dementia & Alzheimer's",
     description: "Advanced dementia / Alzheimer's requiring a secured perimeter layout.",
   },
   {
     value: "behavioral-health",
-    label: "Behavioral Health",
+    label: "Mental & Behavioral Health",
     description: "Active psychiatric diagnoses, history of exit-seeking, or combativeness during care actions.",
   },
   {
