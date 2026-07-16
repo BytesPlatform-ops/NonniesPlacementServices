@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type BaseSyntheticEvent } from "react";
 import { useForm, useWatch, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,7 +10,10 @@ import { FormField } from "@/components/ui/FormField";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
+import { submitForm, field, optionLabel, readHoneypot } from "@/lib/forms/submitForm";
 import type { Option } from "@/data/careTypes";
 
 const LIVING_SITUATION: Option[] = [
@@ -144,6 +147,7 @@ function SectionLabel({ icon: Icon, title }: { icon: typeof Users; title: string
 
 export function HomeCareInquiryForm() {
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const {
     register,
     handleSubmit,
@@ -159,10 +163,52 @@ export function HomeCareInquiryForm() {
   const servicesNeeded = useWatch({ control, name: "servicesNeeded" });
   const showServicesOther = Array.isArray(servicesNeeded) && servicesNeeded.includes("Other");
 
-  const onSubmit = async () => {
-    // Frontend only — simulate the inquiry, then confirm.
-    await new Promise((r) => setTimeout(r, 700));
-    setDone(true);
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
+    try {
+      await submitForm({
+        formName: "Cascadia Home Health",
+        replyTo: data.email,
+        honeypot: readHoneypot(event),
+        raw: data,
+        sections: [
+          {
+            title: "Family Information",
+            fields: [
+              field("Primary Contact Name", data.contactName),
+              field("Relationship to Client", data.relationship),
+              field("Phone Number", data.phone),
+              field("Email Address", data.email),
+            ],
+          },
+          {
+            title: "Client Information",
+            fields: [
+              field("Client Name", data.clientName),
+              field("Age", data.age),
+              field("City", data.city),
+              { label: "Current Living Situation", value: optionLabel(LIVING_SITUATION, data.livingSituation) },
+            ],
+          },
+          {
+            title: "Services",
+            fields: [
+              field("Services Needed", data.servicesNeeded),
+              field("Other service details", data.servicesNeededOther),
+              { label: "How Soon Do You Need Services?", value: optionLabel(TIMELINE, data.timeline) },
+              field("Preferred Schedule", data.schedule),
+            ],
+          },
+          {
+            title: "Additional Information",
+            fields: [field("Additional Information", data.notes)],
+          },
+        ],
+      });
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -261,7 +307,10 @@ export function HomeCareInquiryForm() {
           {...register("notes")}
         />
 
+        <Honeypot />
+
         <div className="flex flex-col gap-4">
+          <FormError show={failed} />
           <Button type="submit" variant="primary" size="lg" className="w-full sm:w-auto sm:self-start" disabled={isSubmitting}>
             {isSubmitting ? "Submitting…" : "Submit Inquiry"} <Send className="h-4 w-4" aria-hidden />
           </Button>

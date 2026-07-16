@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type BaseSyntheticEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,10 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
+import { submitForm, field, optionLabel, readHoneypot } from "@/lib/forms/submitForm";
 
 const INQUIRY_TYPES = [
   { value: "family", label: "I'm a family / care seeker" },
@@ -33,6 +36,7 @@ type FormValues = z.infer<typeof schema>;
 
 export function ContactForm() {
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const {
     register,
     handleSubmit,
@@ -40,9 +44,32 @@ export function ContactForm() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), mode: "onTouched" });
 
-  const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 600));
-    setDone(true);
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
+    try {
+      await submitForm({
+        formName: "Contact Form",
+        replyTo: data.email,
+        honeypot: readHoneypot(event),
+        raw: data,
+        sections: [
+          {
+            title: "Contact",
+            fields: [
+              field("Name", data.name),
+              field("Email", data.email),
+              field("Phone", data.phone),
+              { label: "Reaching out as", value: optionLabel(INQUIRY_TYPES, data.inquiryType) },
+              field("Message", data.message),
+              field("Consent to contact", data.consent),
+            ],
+          },
+        ],
+      });
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -84,6 +111,8 @@ export function ContactForm() {
           {...register("consent")}
         />
       </div>
+      <Honeypot />
+      <FormError show={failed} className="mt-6" />
       <Button type="submit" variant="primary" size="lg" className="mt-8 w-full sm:w-auto" disabled={isSubmitting}>
         {isSubmitting ? "Sending…" : "Send message"} <Send className="h-4 w-4" aria-hidden />
       </Button>

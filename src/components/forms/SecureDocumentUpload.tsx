@@ -24,7 +24,15 @@ const extOf = (name: string) => {
 };
 const sizeLabel = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-export function SecureDocumentUpload({ className }: { className?: string }) {
+export type StagedFileMeta = { name: string; size: number; type: string };
+
+export function SecureDocumentUpload({
+  className,
+  onFilesChange,
+}: {
+  className?: string;
+  onFilesChange?: (files: StagedFileMeta[]) => void;
+}) {
   const [dragging, setDragging] = useState(false);
   const [staged, setStaged] = useState<File[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -53,16 +61,20 @@ export function SecureDocumentUpload({ className }: { className?: string }) {
       nextErrors.push("You can upload up to 5 documents only.");
     }
     const toAdd = accepted.slice(0, Math.max(0, room));
-    if (toAdd.length) setStaged((prev) => [...prev, ...toAdd]);
+    const nextStaged = toAdd.length ? [...staged, ...toAdd] : staged;
+    if (toAdd.length) setStaged(nextStaged);
     setErrors(nextErrors);
+    onFilesChange?.(nextStaged.map((f) => ({ name: f.name, size: f.size, type: f.type })));
 
     // Allow re-selecting the same file after a removal.
     if (inputRef.current) inputRef.current.value = "";
   };
 
   const remove = (index: number) => {
-    setStaged((prev) => prev.filter((_, i) => i !== index));
+    const nextStaged = staged.filter((_, i) => i !== index);
+    setStaged(nextStaged);
     setErrors([]);
+    onFilesChange?.(nextStaged.map((f) => ({ name: f.name, size: f.size, type: f.type })));
   };
 
   const atLimit = staged.length >= MAX_FILES;

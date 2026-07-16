@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type BaseSyntheticEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,8 +13,11 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { PhotoUploadPlaceholder } from "./PhotoUploadPlaceholder";
 import { DataSecurityNotice } from "./DataSecurityNotice";
+import { submitForm, field, optionLabel, optionLabels, readHoneypot } from "@/lib/forms/submitForm";
 import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES, PROVIDER_SPECIALTIES } from "@/data/careTypes";
 
 const schema = z.object({
@@ -50,6 +53,7 @@ const STEP_FIELDS: (keyof FormValues)[][] = [
 export function ListBedsForm() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -79,9 +83,50 @@ export function ListBedsForm() {
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 600));
-    setDone(true);
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
+    try {
+      await submitForm({
+        formName: "Provider Form",
+        replyTo: data.email,
+        honeypot: readHoneypot(event),
+        raw: data,
+        sections: [
+          {
+            title: "Community",
+            fields: [
+              field("Provider / community name", data.communityName),
+              field("Contact person", data.contactPerson),
+              field("Email", data.email),
+              field("Phone", data.phone),
+              field("License number", data.license),
+            ],
+          },
+          {
+            title: "Facility",
+            fields: [
+              { label: "Facility type", value: optionLabel(FACILITY_TYPES, data.facilityType) },
+              field("Location", data.location),
+              field("Beds available", data.availableBeds),
+              { label: "Primary bed type", value: optionLabel(BED_TYPES, data.bedType) },
+              field("Specialties", optionLabels(PROVIDER_SPECIALTIES, data.specialties)),
+            ],
+          },
+          {
+            title: "Details",
+            fields: [
+              field("Pricing range", data.pricingRange),
+              { label: "Accepted funding", value: optionLabel(FUNDING_TYPES, data.funding) },
+              field("Notes", data.notes),
+              field("Authorized to list", data.consent),
+            ],
+          },
+        ],
+      });
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -215,6 +260,8 @@ export function ListBedsForm() {
           )}
         </div>
 
+        <Honeypot />
+        <FormError show={failed} className="mt-6" />
         <DataSecurityNotice className="mt-6 border-t border-navy/10 pt-5" />
         </form>
       </div>

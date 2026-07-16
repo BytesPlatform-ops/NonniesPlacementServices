@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type BaseSyntheticEvent } from "react";
 import { useForm, useWatch, type UseFormRegister, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +9,10 @@ import { gsap, useGSAP } from "@/lib/gsap";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
+import { submitForm, field, readHoneypot, type SubmissionFieldItem } from "@/lib/forms/submitForm";
 
 /* -------------------------------------------------------------------------- */
 /*  Options — transcribed exactly from the intake spec                         */
@@ -317,6 +320,7 @@ function OtherInput({
 export function CareProfileWizard() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [priority, setPriority] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -365,18 +369,81 @@ export function CareProfileWizard() {
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  const onSubmit = async (data: FormValues) => {
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
     // Conditional logic rule: Hospital ER or Immediate → high_urgency status.
     const status =
       data.location === LOCATION_HOSPITAL || data.timeline === TIMELINE_IMMEDIATE
         ? "high_urgency"
         : "standard";
-    const payload = { ...data, status };
-    // Frontend only — backend wiring pending. Assembled profile (incl. status flag):
-    console.info("[CareProfileWizard] submission", payload);
-    setPriority(status === "high_urgency");
-    await new Promise((r) => setTimeout(r, 600));
-    setDone(true);
+    // Only include an "Other" detail line when the user actually typed one.
+    const opt = (label: string, value: unknown): SubmissionFieldItem | null =>
+      value && String(value).trim() ? field(label, value) : null;
+    const keep = (items: (SubmissionFieldItem | null)[]) => items.filter((x): x is SubmissionFieldItem => x !== null);
+
+    try {
+      await submitForm({
+        formName: "Care Profile",
+        honeypot: readHoneypot(event),
+        raw: { ...data, status },
+        sections: [
+          {
+            title: "The Basics",
+            fields: keep([
+              field("Who is filling out this form?", data.filledBy),
+              opt("Other — role", data.filledByOther),
+              field("Where is the individual currently located?", data.location),
+              opt("Other — current setting", data.locationOther),
+              field("Target move-in timeline", data.timeline),
+              opt("Other — timeline", data.timelineOther),
+              field("Urgency status", status === "high_urgency" ? "High priority" : "Standard"),
+            ]),
+          },
+          {
+            title: "Memory Support",
+            fields: keep([
+              field("Diagnosed cognitive condition", data.cognitiveConditions),
+              opt("Other — cognitive condition", data.cognitiveConditionsOther),
+              field("Safety & cognitive behaviors", data.safetyBehaviors),
+              opt("Other — safety behavior", data.safetyBehaviorsOther),
+            ]),
+          },
+          {
+            title: "Behavioral Health",
+            fields: keep([
+              field("Active mental health diagnoses", data.mentalHealth),
+              opt("Other — mental health", data.mentalHealthOther),
+              field("Behavioral care expressions", data.behavioralExpressions),
+              opt("Other — behavioral expression", data.behavioralExpressionsOther),
+            ]),
+          },
+          {
+            title: "Level of Care",
+            fields: keep([
+              field("Mobility support level", data.mobility),
+              opt("Other — mobility", data.mobilityOther),
+              field("Specialized medical interventions", data.medicalInterventions),
+              opt("Other — medical intervention", data.medicalInterventionsOther),
+              field("Medication assistance", data.medicationAssistance),
+              opt("Other — medication", data.medicationAssistanceOther),
+            ]),
+          },
+          {
+            title: "Financials",
+            fields: keep([
+              field("How care will be financed", data.financing),
+              opt("Other — financing", data.financingOther),
+              field("Estimated monthly care budget", data.budget),
+              opt("Other — budget", data.budgetOther),
+            ]),
+          },
+        ],
+      });
+      setPriority(status === "high_urgency");
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -660,6 +727,8 @@ export function CareProfileWizard() {
             )}
           </div>
 
+          <Honeypot />
+          <FormError show={failed} />
           <DataSecurityNotice className="border-t border-navy/10 pt-5" />
         </form>
       </div>

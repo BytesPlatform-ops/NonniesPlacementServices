@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type BaseSyntheticEvent } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,8 +10,11 @@ import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
-import { SecureDocumentUpload } from "./SecureDocumentUpload";
+import { SecureDocumentUpload, type StagedFileMeta } from "./SecureDocumentUpload";
+import { submitForm, field, optionLabel, optionLabels, readHoneypot } from "@/lib/forms/submitForm";
 import {
   DISCHARGE_URGENCY,
   CARE_DESTINATIONS,
@@ -63,6 +66,8 @@ function SectionLabel({ icon: Icon, title, children }: { icon: typeof Stethoscop
 
 export function HospitalReferralForm() {
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [files, setFiles] = useState<StagedFileMeta[]>([]);
   const {
     register,
     handleSubmit,
@@ -77,10 +82,50 @@ export function HospitalReferralForm() {
   const financialRouting = useWatch({ control, name: "financialRouting" });
   const showFinancialOther = financialRouting?.includes("other") ?? false;
 
-  const onSubmit = async () => {
-    // Frontend only — simulate dispatch to the RN clinical queue, then confirm.
-    await new Promise((r) => setTimeout(r, 700));
-    setDone(true);
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
+    try {
+      await submitForm({
+        formName: "Hospital Referral",
+        replyTo: data.email,
+        honeypot: readHoneypot(event),
+        files,
+        raw: { ...data, uploadedDocuments: files },
+        sections: [
+          {
+            title: "Professional Contact Information",
+            fields: [
+              field("Referring professional name", data.referringName),
+              field("Hospital / corporate facility", data.hospital),
+              field("Location / ZIP code", data.location),
+              field("Direct phone / pager contact", data.phone),
+              field("Secure business email address", data.email),
+            ],
+          },
+          {
+            title: "Patient Baseline Metrics",
+            fields: [
+              field("Patient initials only", data.patientInitials),
+              field("Current location / room number", data.roomNumber),
+              field("Target discharge window", data.dischargeWindow),
+              { label: "Discharge urgency status", value: optionLabel(DISCHARGE_URGENCY, data.urgency) },
+            ],
+          },
+          {
+            title: "Primary Clinical & Placement Drivers",
+            fields: [
+              field("Required care destination type", optionLabels(CARE_DESTINATIONS, data.careDestinations)),
+              field("Financial status routing", optionLabels(FINANCIAL_ROUTING, data.financialRouting)),
+              field("Other financial status", data.financialRoutingOther),
+              field("Patient choice attestation (RCW 70.41.322)", data.attestation),
+            ],
+          },
+        ],
+      });
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -203,7 +248,7 @@ export function HospitalReferralForm() {
 
         {/* Secure document upload */}
         <fieldset>
-          <SecureDocumentUpload />
+          <SecureDocumentUpload onFilesChange={setFiles} />
         </fieldset>
 
         {/* Attestation */}
@@ -214,7 +259,10 @@ export function HospitalReferralForm() {
           {...register("attestation")}
         />
 
+        <Honeypot />
+
         <div className="flex flex-col gap-4">
+          <FormError show={failed} />
           <Button type="submit" variant="primary" size="lg" className="w-full sm:w-auto sm:self-start" disabled={isSubmitting}>
             <Zap className="h-4 w-4" aria-hidden /> {isSubmitting ? "Dispatching…" : "Dispatch Referral to RN Clinical Queue"}
           </Button>

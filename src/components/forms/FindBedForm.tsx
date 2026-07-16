@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type BaseSyntheticEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,7 +13,10 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
+import { FormError } from "./FormError";
+import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
+import { submitForm, field, optionLabel, readHoneypot } from "@/lib/forms/submitForm";
 import {
   FACILITY_TYPES,
   CARE_LEVELS,
@@ -49,6 +52,7 @@ const STEP_FIELDS: (keyof FormValues)[][] = [
 export function FindBedForm() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -78,10 +82,48 @@ export function FindBedForm() {
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  const onSubmit = async () => {
-    // Frontend only — simulate a brief submit, then show success.
-    await new Promise((r) => setTimeout(r, 600));
-    setDone(true);
+  const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
+    setFailed(false);
+    try {
+      await submitForm({
+        formName: "Find a Bed",
+        replyTo: data.email,
+        honeypot: readHoneypot(event),
+        raw: data,
+        sections: [
+          {
+            title: "About you",
+            fields: [
+              field("Name", data.name),
+              field("Relationship to patient/resident", data.relationship),
+              field("Email", data.email),
+              field("Phone", data.phone),
+            ],
+          },
+          {
+            title: "Care needs",
+            fields: [
+              field("Desired location", data.location),
+              { label: "Facility type", value: optionLabel(FACILITY_TYPES, data.facilityType) },
+              { label: "Care level", value: optionLabel(CARE_LEVELS, data.careLevel) },
+              { label: "Bed preference", value: optionLabel(BED_PREFERENCES, data.bedPreference) },
+            ],
+          },
+          {
+            title: "Details",
+            fields: [
+              { label: "Funding / payment type", value: optionLabel(FUNDING_TYPES, data.funding) },
+              { label: "Timeline / urgency", value: optionLabel(TIMELINES, data.timeline) },
+              field("Notes / special needs", data.notes),
+              field("Consent to contact", data.consent),
+            ],
+          },
+        ],
+      });
+      setDone(true);
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (done) {
@@ -183,6 +225,8 @@ export function FindBedForm() {
           )}
         </div>
 
+        <Honeypot />
+        <FormError show={failed} className="mt-6" />
         <DataSecurityNotice className="mt-6 border-t border-navy/10 pt-5" />
         </form>
       </div>
