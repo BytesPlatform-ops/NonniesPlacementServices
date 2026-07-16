@@ -123,8 +123,6 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
           .join("")}</table><p style="margin:6px 0 0;font-size:12px;color:#8a7a68">File metadata only — documents are not attached to this email.</p>`
       : "";
 
-  const rawJson = esc(JSON.stringify(sub.raw ?? {}, null, 2));
-
   const html = `<!doctype html><html><body style="margin:0;background:#faf7f2;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
     <div style="max-width:640px;margin:0 auto;padding:24px">
       <div style="background:#472e16;color:#fff;border-radius:14px 14px 0 0;padding:20px 24px">
@@ -135,9 +133,7 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
         <table style="width:100%;border-collapse:collapse;font-size:14px">${summaryHtml}</table>
         ${sectionsHtml}
         ${filesHtml}
-        <h3 style="margin:24px 0 8px;color:#472e16;font-size:15px">Raw Submission Data</h3>
-        <pre style="background:#faf7f2;border:1px solid #eadfce;border-radius:10px;padding:12px;font-size:12px;color:#5e4a38;white-space:pre-wrap;word-break:break-word;overflow-x:auto">${rawJson}</pre>
-        <p style="margin:20px 0 0;font-size:12px;color:#8a7a68">This message was generated from the Nonni's website form.</p>
+        <p style="margin:24px 0 0;font-size:12px;color:#8a7a68">This message was generated from the Nonni's website form.</p>
       </div>
     </div>
   </body></html>`;
@@ -159,7 +155,6 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
     for (const f of sub.files) lines.push(`- ${f.name} (${fmtBytes(f.size)} · ${f.type || "unknown type"})`);
     lines.push("(File metadata only — documents are not attached.)", "");
   }
-  lines.push("Raw Submission Data:", JSON.stringify(sub.raw ?? {}, null, 2), "");
   lines.push("This message was generated from the Nonni's website form.");
   const text = lines.join("\n");
 
