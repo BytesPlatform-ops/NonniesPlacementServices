@@ -1,20 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Zap, Stethoscope, UserRound, ClipboardList, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
-import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FormSuccess } from "./FormSuccess";
 import { DataSecurityNotice } from "./DataSecurityNotice";
 import { SecureDocumentUpload } from "./SecureDocumentUpload";
 import {
-  REFERRAL_HOSPITALS,
   DISCHARGE_URGENCY,
   CARE_DESTINATIONS,
   FINANCIAL_ROUTING,
@@ -23,20 +21,28 @@ import {
 
 // Checkbox groups arrive from RHF as arrays of checked values (defaultValues
 // seed them to []), so they validate directly as string arrays.
-const schema = z.object({
-  referringName: z.string().min(2, "Enter the referring professional's name"),
-  hospital: z.string().min(1, "Select a hospital or facility"),
-  location: z.string().min(2, "Enter a location or ZIP code"),
-  phone: z.string().min(7, "Enter a direct phone or pager number"),
-  email: z.string().email("Enter a valid secure business email"),
-  patientInitials: z.string().min(1, "Enter patient initials").max(3, "Maximum 3 characters"),
-  roomNumber: z.string().min(1, "Enter the current location / room number"),
-  dischargeWindow: z.string().min(1, "Select a target discharge date"),
-  urgency: z.string().min(1, "Select a discharge urgency status"),
-  careDestinations: z.array(z.string()).min(1, "Select at least one care destination"),
-  financialRouting: z.array(z.string()).min(1, "Select at least one funding status"),
-  attestation: z.literal(true, { message: "Please confirm patient choice has been documented" }),
-});
+const schema = z
+  .object({
+    referringName: z.string().min(2, "Enter the referring professional's name"),
+    hospital: z.string().min(1, "Please enter the hospital or facility name."),
+    location: z.string().min(2, "Enter a location or ZIP code"),
+    phone: z.string().min(7, "Enter a direct phone or pager number"),
+    email: z.string().email("Enter a valid secure business email"),
+    patientInitials: z.string().min(1, "Enter patient initials").max(3, "Maximum 3 characters"),
+    roomNumber: z.string().min(1, "Enter the current location / room number"),
+    dischargeWindow: z.string().min(1, "Select a target discharge date"),
+    urgency: z.string().min(1, "Select a discharge urgency status"),
+    careDestinations: z.array(z.string()).min(1, "Select at least one care destination"),
+    financialRouting: z.array(z.string()).min(1, "Select at least one funding status"),
+    financialRoutingOther: z.string().optional(),
+    attestation: z.literal(true, { message: "Please confirm patient choice has been documented" }),
+  })
+  .superRefine((data, ctx) => {
+    // "Other" financial status requires a short description.
+    if (data.financialRouting.includes("other") && !data.financialRoutingOther?.trim()) {
+      ctx.addIssue({ code: "custom", path: ["financialRoutingOther"], message: "Please tell us more." });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -61,12 +67,15 @@ export function HospitalReferralForm() {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
     defaultValues: { careDestinations: [], financialRouting: [] },
   });
+  const financialRouting = useWatch({ control, name: "financialRouting" });
+  const showFinancialOther = financialRouting?.includes("other") ?? false;
 
   const onSubmit = async () => {
     // Frontend only — simulate dispatch to the RN clinical queue, then confirm.
@@ -111,7 +120,7 @@ export function HospitalReferralForm() {
           <SectionLabel icon={UserRound} title="Professional Contact Information" />
           <div className="grid gap-5 sm:grid-cols-2">
             <FormField label="Referring professional name" required error={errors.referringName?.message} autoComplete="name" {...register("referringName")} />
-            <Select label="Hospital / corporate facility" required options={REFERRAL_HOSPITALS} placeholder="Select a facility" error={errors.hospital?.message} {...register("hospital")} />
+            <FormField label="Hospital / corporate facility" required placeholder="Enter hospital or facility name" error={errors.hospital?.message} autoComplete="organization" {...register("hospital")} />
             <FormField label="Location / ZIP code" required error={errors.location?.message} autoComplete="postal-code" {...register("location")} />
             <FormField label="Direct phone / pager contact" type="tel" required error={errors.phone?.message} autoComplete="tel" {...register("phone")} />
             <FormField label="Secure business email address" type="email" required className="sm:col-span-2" error={errors.email?.message} autoComplete="email" {...register("email")} />
@@ -169,6 +178,27 @@ export function HospitalReferralForm() {
             error={errors.financialRouting?.message}
             register={register}
           />
+          {/* Conditional "Other" detail — grid-rows collapse keeps the reveal smooth
+              without measuring heights; inert removes it from tab order when hidden. */}
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows,opacity,transform,margin-top] duration-[250ms] ease-out motion-reduce:transition-none",
+              showFinancialOther ? "grid-rows-[1fr] translate-y-0 opacity-100" : "-mt-5 grid-rows-[0fr] -translate-y-1.5 opacity-0",
+            )}
+            inert={!showFinancialOther}
+            aria-hidden={!showFinancialOther}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <FormField
+                label="Other financial status"
+                placeholder="Please describe the financial status"
+                required={showFinancialOther}
+                className="p-1"
+                error={errors.financialRoutingOther?.message}
+                {...register("financialRoutingOther")}
+              />
+            </div>
+          </div>
         </fieldset>
 
         {/* Secure document upload */}

@@ -83,6 +83,11 @@ export const FINANCIAL_ROUTING: DriverOption[] = [
     label: "Private Pay Verified",
     description: "Complete private family funds available.",
   },
+  {
+    value: "other",
+    label: "Other",
+    description: "Financial situation not listed above.",
+  },
 ];
 
 /** Recommended documents that expedite RN clinical review. */
