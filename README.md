@@ -26,7 +26,7 @@ Built against the two source-of-truth briefs in [`/docs`](./docs): `Nonnis_Desig
 - **Type** — Fraunces for expressive display headings; Inter for legible body (≥16px, generous line-height — a hard requirement for the senior-care audience).
 
 ## Routes
-
+ 
 | Route | Purpose |
 |---|---|
 | `/` | Home — hero, problem, solution, pinned How-it-works, differentiators, audience previews, browse catalogue, pinned AI-matching, pricing, trust, about preview, final CTA |
