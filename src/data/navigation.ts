@@ -19,7 +19,7 @@ export const SECONDARY_CTA = { label: "List Your Beds", href: "/providers#list-y
 export const REFERRAL_CTA = { label: "Submit a Facilities Referral", href: "/hospital-referral" };
 
 // Click-to-call RN CTA — `tel:` href launches the native dialer on mobile.
-export const RN_PHONE = { label: "Talk to an RN Now", tel: "2065318890", href: "tel:2065318890" };
+export const RN_PHONE = { label: "Talk to an RN Now", tel: "2533848822", href: "tel:2533848822" };
 
 export const FOOTER_SECTIONS = [
   {

@@ -11,7 +11,7 @@ import { CONTACT } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Reach Nonni's Placement Services — RN-led care placement across Washington State. Based in Tacoma. Call (206) 531-8890.",
+  description: "Reach Nonni's Placement Services — RN-led care placement across Washington State. Based in Tacoma. Call (253) 384-8822.",
 };
 
 const CARDS = [

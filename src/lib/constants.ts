@@ -8,9 +8,9 @@ export const BRAND = {
 } as const;
 
 export const CONTACT = {
-  phonePrimary: "(206) 531-8890",
+  phonePrimary: "(253) 384-8822",
   phoneSecondary: "(206) 650-4985",
-  phonePrimaryHref: "+12065318890",
+  phonePrimaryHref: "+12533848822",
   phoneSecondaryHref: "+12066504985",
   email: "info@nonnisplacementservices.com",
   address: "1521 137th St E, Tacoma, WA 98445",
