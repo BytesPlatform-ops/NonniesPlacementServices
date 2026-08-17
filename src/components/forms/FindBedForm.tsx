@@ -16,7 +16,7 @@ import { FormSuccess } from "./FormSuccess";
 import { FormError } from "./FormError";
 import { Honeypot } from "./Honeypot";
 import { DataSecurityNotice } from "./DataSecurityNotice";
-import { submitForm, field, optionLabel, readHoneypot } from "@/lib/forms/submitForm";
+import { submitForm, field, optionLabel, optionLabels, readHoneypot } from "@/lib/forms/submitForm";
 import {
   FACILITY_TYPES,
   CARE_LEVELS,
@@ -34,7 +34,7 @@ const schema = z.object({
   facilityType: z.string().min(1, "Select a facility type"),
   careLevel: z.string().min(1, "Select a care level"),
   bedPreference: z.string().min(1, "Select a bed preference"),
-  funding: z.string().min(1, "Select a funding type"),
+  funding: z.array(z.string()).min(1, "Select at least one funding type"),
   timeline: z.string().min(1, "Select a timeline"),
   notes: z.string().max(1000).optional().or(z.literal("")),
   consent: z.literal(true, { message: "Please provide consent to continue" }),
@@ -61,7 +61,7 @@ export function FindBedForm() {
     trigger,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), mode: "onTouched" });
+  } = useForm<FormValues>({ resolver: zodResolver(schema), mode: "onTouched", defaultValues: { funding: [] } });
 
   useGSAP(
     () => {
@@ -112,7 +112,7 @@ export function FindBedForm() {
           {
             title: "Details",
             fields: [
-              { label: "Funding / payment type", value: optionLabel(FUNDING_TYPES, data.funding) },
+              field("Funding / payment type", optionLabels(FUNDING_TYPES, data.funding)),
               { label: "Timeline / urgency", value: optionLabel(TIMELINES, data.timeline) },
               field("Notes / special needs", data.notes),
               field("Consent to contact", data.consent),
@@ -186,8 +186,36 @@ export function FindBedForm() {
 
           {step === 2 && (
             <div className="grid gap-5 sm:grid-cols-2">
-              <Select label="Funding / payment type" required options={FUNDING_TYPES} error={errors.funding?.message} {...register("funding")} />
-              <Select label="Timeline / urgency" required options={TIMELINES} error={errors.timeline?.message} {...register("timeline")} />
+              <div className="flex flex-col gap-2.5 sm:col-span-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold text-navy">
+                    Funding / payment type<span className="ml-0.5 text-coral">*</span>
+                  </span>
+                  <span className="text-xs text-slate-ink/75">Select every funding source that may apply — choose all that apply.</span>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {FUNDING_TYPES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-navy/15 bg-[#fffdf9] px-4 py-3 text-sm font-medium text-navy transition-colors hover:border-teal/50 hover:bg-teal/5 has-[:checked]:border-teal has-[:checked]:bg-teal/10 has-[:checked]:ring-1 has-[:checked]:ring-teal/40"
+                    >
+                      <input
+                        type="checkbox"
+                        value={opt.value}
+                        className="h-5 w-5 shrink-0 rounded-md border-navy/30 text-teal accent-teal focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-coral"
+                        {...register("funding")}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {errors.funding?.message && (
+                  <p role="alert" className="text-sm font-medium text-coral">
+                    {errors.funding.message}
+                  </p>
+                )}
+              </div>
+              <Select label="Timeline / urgency" required className="sm:col-span-2" options={TIMELINES} error={errors.timeline?.message} {...register("timeline")} />
               <Textarea
                 label="Notes / special needs"
                 className="sm:col-span-2"
