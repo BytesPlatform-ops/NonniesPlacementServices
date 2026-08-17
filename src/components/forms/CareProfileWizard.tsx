@@ -322,6 +322,7 @@ export function CareProfileWizard() {
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
   const [priority, setPriority] = useState(false);
+  const [referenceId, setReferenceId] = useState<string>();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -382,7 +383,7 @@ export function CareProfileWizard() {
     const keep = (items: (SubmissionFieldItem | null)[]) => items.filter((x): x is SubmissionFieldItem => x !== null);
 
     try {
-      await submitForm({
+      const result = await submitForm({
         formName: "Care Profile",
         honeypot: readHoneypot(event),
         raw: { ...data, status },
@@ -440,6 +441,7 @@ export function CareProfileWizard() {
         ],
       });
       setPriority(status === "high_urgency");
+      setReferenceId(result.referenceId);
       setDone(true);
     } catch {
       setFailed(true);
@@ -455,11 +457,13 @@ export function CareProfileWizard() {
             ? "Flagged as high priority. An RN-led specialist would normally reach out within hours to coordinate an urgent placement."
             : "Thank you — an RN-led specialist would normally review this profile and reach out within one business day to begin matching."
         }
+        referenceId={referenceId}
         onReset={() => {
           reset();
           setStep(0);
           setDone(false);
           setPriority(false);
+          setReferenceId(undefined);
         }}
       />
     );

@@ -67,11 +67,18 @@ export function optionLabels(options: { value: string; label: string }[], values
   return values.map((v) => options.find((o) => o.value === v)?.label ?? v);
 }
 
+/** Result of a successful submission. */
+export type SubmitFormResult = {
+  /** Server-issued unique reference ID for the submission / PDF record. */
+  referenceId?: string;
+};
+
 /**
  * POST the submission to the shared endpoint. Throws on a non-2xx response so
- * callers can show the error state and keep the user's entered data.
+ * callers can show the error state and keep the user's entered data. Returns
+ * the server-issued reference ID on success.
  */
-export async function submitForm(payload: SubmitFormPayload): Promise<void> {
+export async function submitForm(payload: SubmitFormPayload): Promise<SubmitFormResult> {
   const res = await fetch("/api/forms/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -82,4 +89,6 @@ export async function submitForm(payload: SubmitFormPayload): Promise<void> {
     }),
   });
   if (!res.ok) throw new Error(`Form submit failed (${res.status})`);
+  const data = (await res.json().catch(() => ({}))) as SubmitFormResult;
+  return { referenceId: data.referenceId };
 }

@@ -122,6 +122,7 @@ function SectionLabel({ icon: Icon, title, children }: { icon: typeof Stethoscop
 export function HospitalReferralForm() {
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [referenceId, setReferenceId] = useState<string>();
   const [files, setFiles] = useState<StagedFileMeta[]>([]);
   const {
     register,
@@ -192,7 +193,7 @@ export function HospitalReferralForm() {
     ];
 
     try {
-      await submitForm({
+      const result = await submitForm({
         formName: "Hospital Referral",
         replyTo: data.email,
         honeypot: readHoneypot(event),
@@ -239,6 +240,7 @@ export function HospitalReferralForm() {
           },
         ],
       });
+      setReferenceId(result.referenceId);
       setDone(true);
     } catch {
       setFailed(true);
@@ -250,10 +252,12 @@ export function HospitalReferralForm() {
       <FormSuccess
         title="Referral dispatched to RN clinical queue"
         message="Thanks — this referral would normally be routed to an RN for clinical review, with a placement specialist responding on an urgency-prioritized basis."
+        referenceId={referenceId}
         onReset={() => {
           reset();
           setDone(false);
           setFiles([]);
+          setReferenceId(undefined);
         }}
       />
     );

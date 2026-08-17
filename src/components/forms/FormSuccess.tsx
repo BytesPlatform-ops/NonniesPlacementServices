@@ -1,14 +1,17 @@
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-/** Local-only success state — no backend request is made (§16). */
+/** Success state shown after a submission is emailed. */
 export function FormSuccess({
   title,
   message,
+  referenceId,
   onReset,
 }: {
   title: string;
   message: string;
+  /** Unique submission reference — printed on the generated PDF record. */
+  referenceId?: string;
   onReset: () => void;
 }) {
   return (
@@ -18,6 +21,11 @@ export function FormSuccess({
       </span>
       <h3 className="mt-5 font-display text-2xl font-medium text-navy">{title}</h3>
       <p className="mt-2 max-w-md text-slate-ink">{message}</p>
+      {referenceId && (
+        <p className="mt-4 rounded-full bg-navy/5 px-4 py-1.5 text-sm font-medium text-navy">
+          Reference ID: <span className="font-semibold tracking-wide">{referenceId}</span>
+        </p>
+      )}
       <Button onClick={onReset} variant="ghost" className="mt-6">
         Submit another response
       </Button>

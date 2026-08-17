@@ -54,6 +54,7 @@ export function ListBedsForm() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [referenceId, setReferenceId] = useState<string>();
   const [photos, setPhotos] = useState<SubmissionFile[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +88,7 @@ export function ListBedsForm() {
   const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
     setFailed(false);
     try {
-      await submitForm({
+      const result = await submitForm({
         formName: "Provider Form",
         replyTo: data.email,
         honeypot: readHoneypot(event),
@@ -125,6 +126,7 @@ export function ListBedsForm() {
           },
         ],
       });
+      setReferenceId(result.referenceId);
       setDone(true);
     } catch {
       setFailed(true);
@@ -136,11 +138,13 @@ export function ListBedsForm() {
       <FormSuccess
         title="Listing submitted"
         message="Thanks — our team would normally verify your license and publish your community listing within two business days."
+        referenceId={referenceId}
         onReset={() => {
           reset();
           setStep(0);
           setDone(false);
           setPhotos([]);
+          setReferenceId(undefined);
         }}
       />
     );

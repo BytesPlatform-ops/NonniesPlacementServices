@@ -53,6 +53,7 @@ export function FindBedForm() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [referenceId, setReferenceId] = useState<string>();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -85,7 +86,7 @@ export function FindBedForm() {
   const onSubmit = async (data: FormValues, event?: BaseSyntheticEvent) => {
     setFailed(false);
     try {
-      await submitForm({
+      const result = await submitForm({
         formName: "Find a Bed",
         replyTo: data.email,
         honeypot: readHoneypot(event),
@@ -120,6 +121,7 @@ export function FindBedForm() {
           },
         ],
       });
+      setReferenceId(result.referenceId);
       setDone(true);
     } catch {
       setFailed(true);
@@ -131,10 +133,12 @@ export function FindBedForm() {
       <FormSuccess
         title="Request received"
         message="Thanks — an RN-led placement specialist would normally reach out within one business day to begin your assessment."
+        referenceId={referenceId}
         onReset={() => {
           reset();
           setStep(0);
           setDone(false);
+          setReferenceId(undefined);
         }}
       />
     );

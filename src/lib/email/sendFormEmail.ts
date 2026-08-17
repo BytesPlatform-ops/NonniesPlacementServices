@@ -1,5 +1,6 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
+import { renderSubmissionPdf } from "@/lib/pdf/renderSubmissionPdf";
 
 /**
  * Server-only email helper. Formats a form submission into a readable HTML +
@@ -19,6 +20,8 @@ export type FormSubmission = {
   submittedAt?: string;
   source?: string;
   replyTo?: string;
+  /** Unique submission reference — printed on the PDF record and shown in the email. */
+  referenceId?: string;
   sections: EmailSection[];
   files?: EmailFile[];
   raw?: Record<string, unknown>;
@@ -87,6 +90,7 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
   /* ---- HTML ---- */
   const summaryRows: [string, string][] = [
     ["Form Name", sub.formName],
+    ...(sub.referenceId ? ([["Reference ID", sub.referenceId]] as [string, string][]) : []),
     ["Page URL", sub.pageUrl || "—"],
     ["Submitted At", `${when} (PT)`],
     ["User Email", userEmail || "Not provided"],
@@ -138,6 +142,7 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
       </div>
       <div style="background:#fff;border:1px solid #eadfce;border-top:0;border-radius:0 0 14px 14px;padding:22px 24px">
         <table style="width:100%;border-collapse:collapse;font-size:14px">${summaryHtml}</table>
+        <p style="margin:14px 0 0;padding:8px 12px;background:#f7f0e6;border-radius:8px;font-size:12px;color:#5e4a38">📄 A branded PDF record of this submission is attached for your files.</p>
         ${sectionsHtml}
         ${filesHtml}
         <p style="margin:24px 0 0;font-size:12px;color:#8a7a68">This message was generated from the Nonni's website form.</p>
@@ -150,6 +155,8 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
     "Nonni's Placement Services — New Form Submission",
     "",
     ...summaryRows.map(([k, v]) => `${k}: ${v}`),
+    "",
+    "A branded PDF record of this submission is attached for your files.",
     "",
   ];
   for (const section of sub.sections) {
@@ -170,12 +177,42 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
   lines.push("This message was generated from the Nonni's website form.");
   const text = lines.join("\n");
 
-  const attachments = attachableFiles.map((f) => ({
-    filename: f.name,
-    content: f.content as string,
-    encoding: "base64" as const,
-    contentType: f.type || undefined,
-  }));
+  // Attachments: a branded PDF record first, then the uploaded documents.
+  type MailAttachment = {
+    filename: string;
+    content: string | Buffer;
+    contentType?: string;
+    encoding?: "base64";
+  };
+  const attachments: MailAttachment[] = [];
+
+  try {
+    const pdf = await renderSubmissionPdf({
+      formName: sub.formName,
+      referenceId: sub.referenceId || "—",
+      submittedAtLabel: `${when} (PT)`,
+      summaryRows,
+      sections: sub.sections,
+      files: sub.files,
+    });
+    attachments.push({
+      filename: `Submission-${sub.referenceId || "record"}.pdf`,
+      content: pdf,
+      contentType: "application/pdf",
+    });
+  } catch (err) {
+    // A PDF failure must never block the submission email.
+    console.error("[sendFormEmail] PDF generation failed:", err);
+  }
+
+  for (const f of attachableFiles) {
+    attachments.push({
+      filename: f.name,
+      content: f.content as string,
+      encoding: "base64",
+      contentType: f.type || undefined,
+    });
+  }
 
   await getTransporter().sendMail({
     from: `"Nonni's Placement Website" <${from}>`,

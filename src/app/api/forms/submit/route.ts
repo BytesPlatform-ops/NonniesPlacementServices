@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendFormEmail, type FormSubmission } from "@/lib/email/sendFormEmail";
+import { makeReferenceId } from "@/lib/forms/referenceId";
 
 // nodemailer needs the Node.js runtime (not Edge).
 export const runtime = "nodejs";
@@ -40,8 +41,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid submission." }, { status: 400 });
     }
 
-    await sendFormEmail(body);
-    return NextResponse.json({ ok: true });
+    // Stamp a unique reference ID (used on the PDF record and shown to the user).
+    const submittedAt = body.submittedAt ? new Date(body.submittedAt) : new Date();
+    const referenceId = makeReferenceId(body.formName, submittedAt);
+
+    await sendFormEmail({ ...body, referenceId });
+    return NextResponse.json({ ok: true, referenceId });
   } catch (err) {
     console.error("[api/forms/submit] send failed:", err);
     return NextResponse.json({ ok: false, error: "Failed to send submission." }, { status: 500 });
