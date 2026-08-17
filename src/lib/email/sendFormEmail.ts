@@ -9,7 +9,7 @@ import nodemailer, { type Transporter } from "nodemailer";
  * hardcoded or shipped to the client (this module is `server-only`).
  */
 
-export type EmailFile = { name: string; size: number; type: string };
+export type EmailFile = { name: string; size: number; type: string; content?: string };
 export type EmailField = { label: string; value: string };
 export type EmailSection = { title: string; fields: EmailField[] };
 
@@ -113,6 +113,9 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
     })
     .join("");
 
+  // Only files that arrived with content become real email attachments.
+  const attachableFiles = (sub.files ?? []).filter((f) => typeof f.content === "string" && f.content.length > 0);
+
   const filesHtml =
     sub.files && sub.files.length
       ? `<h3 style="margin:22px 0 8px;color:#472e16;font-size:15px">Uploaded Documents</h3><table style="width:100%;border-collapse:collapse;font-size:14px">${sub.files
@@ -120,7 +123,11 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
             (f) =>
               `<tr><td style="padding:6px 14px 6px 0;color:#2b1b0e;border-bottom:1px solid #f0e7db">${esc(f.name)}</td><td style="padding:6px 0;color:#5e4a38;border-bottom:1px solid #f0e7db">${esc(fmtBytes(f.size))} · ${esc(f.type || "unknown type")}</td></tr>`,
           )
-          .join("")}</table><p style="margin:6px 0 0;font-size:12px;color:#8a7a68">File metadata only — documents are not attached to this email.</p>`
+          .join("")}</table><p style="margin:6px 0 0;font-size:12px;color:#8a7a68">${
+          attachableFiles.length
+            ? `${attachableFiles.length} document${attachableFiles.length === 1 ? "" : "s"} attached to this email.`
+            : "Documents were listed but could not be attached."
+        }</p>`
       : "";
 
   const html = `<!doctype html><html><body style="margin:0;background:#faf7f2;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
@@ -153,10 +160,22 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
   if (sub.files?.length) {
     lines.push("Uploaded Documents", "-----------------");
     for (const f of sub.files) lines.push(`- ${f.name} (${fmtBytes(f.size)} · ${f.type || "unknown type"})`);
-    lines.push("(File metadata only — documents are not attached.)", "");
+    lines.push(
+      attachableFiles.length
+        ? `(${attachableFiles.length} document${attachableFiles.length === 1 ? "" : "s"} attached to this email.)`
+        : "(Documents were listed but could not be attached.)",
+      "",
+    );
   }
   lines.push("This message was generated from the Nonni's website form.");
   const text = lines.join("\n");
+
+  const attachments = attachableFiles.map((f) => ({
+    filename: f.name,
+    content: f.content as string,
+    encoding: "base64" as const,
+    contentType: f.type || undefined,
+  }));
 
   await getTransporter().sendMail({
     from: `"Nonni's Placement Website" <${from}>`,
@@ -165,5 +184,6 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
     subject,
     text,
     html,
+    attachments: attachments.length ? attachments : undefined,
   });
 }

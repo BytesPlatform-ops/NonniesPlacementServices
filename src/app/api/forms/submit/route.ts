@@ -5,7 +5,10 @@ import { sendFormEmail, type FormSubmission } from "@/lib/email/sendFormEmail";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 256 * 1024; // 256 KB — submissions carry text + file metadata only.
+// Submissions carry text plus base64-encoded document attachments. Base64
+// inflates bytes by ~33%, so allow headroom above the 20 MB client-side cap on
+// combined upload size.
+const MAX_BYTES = 30 * 1024 * 1024; // 30 MB
 
 export async function POST(req: Request) {
   try {

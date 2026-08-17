@@ -90,7 +90,7 @@ export function HospitalReferralForm() {
         replyTo: data.email,
         honeypot: readHoneypot(event),
         files,
-        raw: { ...data, uploadedDocuments: files },
+        raw: { ...data, uploadedDocuments: files.map(({ name, size, type }) => ({ name, size, type })) },
         sections: [
           {
             title: "Professional Contact Information",

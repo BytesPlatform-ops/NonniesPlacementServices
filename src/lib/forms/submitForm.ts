@@ -7,7 +7,7 @@
  * No email/SMTP logic lives here or in any form — only in the server route.
  */
 
-export type SubmissionFile = { name: string; size: number; type: string };
+export type SubmissionFile = { name: string; size: number; type: string; content?: string };
 export type SubmissionFieldItem = { label: string; value: string };
 export type SubmissionSection = { title: string; fields: SubmissionFieldItem[] };
 
@@ -22,7 +22,7 @@ export type SubmitFormPayload = {
   replyTo?: string;
   /** Optional source/label in addition to the auto-captured page URL. */
   source?: string;
-  /** Uploaded document metadata (name/size/type). */
+  /** Uploaded documents (name/size/type + base64 content) attached to the email. */
   files?: SubmissionFile[];
   /** Anti-spam honeypot value — must be empty for a real human. */
   honeypot?: string;

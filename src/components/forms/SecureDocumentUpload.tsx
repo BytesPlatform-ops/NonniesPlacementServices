@@ -6,15 +6,18 @@ import { cn } from "@/lib/utils";
 import { RECOMMENDED_UPLOADS } from "@/data/hospitalReferral";
 
 /**
- * Secure clinical document staging target. Presentational only — no file is
- * read, stored, or transmitted (frontend-only build). Files are validated and
- * held in local component state so the interaction feels real, but nothing
- * leaves the browser. The AES-256 / HIPAA framing describes the intended
- * secure pipeline, not a live upload.
+ * Secure clinical document staging target. Files are validated and held in
+ * local component state, and their contents are read into base64 so the
+ * referral submission can carry the real documents (they are delivered to the
+ * RN inbox as encrypted-in-transit email attachments over TLS). Nothing is
+ * persisted in the browser beyond the life of the form.
  */
 
 const MAX_FILES = 5;
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_BYTES = 25 * 1024 * 1024; // 25 MB per document
+// Mail servers cap total message size (Google Workspace ~25 MB), so guard the
+// combined attachment payload to keep submissions deliverable.
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024; // 20 MB across all documents
 const ACCEPT = ".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.heic,.heif";
 const ALLOWED_EXT = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 
@@ -24,7 +27,23 @@ const extOf = (name: string) => {
 };
 const sizeLabel = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-export type StagedFileMeta = { name: string; size: number; type: string };
+/** Read a file into base64 (no `data:` prefix) for transmission with the form. */
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export type StagedFileMeta = { name: string; size: number; type: string; content: string };
+
+type StagedFile = { file: File; content: string };
 
 export function SecureDocumentUpload({
   className,
@@ -34,16 +53,20 @@ export function SecureDocumentUpload({
   onFilesChange?: (files: StagedFileMeta[]) => void;
 }) {
   const [dragging, setDragging] = useState(false);
-  const [staged, setStaged] = useState<File[]>([]);
+  const [staged, setStaged] = useState<StagedFile[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = (fileList: FileList | null) => {
+  const emit = (items: StagedFile[]) =>
+    onFilesChange?.(items.map(({ file, content }) => ({ name: file.name, size: file.size, type: file.type, content })));
+
+  const addFiles = async (fileList: FileList | null) => {
     if (!fileList?.length) return;
     const incoming = Array.from(fileList);
     const nextErrors: string[] = [];
     const accepted: File[] = [];
 
+    let runningTotal = staged.reduce((sum, s) => sum + s.file.size, 0);
     for (const file of incoming) {
       if (!ALLOWED_EXT.includes(extOf(file.name))) {
         nextErrors.push(`${file.name} is not an accepted format. Please upload a PDF, Word Doc, or image scan.`);
@@ -53,6 +76,11 @@ export function SecureDocumentUpload({
         nextErrors.push(`${file.name} is larger than 25 MB.`);
         continue;
       }
+      if (runningTotal + file.size > MAX_TOTAL_BYTES) {
+        nextErrors.push(`${file.name} exceeds the 20 MB combined upload limit. Remove a document or send it separately.`);
+        continue;
+      }
+      runningTotal += file.size;
       accepted.push(file);
     }
 
@@ -61,20 +89,31 @@ export function SecureDocumentUpload({
       nextErrors.push("You can upload up to 5 documents only.");
     }
     const toAdd = accepted.slice(0, Math.max(0, room));
-    const nextStaged = toAdd.length ? [...staged, ...toAdd] : staged;
-    if (toAdd.length) setStaged(nextStaged);
-    setErrors(nextErrors);
-    onFilesChange?.(nextStaged.map((f) => ({ name: f.name, size: f.size, type: f.type })));
 
     // Allow re-selecting the same file after a removal.
     if (inputRef.current) inputRef.current.value = "";
+
+    if (!toAdd.length) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    try {
+      const read = await Promise.all(toAdd.map(async (file) => ({ file, content: await readAsBase64(file) })));
+      const nextStaged = [...staged, ...read];
+      setStaged(nextStaged);
+      setErrors(nextErrors);
+      emit(nextStaged);
+    } catch {
+      setErrors([...nextErrors, "One or more documents could not be read. Please try again."]);
+    }
   };
 
   const remove = (index: number) => {
     const nextStaged = staged.filter((_, i) => i !== index);
     setStaged(nextStaged);
     setErrors([]);
-    onFilesChange?.(nextStaged.map((f) => ({ name: f.name, size: f.size, type: f.type })));
+    emit(nextStaged);
   };
 
   const atLimit = staged.length >= MAX_FILES;
@@ -143,7 +182,7 @@ export function SecureDocumentUpload({
 
       {staged.length > 0 && (
         <ul className="flex flex-col gap-1.5" aria-label="Staged documents">
-          {staged.map((file, i) => (
+          {staged.map(({ file }, i) => (
             <li
               key={`${file.name}-${i}`}
               className="flex items-center gap-2 rounded-lg border border-navy/10 bg-white px-3 py-2 text-xs font-medium text-navy"
