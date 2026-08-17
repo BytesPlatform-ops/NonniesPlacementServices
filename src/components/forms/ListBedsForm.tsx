@@ -36,7 +36,7 @@ const schema = z.object({
   bedType: z.string().min(1, "Select a bed type"),
   specialties: z.array(z.string()).min(1, "Select at least one specialty"),
   pricingRange: z.string().min(1, "Enter a pricing range"),
-  funding: z.string().min(1, "Select accepted funding"),
+  funding: z.array(z.string()).min(1, "Select at least one accepted funding source"),
   notes: z.string().max(1000).optional().or(z.literal("")),
   consent: z.literal(true, { message: "Please provide consent to continue" }),
 });
@@ -66,7 +66,7 @@ export function ListBedsForm() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { specialties: [] },
+    defaultValues: { specialties: [], funding: [] },
   });
 
   useGSAP(
@@ -118,7 +118,7 @@ export function ListBedsForm() {
             title: "Details",
             fields: [
               field("Pricing range", data.pricingRange),
-              { label: "Accepted funding", value: optionLabel(FUNDING_TYPES, data.funding) },
+              field("Accepted funding", optionLabels(FUNDING_TYPES, data.funding)),
               field("Notes", data.notes),
               field("Authorized to list", data.consent),
             ],
@@ -222,7 +222,35 @@ export function ListBedsForm() {
           {step === 2 && (
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField label="Pricing range" required hint="e.g. $4,000–$6,500 / month" error={errors.pricingRange?.message} {...register("pricingRange")} />
-              <Select label="Accepted funding / payment" required options={FUNDING_TYPES} error={errors.funding?.message} {...register("funding")} />
+              <div className="flex flex-col gap-2.5 sm:col-span-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold text-navy">
+                    Accepted funding / payment<span className="ml-0.5 text-coral">*</span>
+                  </span>
+                  <span className="text-xs text-slate-ink/75">Select every funding source your community accepts.</span>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {FUNDING_TYPES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-navy/15 bg-[#fffdf9] px-4 py-3 text-sm font-medium text-navy transition-colors hover:border-blue/50 hover:bg-blue/5 has-[:checked]:border-blue has-[:checked]:bg-blue/10 has-[:checked]:ring-1 has-[:checked]:ring-blue/40"
+                    >
+                      <input
+                        type="checkbox"
+                        value={opt.value}
+                        className="h-5 w-5 shrink-0 rounded-md border-navy/30 text-blue accent-blue focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-coral"
+                        {...register("funding")}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {errors.funding?.message && (
+                  <p role="alert" className="text-sm font-medium text-coral">
+                    {errors.funding.message}
+                  </p>
+                )}
+              </div>
               <div className="sm:col-span-2">
                 <PhotoUpload label="Community photos" onPhotosChange={setPhotos} />
               </div>
