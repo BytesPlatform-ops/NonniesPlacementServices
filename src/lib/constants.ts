@@ -12,7 +12,7 @@ export const CONTACT = {
   phoneSecondary: "(206) 650-4985",
   phonePrimaryHref: "+12533848822",
   phoneSecondaryHref: "+12066504985",
-  email: "info@nonnisplacementservices.com",
+  email: "admin@nonnisplacement.com",
   address: "1521 137th St E, Tacoma, WA 98445",
   region: "Serving all of Washington State",
   hours: "Mon–Fri 8am–6pm PT · On-call support for active placements",
