@@ -15,9 +15,9 @@ import { StepIndicator } from "@/components/ui/StepIndicator";
 import { FormSuccess } from "./FormSuccess";
 import { FormError } from "./FormError";
 import { Honeypot } from "./Honeypot";
-import { PhotoUploadPlaceholder } from "./PhotoUploadPlaceholder";
+import { PhotoUpload } from "./PhotoUpload";
 import { DataSecurityNotice } from "./DataSecurityNotice";
-import { submitForm, field, optionLabel, optionLabels, readHoneypot } from "@/lib/forms/submitForm";
+import { submitForm, field, optionLabel, optionLabels, readHoneypot, type SubmissionFile } from "@/lib/forms/submitForm";
 import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES, PROVIDER_SPECIALTIES } from "@/data/careTypes";
 
 const schema = z.object({
@@ -54,6 +54,7 @@ export function ListBedsForm() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [photos, setPhotos] = useState<SubmissionFile[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -90,7 +91,8 @@ export function ListBedsForm() {
         formName: "Provider Form",
         replyTo: data.email,
         honeypot: readHoneypot(event),
-        raw: data,
+        files: photos,
+        raw: { ...data, communityPhotos: photos.map(({ name, size, type }) => ({ name, size, type })) },
         sections: [
           {
             title: "Community",
@@ -138,6 +140,7 @@ export function ListBedsForm() {
           reset();
           setStep(0);
           setDone(false);
+          setPhotos([]);
         }}
       />
     );
@@ -221,7 +224,7 @@ export function ListBedsForm() {
               <FormField label="Pricing range" required hint="e.g. $4,000–$6,500 / month" error={errors.pricingRange?.message} {...register("pricingRange")} />
               <Select label="Accepted funding / payment" required options={FUNDING_TYPES} error={errors.funding?.message} {...register("funding")} />
               <div className="sm:col-span-2">
-                <PhotoUploadPlaceholder label="Community photos" />
+                <PhotoUpload label="Community photos" onPhotosChange={setPhotos} />
               </div>
               <Textarea
                 label="Notes"
