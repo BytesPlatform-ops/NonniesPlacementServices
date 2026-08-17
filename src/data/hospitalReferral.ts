@@ -170,7 +170,6 @@ export const SUPERVISION_LEVELS: Option[] = [
 /* -------------------------------------------------------------------------- */
 
 export const FUNDING_OPTIONS: Option[] = [
-  { value: "medicaid", label: "Medicaid" },
   { value: "medicaid-pending", label: "Medicaid Pending" },
   { value: "private-pay", label: "Private Pay" },
   { value: "ltc-insurance", label: "Long-Term Care Insurance" },
