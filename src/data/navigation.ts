@@ -57,8 +57,9 @@ export const FOOTER_SECTIONS = [
     links: [
       { label: "About us", href: "/about" },
       { label: "Contact", href: "/contact" },
-      { label: "Find Care", href: "/families#find-a-bed" },
       { label: "List Your Beds", href: "/providers#list-your-beds" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
     ],
   },
 ] as const;
