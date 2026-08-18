@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type BaseSyntheticEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, Send } from "lucide-react";
@@ -18,28 +18,36 @@ import { Honeypot } from "./Honeypot";
 import { PhotoUpload } from "./PhotoUpload";
 import { DataSecurityNotice } from "./DataSecurityNotice";
 import { submitForm, field, optionLabel, optionLabels, readHoneypot, type SubmissionFile } from "@/lib/forms/submitForm";
-import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES, PROVIDER_SPECIALTIES } from "@/data/careTypes";
+import { FACILITY_TYPES, FUNDING_TYPES, BED_TYPES, PROVIDER_SPECIALTIES, PRICING_RANGES } from "@/data/careTypes";
 
-const schema = z.object({
-  communityName: z.string().min(2, "Enter your community name"),
-  contactPerson: z.string().min(2, "Enter a contact person"),
-  email: z.string().email("Enter a valid email address"),
-  phone: z.string().min(7, "Enter a valid phone number"),
-  license: z.string().min(2, "Enter your license number"),
-  facilityType: z.string().min(1, "Select a facility type"),
-  location: z.string().min(2, "Enter your location"),
-  availableBeds: z
-    .number({ message: "Enter a number of beds" })
-    .int("Enter a whole number")
-    .min(0, "Enter a number")
-    .max(9999, "That seems too high"),
-  bedType: z.string().min(1, "Select a bed type"),
-  specialties: z.array(z.string()).min(1, "Select at least one specialty"),
-  pricingRange: z.string().min(1, "Enter a pricing range"),
-  funding: z.array(z.string()).min(1, "Select at least one accepted funding source"),
-  notes: z.string().max(1000).optional().or(z.literal("")),
-  consent: z.literal(true, { message: "Please provide consent to continue" }),
-});
+const schema = z
+  .object({
+    communityName: z.string().min(2, "Enter your community name"),
+    contactPerson: z.string().min(2, "Enter a contact person"),
+    email: z.string().email("Enter a valid email address"),
+    phone: z.string().min(7, "Enter a valid phone number"),
+    license: z.string().min(2, "Enter your license number"),
+    facilityType: z.string().min(1, "Select a facility type"),
+    location: z.string().min(2, "Enter your location"),
+    availableBeds: z
+      .number({ message: "Enter a number of beds" })
+      .int("Enter a whole number")
+      .min(0, "Enter a number")
+      .max(9999, "That seems too high"),
+    bedType: z.string().min(1, "Select a bed type"),
+    specialties: z.array(z.string()).min(1, "Select at least one specialty"),
+    pricingRanges: z.array(z.string()).min(1, "Select at least one pricing range"),
+    pricingRangeOther: z.string().optional(),
+    funding: z.array(z.string()).min(1, "Select at least one accepted funding source"),
+    notes: z.string().max(1000).optional().or(z.literal("")),
+    consent: z.literal(true, { message: "Please provide consent to continue" }),
+  })
+  .superRefine((data, ctx) => {
+    // "Other" pricing requires a short description.
+    if (data.pricingRanges.includes("other") && !data.pricingRangeOther?.trim()) {
+      ctx.addIssue({ code: "custom", path: ["pricingRangeOther"], message: "Please describe the pricing." });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -47,7 +55,7 @@ const STEPS = ["Community", "Facility", "Details"] as const;
 const STEP_FIELDS: (keyof FormValues)[][] = [
   ["communityName", "contactPerson", "email", "phone", "license"],
   ["facilityType", "location", "availableBeds", "bedType", "specialties"],
-  ["pricingRange", "funding", "notes", "consent"],
+  ["pricingRanges", "pricingRangeOther", "funding", "notes", "consent"],
 ];
 
 export function ListBedsForm() {
@@ -63,12 +71,15 @@ export function ListBedsForm() {
     handleSubmit,
     trigger,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { specialties: [], funding: [] },
+    defaultValues: { specialties: [], funding: [], pricingRanges: [] },
   });
+  const pricingRanges = useWatch({ control, name: "pricingRanges" });
+  const showPricingOther = pricingRanges?.includes("other") ?? false;
 
   useGSAP(
     () => {
@@ -118,7 +129,8 @@ export function ListBedsForm() {
           {
             title: "Details",
             fields: [
-              field("Pricing range", data.pricingRange),
+              field("Pricing range", optionLabels(PRICING_RANGES, data.pricingRanges)),
+              ...(data.pricingRanges.includes("other") ? [field("Other pricing", data.pricingRangeOther)] : []),
               field("Accepted funding", optionLabels(FUNDING_TYPES, data.funding)),
               field("Notes", data.notes),
               field("Authorized to list", data.consent),
@@ -225,7 +237,45 @@ export function ListBedsForm() {
 
           {step === 2 && (
             <div className="grid gap-5 sm:grid-cols-2">
-              <FormField label="Pricing range" required hint="e.g. $4,000–$6,500 / month" error={errors.pricingRange?.message} {...register("pricingRange")} />
+              <div className="flex flex-col gap-2.5 sm:col-span-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold text-navy">
+                    Pricing range<span className="ml-0.5 text-coral">*</span>
+                  </span>
+                  <span className="text-xs text-slate-ink/75">Select every monthly price bracket your community offers.</span>
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {PRICING_RANGES.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-navy/15 bg-[#fffdf9] px-4 py-3 text-sm font-medium text-navy transition-colors hover:border-blue/50 hover:bg-blue/5 has-[:checked]:border-blue has-[:checked]:bg-blue/10 has-[:checked]:ring-1 has-[:checked]:ring-blue/40"
+                    >
+                      <input
+                        type="checkbox"
+                        value={opt.value}
+                        className="h-5 w-5 shrink-0 rounded-md border-navy/30 text-blue accent-blue focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-coral"
+                        {...register("pricingRanges")}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {errors.pricingRanges?.message && (
+                  <p role="alert" className="text-sm font-medium text-coral">
+                    {errors.pricingRanges.message}
+                  </p>
+                )}
+              </div>
+              {showPricingOther && (
+                <FormField
+                  label="Other pricing"
+                  required
+                  className="sm:col-span-2"
+                  placeholder="Describe the pricing"
+                  error={errors.pricingRangeOther?.message}
+                  {...register("pricingRangeOther")}
+                />
+              )}
               <div className="flex flex-col gap-2.5 sm:col-span-2">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-semibold text-navy">

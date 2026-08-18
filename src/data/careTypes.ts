@@ -41,6 +41,15 @@ export const CARE_LEVELS: Option[] = [
   { value: "unsure", label: "Unsure — help me decide" },
 ];
 
+/** Monthly pricing brackets for a provider listing (multi-select). */
+export const PRICING_RANGES: Option[] = [
+  { value: "1-5k", label: "$1,000 – $5,000 / month" },
+  { value: "5-10k", label: "$5,000 – $10,000 / month" },
+  { value: "10-15k", label: "$10,000 – $15,000 / month" },
+  { value: "15k-plus", label: "$15,000+ / month" },
+  { value: "other", label: "Other" },
+];
+
 /** Funding / payment types (deck: Private, Medicaid, Medicare). */
 export const FUNDING_TYPES: Option[] = [
   { value: "private", label: "Private pay" },
