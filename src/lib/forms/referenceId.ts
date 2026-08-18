@@ -10,7 +10,7 @@ import { randomBytes } from "node:crypto";
 const PREFIXES: Record<string, string> = {
   "hospital referral": "HR",
   "provider form": "PR",
-  "find a bed": "FC", // Family / client
+  "find community": "FC", // Family / client
   "care profile": "CP",
 };
 

@@ -87,7 +87,7 @@ export function FindBedForm() {
     setFailed(false);
     try {
       const result = await submitForm({
-        formName: "Find a Bed",
+        formName: "Find Community",
         replyTo: data.email,
         honeypot: readHoneypot(event),
         raw: data,
