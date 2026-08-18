@@ -14,7 +14,7 @@ const FACILITIES = [
   { name: "Rainier Skilled Nursing", type: "Skilled Nursing", beds: 3, price: "$$$$", funding: "Medicare · Medicaid", dist: "12 mi", score: 80, tone: "from-navy/25 to-blue/15", specialties: ["Psychiatric Support", "Medication protocols"] },
 ];
 
-const FILTERS = ["Specialty", "Funding", "Price", "Distance", "Beds"];
+const FILTERS = ["Specialty", "Funding", "Price", "Distance", "Availability"];
 
 /** Provider Availability Board — facility cards with beds, care type, price, funding, distance, match score + RN-reviewed badge. */
 export function ProviderAvailabilityBoard({

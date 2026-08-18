@@ -44,7 +44,7 @@ export function LocationChip({ city, tone = "light" }: { city: string; tone?: "l
 export function AvailabilityBadge({ beds }: { beds: number }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[0.7rem] font-bold text-teal backdrop-blur">
-      <BedDouble className="h-3.5 w-3.5" aria-hidden /> {beds} bed{beds === 1 ? "" : "s"}
+      <BedDouble className="h-3.5 w-3.5" aria-hidden /> {beds} open
     </span>
   );
 }

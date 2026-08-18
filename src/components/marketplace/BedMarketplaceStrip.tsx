@@ -43,7 +43,7 @@ export function BedMarketplaceStrip() {
               <Radar className="h-3.5 w-3.5" aria-hidden /> Live availability
             </Badge>
             <h2 className="mt-4 font-display text-[clamp(1.9rem,4vw,3rem)] font-medium leading-tight tracking-tight text-navy text-balance">
-              Real beds, matched to real needs
+              Real care & community, matched to real needs
             </h2>
             <p className="mt-2 text-slate-ink">RN-reviewed communities across Washington — live openings, funding, and match scores.</p>
           </div>
@@ -73,7 +73,7 @@ export function BedMarketplaceStrip() {
 
       <Container>
         <div className="mt-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <p className="text-xs text-slate-ink/60">Specialty-aware availability across Washington — dementia, Alzheimer&apos;s &amp; behavioral health beds, RN-reviewed.</p>
+          <p className="text-xs text-slate-ink/60">Specialty-aware availability across Washington — dementia, Alzheimer&apos;s &amp; behavioral health communities, RN-reviewed.</p>
           <Button href="/families#find-a-bed" variant="ghost">
             Browse the full marketplace <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>

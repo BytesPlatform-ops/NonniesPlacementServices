@@ -12,7 +12,7 @@ export const NAV_LINKS: NavLink[] = [
 ];
 
 export const PRIMARY_CTA = { label: "Find Care", href: "/families#find-a-bed" };
-export const SECONDARY_CTA = { label: "List Your Beds", href: "/providers#list-your-beds" };
+export const SECONDARY_CTA = { label: "List Your Community", href: "/providers#list-your-beds" };
 
 // Dedicated professional funnel — secure hospital placement portal for case
 // managers and discharge planners.
@@ -57,7 +57,7 @@ export const FOOTER_SECTIONS = [
     links: [
       { label: "About us", href: "/about" },
       { label: "Contact", href: "/contact" },
-      { label: "List Your Beds", href: "/providers#list-your-beds" },
+      { label: "List Your Community", href: "/providers#list-your-beds" },
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
     ],

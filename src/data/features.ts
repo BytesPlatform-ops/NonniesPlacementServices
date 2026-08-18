@@ -52,7 +52,7 @@ export const DIFFERENTIATORS: Feature[] = [
     icon: Network,
     title: "Two-sided network",
     description:
-      "One platform connects families, hospitals, and providers — so the right beds and the right needs actually find each other.",
+      "One platform connects families, hospitals, and providers — so the right care and the right needs actually find each other.",
   },
   {
     icon: Building2,

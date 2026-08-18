@@ -15,7 +15,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     heading: "No guarantee of placement",
-    body: `Submitting a form begins a conversation. It does not guarantee placement, a specific community, an available bed, or a caregiver match. Matches depend on care needs, availability, funding and suitability.`,
+    body: `Submitting a form begins a conversation. It does not guarantee placement, a specific community, an available placement, or a caregiver match. Matches depend on care needs, availability, funding and suitability.`,
   },
   {
     heading: "Not medical advice",

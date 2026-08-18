@@ -33,7 +33,7 @@ export const journeyFrames: JourneyFrame[] = [
     eyebrow: "The match",
     title: "The right community, found",
     text: "We surface real openings matched to memory and behavioral needs — an RN clears the best fits.",
-    microcopy: "Care level, funding, location, and a bed that's actually available.",
+    microcopy: "Care level, funding, location, and a community that's actually available.",
     image: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg",
     alt: "Provider room prepared for memory care placement",
   },

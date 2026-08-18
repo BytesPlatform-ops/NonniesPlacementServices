@@ -26,7 +26,7 @@ export function FinalCTA() {
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-lg text-white/75 text-pretty">
             Start free — whether you&apos;re a family searching, a hospital discharging, or a provider
-            with beds to fill. RN-led guidance is a step away.
+            with openings to fill. RN-led guidance is a step away.
           </p>
         </Reveal>
         <Reveal className="mt-9 flex flex-wrap items-center justify-center gap-3">

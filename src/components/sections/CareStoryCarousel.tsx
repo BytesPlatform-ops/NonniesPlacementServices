@@ -22,7 +22,7 @@ export function CareStoryCarousel({
   slides = HOME_SLIDES,
   eyebrow = "In their world",
   title = "Care you can see, not just read about",
-  description = "The people, communities, and beds Nonni's connects — every day.",
+  description = "The people, communities, and care Nonni's connects — every day.",
   tone = "ice",
 }: {
   slides?: Slide[];

@@ -15,7 +15,7 @@ import { PRIMARY_CTA, SECONDARY_CTA } from "@/data/navigation";
 
 // Editorial headline — one clear statement, a single gold-accented focal word.
 const LINES: { word: string; accent?: boolean }[][] = [
-  [{ word: "Real" }, { word: "beds," }],
+  [{ word: "Real" }, { word: "care," }],
   [{ word: "matched", accent: true }, { word: "to" }, { word: "real" }, { word: "needs." }],
 ];
 
@@ -151,7 +151,7 @@ export function Hero() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-70" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-mint" />
               </span>
-              1 bed available today
+              1 opening available today
             </div>
 
             {/* RN review chip */}

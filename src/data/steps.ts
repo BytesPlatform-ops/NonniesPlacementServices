@@ -70,7 +70,7 @@ export const AI_PIPELINE: Step[] = [
     eyebrow: "Inputs",
     title: "Understanding the Whole Situation",
     description:
-      "Care level, memory and behavioral needs, funding, location, bed availability, specialty, and available support — the whole picture becomes structured inputs.",
+      "Care level, memory and behavioral needs, funding, location, availability, specialty, and available support — the whole picture becomes structured inputs.",
     icon: Database,
   },
   {
@@ -78,7 +78,7 @@ export const AI_PIPELINE: Step[] = [
     eyebrow: "Filtering",
     title: "Finding Options That Can Truly Help",
     description:
-      "Hard constraints — funding accepted, care level and behavioral support needs supported, real bed availability, verified license — remove options that can't actually work.",
+      "Hard constraints — funding accepted, care level and behavioral support needs supported, real-time availability, verified license — remove options that can't actually work.",
     icon: Filter,
   },
   {
@@ -110,7 +110,7 @@ export const AI_SIGNALS = [
   "Medication protocols",
   "Facility type",
   "Location",
-  "Bed availability",
+  "Availability",
   "Funding type",
   "Available support",
   "License validation",

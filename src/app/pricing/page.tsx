@@ -20,7 +20,7 @@ export default function PricingPage() {
         title="Placement is $0 cost to families"
         description="Our core matching and placement service is free for families. Search the directory, receive RN-reviewed matches, and connect with verified providers — all at no cost to you."
         primary={{ label: "Find Care", href: "/families#find-a-bed" }}
-        secondary={{ label: "List Your Beds", href: "/providers#list-your-beds" }}
+        secondary={{ label: "List Your Community", href: "/providers#list-your-beds" }}
         stats={[
           { v: "$0", l: "Cost to families" },
           { v: "RN-led", l: "Every match reviewed" },

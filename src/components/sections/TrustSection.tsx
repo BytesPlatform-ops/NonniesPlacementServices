@@ -20,7 +20,7 @@ const TESTIMONIALS = [
   },
   {
     quote:
-      "We filled two long-open memory-care beds with residents who were genuinely the right fit for our team. That's the part that matters.",
+      "We filled two long-open memory-care spaces with residents who were genuinely the right fit for our team. That's the part that matters.",
     name: "Priya S.",
     role: "Community director · Spokane",
   },

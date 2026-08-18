@@ -20,7 +20,7 @@ const SUPPLY = {
   image: "/assets/images/provider-facility-care.jpg",
   alt: "A caregiver serving a resident in a care community",
   pains: [
-    { icon: BedDouble, text: "Open beds sitting empty while the right residents never learn the community exists." },
+    { icon: BedDouble, text: "Vacancies sitting empty while the right residents never learn the community exists." },
     { icon: FileWarning, text: "Mismatched inquiries — wrong care level, wrong funding, wasted tours and staff time." },
     { icon: Database, text: "No real-time view of demand, patient funding models, or client-centric preferences." },
   ],

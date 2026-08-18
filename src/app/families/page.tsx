@@ -82,7 +82,7 @@ export default function FamiliesPage() {
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <ParallaxMedia src="/assets/nonnis/specialty-care/rn-memory-care-assessment.jpg" alt="Registered Nurse reviewing memory care needs with an older adult" className="aspect-[4/3] w-full shadow-card" speed={10} />
           <div>
-            <SectionHeading eyebrow="A nurse's perspective matters" title="Why the RN assessment changes everything" description="We don't simply find an available bed. A Registered Nurse reviews diagnoses, mobility, medications, behavioral concerns, and safety risks — so the match can actually succeed." />
+            <SectionHeading eyebrow="A nurse's perspective matters" title="Why the RN assessment changes everything" description="We don't simply find a placement. A Registered Nurse reviews diagnoses, mobility, medications, behavioral concerns, and safety risks — so the match can actually succeed." />
             <Reveal className="mt-6 rounded-2xl border border-navy/10 bg-white p-5 shadow-soft">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-ink/70">We assist individuals requiring</p>
               <div className="mt-3 flex flex-wrap gap-2">

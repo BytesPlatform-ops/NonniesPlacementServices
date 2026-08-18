@@ -28,7 +28,7 @@ export type PricingAudience = {
 const INTRO = [
   "HIPAA-compliant online profile",
   "Search the full provider directory",
-  "List requests / available beds",
+  "List requests / current availability",
   "RN-reviewed matching",
 ];
 

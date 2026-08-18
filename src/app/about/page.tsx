@@ -56,7 +56,7 @@ export default function AboutPage() {
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <ParallaxMedia src="/assets/nonnis/specialty-care/caregiver-helping-senior.jpg" alt="Caregiver supporting an older adult in a warm home setting" className="aspect-[4/3] w-full shadow-card" speed={10} />
           <div>
-            <SectionHeading eyebrow="A nurse's perspective matters" title="We don't simply find an available bed" description="Unlike traditional placement agencies, every referral receives a clinical review by a Registered Nurse with extensive behavioral and medical health experience. We identify communities that can successfully meet the individual's medical, behavioral, mobility, medication, cognitive, financial, and long-term-care needs — to reduce placement failures and improve transitions." />
+            <SectionHeading eyebrow="A nurse's perspective matters" title="We don't simply find a placement" description="Unlike traditional placement agencies, every referral receives a clinical review by a Registered Nurse with extensive behavioral and medical health experience. We identify communities that can successfully meet the individual's medical, behavioral, mobility, medication, cognitive, financial, and long-term-care needs — to reduce placement failures and improve transitions." />
           </div>
         </div>
       </Section>

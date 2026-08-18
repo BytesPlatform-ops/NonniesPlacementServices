@@ -33,7 +33,7 @@ const schema = z.object({
   location: z.string().min(2, "Enter a desired city or area"),
   facilityType: z.string().min(1, "Select a facility type"),
   careLevel: z.string().min(1, "Select a care level"),
-  bedPreference: z.string().min(1, "Select a bed preference"),
+  bedPreference: z.string().min(1, "Select a room preference"),
   funding: z.array(z.string()).min(1, "Select at least one funding type"),
   timeline: z.string().min(1, "Select a timeline"),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -107,7 +107,7 @@ export function FindBedForm() {
               field("Desired location", data.location),
               { label: "Facility type", value: optionLabel(FACILITY_TYPES, data.facilityType) },
               { label: "Care level", value: optionLabel(CARE_LEVELS, data.careLevel) },
-              { label: "Bed preference", value: optionLabel(BED_PREFERENCES, data.bedPreference) },
+              { label: "Room preference", value: optionLabel(BED_PREFERENCES, data.bedPreference) },
             ],
           },
           {
@@ -184,7 +184,7 @@ export function FindBedForm() {
               <FormField label="Desired location" required hint="City or area in Washington" error={errors.location?.message} {...register("location")} />
               <Select label="Facility type" required options={FACILITY_TYPES} error={errors.facilityType?.message} {...register("facilityType")} />
               <Select label="Care level" required options={CARE_LEVELS} error={errors.careLevel?.message} {...register("careLevel")} />
-              <Select label="Bed preference" required options={BED_PREFERENCES} error={errors.bedPreference?.message} {...register("bedPreference")} />
+              <Select label="Room preference" required options={BED_PREFERENCES} error={errors.bedPreference?.message} {...register("bedPreference")} />
             </div>
           )}
 

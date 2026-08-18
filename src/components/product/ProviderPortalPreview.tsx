@@ -38,7 +38,7 @@ export function ProviderPortalPreview({ className }: { className?: string }) {
         {/* Beds + pricing */}
         <div className="rounded-2xl border border-navy/10 bg-ice/40 p-4">
           <p className="flex items-center gap-2 text-sm font-semibold text-navy">
-            <BedDouble className="h-4 w-4 text-blue" aria-hidden /> Beds available
+            <BedDouble className="h-4 w-4 text-blue" aria-hidden /> Openings available
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             {[

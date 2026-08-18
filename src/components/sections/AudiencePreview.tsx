@@ -67,7 +67,7 @@ export function AudiencePreview() {
     <Section id="audiences" tone="ice" density="normal">
       <div className="flex flex-col gap-16 lg:gap-24">
         <Row
-          badge="For Bed Seekers"
+          badge="For Care Seekers"
           badgeTone="teal"
           title="Find the right care for someone you love"
           points={[

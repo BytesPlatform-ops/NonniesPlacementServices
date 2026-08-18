@@ -30,11 +30,11 @@ const schema = z
     facilityType: z.string().min(1, "Select a facility type"),
     location: z.string().min(2, "Enter your location"),
     availableBeds: z
-      .number({ message: "Enter a number of beds" })
+      .number({ message: "Enter a number of openings" })
       .int("Enter a whole number")
       .min(0, "Enter a number")
       .max(9999, "That seems too high"),
-    bedType: z.string().min(1, "Select a bed type"),
+    bedType: z.string().min(1, "Select a room type"),
     specialties: z.array(z.string()).min(1, "Select at least one specialty"),
     pricingRanges: z.array(z.string()).min(1, "Select at least one pricing range"),
     pricingRangeOther: z.string().optional(),
@@ -121,8 +121,8 @@ export function ListBedsForm() {
             fields: [
               { label: "Facility type", value: optionLabel(FACILITY_TYPES, data.facilityType) },
               field("Location", data.location),
-              field("Beds available", data.availableBeds),
-              { label: "Primary bed type", value: optionLabel(BED_TYPES, data.bedType) },
+              field("Openings available", data.availableBeds),
+              { label: "Primary room type", value: optionLabel(BED_TYPES, data.bedType) },
               field("Specialties", optionLabels(PROVIDER_SPECIALTIES, data.specialties)),
             ],
           },
@@ -201,8 +201,8 @@ export function ListBedsForm() {
             <div className="grid gap-5 sm:grid-cols-2">
               <Select label="Facility type" required options={FACILITY_TYPES} error={errors.facilityType?.message} {...register("facilityType")} />
               <FormField label="Location" required hint="City or area in Washington" error={errors.location?.message} {...register("location")} />
-              <FormField label="Beds currently available" type="number" min={0} required error={errors.availableBeds?.message} {...register("availableBeds", { valueAsNumber: true })} />
-              <Select label="Primary bed type" required options={BED_TYPES} error={errors.bedType?.message} {...register("bedType")} />
+              <FormField label="Openings currently available" type="number" min={0} required error={errors.availableBeds?.message} {...register("availableBeds", { valueAsNumber: true })} />
+              <Select label="Primary room type" required options={BED_TYPES} error={errors.bedType?.message} {...register("bedType")} />
               <div className="flex flex-col gap-2.5 sm:col-span-2">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-semibold text-navy">
