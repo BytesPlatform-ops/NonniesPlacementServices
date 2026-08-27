@@ -1,4 +1,6 @@
 import { API_BASE_URL } from "./config";
+import { getActiveOrg } from "./active-org";
+import { supabaseBrowser } from "./supabase/client";
 import type { ApiErrorBody, ApiSuccess } from "@/types/api";
 
 /** Error raised for any non-2xx API response or network failure. */
@@ -22,22 +24,24 @@ function safeParse(text: string): unknown {
   }
 }
 
-/** GET a resource and unwrap the normalized `{ data }` envelope. */
-export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
+/** Centrally attach the bearer token and active-organization header. */
+async function buildHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { Accept: "application/json", ...(extra ?? {}) };
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: { Accept: "application/json", ...(init?.headers ?? {}) },
-      cache: "no-store",
-    });
+    const { data } = await supabaseBrowser().auth.getSession();
+    const token = data.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
   } catch {
-    throw new ApiError(0, "NETWORK_ERROR", "Unable to reach the API. Is the backend running?");
+    /* no session */
   }
+  const org = getActiveOrg();
+  if (org) headers["X-Organization-Id"] = org;
+  return headers;
+}
 
+async function unwrap<T>(response: Response): Promise<T> {
   const text = await response.text();
   const json = text ? safeParse(text) : undefined;
-
   if (!response.ok) {
     const body = json as ApiErrorBody | undefined;
     throw new ApiError(
@@ -47,6 +51,33 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
       body?.error?.details,
     );
   }
-
   return (json as ApiSuccess<T>).data;
 }
+
+export async function apiGet<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { headers: await buildHeaders(), cache: "no-store" });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Unable to reach the API. Is the backend running?");
+  }
+  return unwrap<T>(response);
+}
+
+async function apiSend<T>(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: await buildHeaders({ "Content-Type": "application/json" }),
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Unable to reach the API. Is the backend running?");
+  }
+  return unwrap<T>(response);
+}
+
+export const apiPost = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>("POST", path, body);
+export const apiPatch = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>("PATCH", path, body);
