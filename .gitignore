@@ -40,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# nonnis-platform (separate apps with their own build artifacts)
+nonnis-platform/**/node_modules/
+nonnis-platform/**/dist/
+nonnis-platform/**/.next/
+nonnis-platform/**/out/
+nonnis-platform/**/build/
+nonnis-platform/**/coverage/

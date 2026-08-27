@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".agents/**",
     "scripts/**",
+    // Separate application with its own tooling/lint config.
+    "nonnis-platform/**",
   ]),
 ]);
 
