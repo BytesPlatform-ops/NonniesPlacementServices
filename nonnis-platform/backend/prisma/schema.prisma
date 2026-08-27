@@ -1,0 +1,357 @@
+// Nonnis Digital Optimization Platform — relational foundation.
+//
+// The central business object is the DISCHARGE CASE. Everything is modelled
+// around a case and its movement through the discharge workflow. All primary
+// keys are stable UUIDs — never email, name, phone, or an external id.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// The kind of organization a record represents. Extensible for every partner
+/// type the network will eventually hold.
+enum OrganizationType {
+  NONNIS
+  HOSPITAL
+  REHABILITATION_CENTER
+  SKILLED_NURSING_FACILITY
+  PROVIDER
+  PARTNER
+}
+
+/// Lifecycle of a discharge case. Transitions are recorded as WorkflowEvents —
+/// status is never meaningfully changed without a corresponding event.
+enum CaseStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  MATCHING
+  REFERRAL_SENT
+  PROVIDER_REVIEWING
+  ADDITIONAL_INFORMATION_REQUIRED
+  ACCEPTED
+  DECLINED
+  SERVICES_BEING_COORDINATED
+  READY_FOR_DISCHARGE
+  DISCHARGED
+  SERVICE_STARTED
+  FOLLOW_UP_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+/// Where the patient currently is at the time of the case.
+enum CareSetting {
+  HOSPITAL
+  REHABILITATION_CENTER
+  SKILLED_NURSING_FACILITY
+  EMERGENCY_DEPARTMENT
+  HOME
+  ASSISTED_LIVING
+  MEMORY_CARE
+  OTHER
+}
+
+/// High-level category of a requested post-discharge service.
+enum ServiceCategory {
+  HOME_HEALTH
+  SKILLED_NURSING
+  PHYSICAL_THERAPY
+  OCCUPATIONAL_THERAPY
+  SPEECH_THERAPY
+  PERSONAL_CARE
+  HOMEMAKER
+  HOSPICE
+  PALLIATIVE_CARE
+  INFUSION
+  WOUND_CARE
+  BEHAVIORAL_HEALTH
+  DURABLE_MEDICAL_EQUIPMENT
+  TRANSPORTATION
+  OTHER
+}
+
+/// Level of care / support intensity for a service request.
+enum LevelOfCare {
+  INDEPENDENT
+  SUPPORTIVE
+  INTERMEDIATE
+  SKILLED
+  COMPLEX
+}
+
+/// Lifecycle of an individual service request within a case.
+enum ServiceRequestStatus {
+  REQUESTED
+  MATCHING
+  FULFILLED
+  CANCELLED
+}
+
+/// Category of a discrete case requirement / constraint.
+enum RequirementCategory {
+  CLINICAL
+  NONCLINICAL
+  EQUIPMENT
+  TRANSPORTATION
+  PROVIDER_QUALIFICATION
+  INSURANCE_FUNDING
+  SPECIAL_CIRCUMSTANCE
+  PREFERENCE
+}
+
+/// Business workflow event types. Append-only history for a case.
+enum WorkflowEventType {
+  CASE_CREATED
+  CASE_UPDATED
+  STATUS_CHANGED
+  REQUIREMENT_ADDED
+  SERVICE_REQUEST_ADDED
+  NOTE_ADDED
+  CASE_CANCELLED
+}
+
+/// Whether a workflow event was produced by a human, an automation, or the
+/// system itself.
+enum WorkflowEventSource {
+  MANUAL
+  AUTOMATED
+  SYSTEM
+}
+
+// ---------------------------------------------------------------------------
+// Core domain
+// ---------------------------------------------------------------------------
+
+/// A participating organization — Nonnis itself, a discharging facility's
+/// parent org, a provider org, or another partner.
+model Organization {
+  id           String           @id @default(uuid()) @db.Uuid
+  type         OrganizationType
+  name         String
+  legalName    String?
+  /// External reference (e.g. partner/EHR org id). Never used as a primary key.
+  externalRef  String?
+  /// Extensible, non-workflow-critical metadata only.
+  metadata     Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  facilities     Facility[]
+  patients       Patient[]
+  cases          Case[]
+  workflowEvents WorkflowEvent[]
+  auditEvents    AuditEvent[]
+
+  @@index([type])
+  @@map("organizations")
+}
+
+/// A physical facility belonging to an organization. Discharge cases originate
+/// from a facility.
+model Facility {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  externalRef    String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String?  @default("US")
+  phone          String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  cases        Case[]
+
+  @@index([organizationId])
+  @@map("facilities")
+}
+
+/// A patient who may have multiple discharge cases over time. Deliberately not
+/// embedded inside Case. Minimal identifying data only — not a medical record.
+model Patient {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  firstName      String
+  lastName       String
+  dateOfBirth    DateTime? @db.Date
+  /// External reference (e.g. facility MRN). Never used as a primary key.
+  externalRef    String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  cases        Case[]
+
+  @@index([organizationId])
+  @@map("patients")
+}
+
+/// The central discharge case.
+model Case {
+  id             String     @id @default(uuid()) @db.Uuid
+  /// Human-readable internal case identifier (unique).
+  caseNumber     String     @unique
+  /// Optional external facility/EHR case id.
+  externalCaseId String?
+  status         CaseStatus @default(DRAFT)
+
+  organizationId        String @db.Uuid
+  patientId             String @db.Uuid
+  originatingFacilityId String @db.Uuid
+
+  /// Placeholder reference to the discharge professional (a User id once
+  /// identity exists). Kept as a nullable string until auth is added.
+  dischargeProfessionalRef String?
+
+  expectedDischargeDate DateTime?
+  actualDischargeDate   DateTime?
+  currentCareSetting    CareSetting?
+
+  /// Destination / preferred service location (free-form for now; structured
+  /// geographic constraints live on ServiceRequest).
+  preferredServiceLocation String?
+
+  // Communication / accessibility.
+  primaryLanguage         String?
+  interpreterRequired     Boolean  @default(false)
+  communicationPreference String?
+  accessibilityNeeds      String[]
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  patient             Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  originatingFacility Facility         @relation(fields: [originatingFacilityId], references: [id], onDelete: Restrict)
+  requirements        CaseRequirement[]
+  serviceRequests     ServiceRequest[]
+  workflowEvents      WorkflowEvent[]
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([originatingFacilityId])
+  @@index([status])
+  @@index([updatedAt])
+  @@map("cases")
+}
+
+/// A requested post-discharge service tied to a case.
+model ServiceRequest {
+  id     String               @id @default(uuid()) @db.Uuid
+  caseId String               @db.Uuid
+  status ServiceRequestStatus @default(REQUESTED)
+
+  category         ServiceCategory
+  levelOfCare      LevelOfCare?
+  requestedStartDate DateTime?
+  frequency        String?
+  durationText     String?
+
+  // Geographic requirements.
+  serviceCity        String?
+  serviceState       String?
+  servicePostalCode  String?
+  serviceRadiusMiles Int?
+
+  // Insurance / funding.
+  fundingSource          String?
+  insurancePlan          String?
+  authorizationReference String?
+
+  notes    String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case         Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  requirements CaseRequirement[]
+
+  @@index([caseId])
+  @@index([category])
+  @@map("service_requests")
+}
+
+/// A discrete requirement or constraint on a case, optionally scoped to a
+/// specific service request.
+model CaseRequirement {
+  id               String              @id @default(uuid()) @db.Uuid
+  caseId           String              @db.Uuid
+  serviceRequestId String?             @db.Uuid
+  category         RequirementCategory
+  label            String
+  detail           String?
+  mandatory        Boolean             @default(true)
+  metadata         Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  case           Case            @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  serviceRequest ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([serviceRequestId])
+  @@index([category])
+  @@map("case_requirements")
+}
+
+/// Append-only business workflow history for a case (timelines, analytics,
+/// automation, auditability).
+model WorkflowEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  caseId         String              @db.Uuid
+  type           WorkflowEventType
+  previousStatus CaseStatus?
+  newStatus      CaseStatus?
+  /// Actor reference (a User id once identity exists), when available.
+  actorRef       String?
+  source         WorkflowEventSource @default(SYSTEM)
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  case         Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([organizationId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("workflow_events")
+}
+
+/// Append-only security / admin action history. Distinct from WorkflowEvent
+/// (which is business workflow history). Never store secrets in metadata.
+model AuditEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @db.Uuid
+  /// Actor reference (a User id once identity exists), when available.
+  actorRef       String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_events")
+}
