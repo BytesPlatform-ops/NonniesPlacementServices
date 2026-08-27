@@ -5,9 +5,13 @@ import type { AuthState, RequestUser } from "./request-user";
 export const IS_PUBLIC_KEY = "isPublic";
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
-/** Declares the permission codes required to invoke a handler. */
+/** Declares the permission codes ALL required to invoke a handler. */
 export const PERMISSIONS_KEY = "requiredPermissions";
 export const RequirePermissions = (...permissions: string[]) => SetMetadata(PERMISSIONS_KEY, permissions);
+
+/** Declares permission codes where at least ONE is required. */
+export const ANY_PERMISSIONS_KEY = "anyPermissions";
+export const RequireAnyPermission = (...permissions: string[]) => SetMetadata(ANY_PERMISSIONS_KEY, permissions);
 
 /** Injects the authenticated application user (present on permission-guarded routes). */
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): RequestUser => {

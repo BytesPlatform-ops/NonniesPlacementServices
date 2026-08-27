@@ -4,7 +4,10 @@ import { loadConfiguration } from "./config/configuration";
 import { PrismaModule } from "./database/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CasesModule } from "./modules/cases/cases.module";
+import { FacilitiesModule } from "./modules/facilities/facilities.module";
 import { HealthModule } from "./modules/health/health.module";
+import { OrganizationsModule } from "./modules/organizations/organizations.module";
+import { UsersModule } from "./modules/users/users.module";
 
 @Module({
   imports: [
@@ -13,6 +16,9 @@ import { HealthModule } from "./modules/health/health.module";
     AuthModule,
     HealthModule,
     CasesModule,
+    OrganizationsModule,
+    FacilitiesModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
