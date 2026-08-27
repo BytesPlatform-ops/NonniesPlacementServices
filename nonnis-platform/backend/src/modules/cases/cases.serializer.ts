@@ -22,6 +22,7 @@ export const caseDetailInclude = {
   patient: true,
   originatingFacility: true,
   organization: { select: { id: true, name: true, type: true } },
+  assignedDischargeProfessional: { select: { id: true, firstName: true, lastName: true, displayName: true } },
   serviceRequests: { orderBy: { createdAt: "asc" } },
   requirements: { orderBy: { createdAt: "asc" } },
   workflowEvents: { orderBy: { createdAt: "desc" }, take: 50 },
@@ -103,6 +104,7 @@ export interface CaseDetail {
     city: string | null;
     state: string | null;
   };
+  assignedDischargeProfessional: { id: string; displayName: string } | null;
   dischargeProfessionalRef: string | null;
   expectedDischargeDate: string | null;
   actualDischargeDate: string | null;
@@ -162,6 +164,14 @@ export function toCaseDetail(row: CaseDetailRow): CaseDetail {
       city: row.originatingFacility.city,
       state: row.originatingFacility.state,
     },
+    assignedDischargeProfessional: row.assignedDischargeProfessional
+      ? {
+          id: row.assignedDischargeProfessional.id,
+          displayName:
+            row.assignedDischargeProfessional.displayName ??
+            `${row.assignedDischargeProfessional.firstName ?? ""} ${row.assignedDischargeProfessional.lastName ?? ""}`.trim(),
+        }
+      : null,
     dischargeProfessionalRef: row.dischargeProfessionalRef,
     expectedDischargeDate: iso(row.expectedDischargeDate),
     actualDischargeDate: iso(row.actualDischargeDate),

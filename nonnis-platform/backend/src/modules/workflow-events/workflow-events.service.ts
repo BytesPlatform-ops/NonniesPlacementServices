@@ -9,6 +9,7 @@ export interface RecordWorkflowEventInput {
   previousStatus?: CaseStatus | null;
   newStatus?: CaseStatus | null;
   actorRef?: string | null;
+  actorUserId?: string | null;
   source?: WorkflowEventSource;
   metadata?: Prisma.InputJsonValue;
 }
@@ -32,6 +33,7 @@ export class WorkflowEventsService {
         previousStatus: input.previousStatus ?? null,
         newStatus: input.newStatus ?? null,
         actorRef: input.actorRef ?? null,
+        actorUserId: input.actorUserId ?? null,
         source: input.source ?? "SYSTEM",
         metadata: input.metadata,
       },

@@ -8,6 +8,7 @@ export interface RecordAuditInput {
   entityId: string;
   organizationId?: string | null;
   actorRef?: string | null;
+  actorUserId?: string | null;
   /** Safe metadata only — never store secrets here. */
   metadata?: Prisma.InputJsonValue;
 }
@@ -30,6 +31,7 @@ export class AuditService {
         entityId: input.entityId,
         organizationId: input.organizationId ?? null,
         actorRef: input.actorRef ?? null,
+        actorUserId: input.actorUserId ?? null,
         metadata: input.metadata,
       },
     });

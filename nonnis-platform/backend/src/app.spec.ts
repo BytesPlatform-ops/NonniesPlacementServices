@@ -6,24 +6,24 @@ import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import { PrismaService } from "./database/prisma.service";
+import { TOKEN_VERIFIER, type VerifiedIdentity } from "./modules/auth/token-verifier";
 
 /**
- * End-to-end tests over the real Nest application with the database layer
- * mocked, so routing, validation, the response envelope and error handling are
- * all exercised without a live Postgres instance.
+ * HTTP-level auth behavior over the real Nest application, with Supabase token
+ * verification and the database layer mocked. Deeper authorization/isolation
+ * logic is covered by service/guard unit tests.
  */
 describe("Platform API (e2e)", () => {
   let app: INestApplication;
 
+  const tokenVerifierMock = {
+    verify: async (token: string): Promise<VerifiedIdentity | null> =>
+      token === "valid" ? { supabaseUserId: "sb-x", email: "x@example.com" } : null,
+  };
+
+  // Unprovisioned identity: no application user exists for the verified identity.
   const prismaMock = {
-    case: {
-      findMany: jest.fn().mockResolvedValue([]),
-      count: jest.fn().mockResolvedValue(0),
-      findUnique: jest.fn().mockResolvedValue(null),
-    },
-    $transaction: jest.fn().mockImplementation((arg: unknown) =>
-      Array.isArray(arg) ? Promise.all(arg) : (arg as (t: unknown) => unknown)(prismaMock),
-    ),
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     $disconnect: jest.fn(),
   };
 
@@ -31,6 +31,8 @@ describe("Platform API (e2e)", () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(TOKEN_VERIFIER)
+      .useValue(tokenVerifierMock)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -45,33 +47,33 @@ describe("Platform API (e2e)", () => {
     await app.close();
   });
 
-  it("GET /health returns a raw (unwrapped) liveness payload", async () => {
+  it("GET /health is public and returns a raw liveness payload", async () => {
     const res = await request(app.getHttpServer()).get("/health");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
     expect(res.body.data).toBeUndefined();
   });
 
-  it("GET /api/v1/cases returns a wrapped, paginated result", async () => {
+  it("rejects a protected route with no token (401)", async () => {
     const res = await request(app.getHttpServer()).get("/api/v1/cases");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a protected route with an invalid token (401)", async () => {
+    const res = await request(app.getHttpServer()).get("/api/v1/cases").set("Authorization", "Bearer nope");
+    expect(res.status).toBe(401);
+  });
+
+  it("denies a valid but unprovisioned identity from protected data (403)", async () => {
+    const res = await request(app.getHttpServer()).get("/api/v1/cases").set("Authorization", "Bearer valid");
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/v1/auth/me returns an unprovisioned context for a new identity", async () => {
+    const res = await request(app.getHttpServer()).get("/api/v1/auth/me").set("Authorization", "Bearer valid");
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 });
-  });
-
-  it("GET /api/v1/cases/:id rejects an invalid UUID with 400", async () => {
-    const res = await request(app.getHttpServer()).get("/api/v1/cases/not-a-uuid");
-    expect(res.status).toBe(400);
-  });
-
-  it("GET /api/v1/cases/:id returns 404 when the case is not found", async () => {
-    const res = await request(app.getHttpServer()).get("/api/v1/cases/11111111-1111-4111-8111-111111111111");
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("NOT_FOUND");
-  });
-
-  it("POST /api/v1/cases rejects an invalid body with 400", async () => {
-    const res = await request(app.getHttpServer()).post("/api/v1/cases").send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("BAD_REQUEST");
+    expect(res.body.data.authenticated).toBe(true);
+    expect(res.body.data.provisioned).toBe(false);
+    expect(res.body.data.memberships).toEqual([]);
   });
 });

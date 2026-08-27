@@ -127,11 +127,8 @@ export class CreateCaseRequirementDto {
   mandatory?: boolean;
 }
 
-/** Create a discharge case. */
+/** Create a discharge case. The organization is taken from the request context. */
 export class CreateCaseDto {
-  @IsUUID()
-  organizationId!: string;
-
   @IsUUID()
   originatingFacilityId!: string;
 

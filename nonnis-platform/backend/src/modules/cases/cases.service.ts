@@ -3,6 +3,9 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
+import { PERMISSIONS } from "../../common/rbac";
+import type { RequestUser } from "../auth/request-user";
+import { requireActiveOrganization } from "../auth/org-context";
 import { AuditService } from "../audit/audit.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
 import type { CreateCaseDto } from "./dto/create-case.dto";
@@ -24,9 +27,11 @@ export class CasesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(query: ListCasesQueryDto): Promise<PaginatedResult<CaseSummary>> {
+  /** List cases within the caller's active organization. */
+  async list(user: RequestUser, query: ListCasesQueryDto): Promise<PaginatedResult<CaseSummary>> {
+    const organizationId = requireActiveOrganization(user);
     const { page, pageSize, status } = query;
-    const where: Prisma.CaseWhereInput = status ? { status } : {};
+    const where: Prisma.CaseWhereInput = { organizationId, ...(status ? { status } : {}) };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.case.findMany({
@@ -48,44 +53,50 @@ export class CasesService {
     };
   }
 
-  async findOne(id: string): Promise<CaseDetail> {
+  /**
+   * Fetch a single case. Cross-organization access is denied with 404 (not 403)
+   * so record existence is never revealed, unless the caller holds cases.read_all.
+   */
+  async findOne(user: RequestUser, id: string): Promise<CaseDetail> {
     const row = await this.prisma.case.findUnique({ where: { id }, include: caseDetailInclude });
     if (!row) {
       throw new NotFoundException(`Case ${id} not found`);
     }
+
+    const canReadAll = user.activePermissions.has(PERMISSIONS.CASES_READ_ALL);
+    if (!canReadAll && row.organizationId !== user.activeOrganizationId) {
+      throw new NotFoundException(`Case ${id} not found`);
+    }
+
     return toCaseDetail(row);
   }
 
-  async create(dto: CreateCaseDto): Promise<CaseDetail> {
+  /** Create a case within the caller's active organization only. */
+  async create(user: RequestUser, dto: CreateCaseDto): Promise<CaseDetail> {
+    const organizationId = requireActiveOrganization(user);
+
     if ((dto.patientId && dto.patient) || (!dto.patientId && !dto.patient)) {
       throw new BadRequestException("Provide exactly one of `patientId` or `patient`.");
     }
 
     const detail = await this.prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.findUnique({ where: { id: dto.organizationId } });
-      if (!organization) {
-        throw new BadRequestException(`Organization ${dto.organizationId} does not exist.`);
-      }
-
       const facility = await tx.facility.findUnique({ where: { id: dto.originatingFacilityId } });
-      if (!facility) {
-        throw new BadRequestException(`Facility ${dto.originatingFacilityId} does not exist.`);
-      }
-      if (facility.organizationId !== organization.id) {
-        throw new BadRequestException("Originating facility does not belong to the given organization.");
+      if (!facility || facility.organizationId !== organizationId) {
+        // Do not reveal whether a facility in another organization exists.
+        throw new BadRequestException("Originating facility is not valid for this organization.");
       }
 
-      const patientId = await this.resolvePatientId(tx, dto, organization.id);
+      const patientId = await this.resolvePatientId(tx, dto, organizationId);
 
       const created = await tx.case.create({
         data: {
           caseNumber: this.generateCaseNumber(),
           externalCaseId: dto.externalCaseId,
           status: dto.status ?? "DRAFT",
-          organizationId: organization.id,
+          organizationId,
           patientId,
           originatingFacilityId: facility.id,
-          dischargeProfessionalRef: dto.dischargeProfessionalRef,
+          assignedDischargeProfessionalId: user.id,
           expectedDischargeDate: dto.expectedDischargeDate ? new Date(dto.expectedDischargeDate) : undefined,
           currentCareSetting: dto.currentCareSetting,
           preferredServiceLocation: dto.preferredServiceLocation,
@@ -123,11 +134,12 @@ export class CasesService {
 
       await this.workflowEvents.record(
         {
-          organizationId: organization.id,
+          organizationId,
           caseId: created.id,
           type: "CASE_CREATED",
           newStatus: created.status,
-          source: "SYSTEM",
+          source: "MANUAL",
+          actorUserId: user.id,
           metadata: { caseNumber: created.caseNumber },
         },
         tx,
@@ -138,8 +150,8 @@ export class CasesService {
           action: "case.created",
           entityType: "Case",
           entityId: created.id,
-          organizationId: organization.id,
-          actorRef: dto.dischargeProfessionalRef ?? null,
+          organizationId,
+          actorUserId: user.id,
           metadata: { caseNumber: created.caseNumber },
         },
         tx,
@@ -159,16 +171,12 @@ export class CasesService {
   ): Promise<string> {
     if (dto.patientId) {
       const patient = await tx.patient.findUnique({ where: { id: dto.patientId } });
-      if (!patient) {
-        throw new BadRequestException(`Patient ${dto.patientId} does not exist.`);
-      }
-      if (patient.organizationId !== organizationId) {
-        throw new BadRequestException("Patient does not belong to the given organization.");
+      if (!patient || patient.organizationId !== organizationId) {
+        throw new BadRequestException("Patient is not valid for this organization.");
       }
       return patient.id;
     }
 
-    // dto.patient is guaranteed present by the create() guard.
     const patientInput = dto.patient!;
     const patient = await tx.patient.create({
       data: {
