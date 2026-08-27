@@ -18,6 +18,7 @@ function detailRow(id: string): CaseDetailRow {
     patientId: "pat",
     originatingFacilityId: "fac",
     dischargeProfessionalRef: null,
+    assignedDischargeProfessionalId: null,
     expectedDischargeDate: null,
     actualDischargeDate: null,
     currentCareSetting: null,
@@ -44,6 +45,7 @@ function detailRow(id: string): CaseDetailRow {
     originatingFacility: {
       id: "fac",
       organizationId: "org",
+      status: "ACTIVE",
       name: "Main Campus",
       externalRef: null,
       addressLine1: null,
