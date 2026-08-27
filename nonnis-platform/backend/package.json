@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "bootstrap:admin": "node --env-file=.env -r ts-node/register src/scripts/bootstrap-admin.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
