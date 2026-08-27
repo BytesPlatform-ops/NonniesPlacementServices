@@ -1,6 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
+import { Prisma, type CaseStatus } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS } from "../../common/rbac";
@@ -10,14 +16,31 @@ import { AuditService } from "../audit/audit.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
 import type { CreateCaseDto } from "./dto/create-case.dto";
 import type { ListCasesQueryDto } from "./dto/list-cases.dto";
+import type { UpdateCaseDto } from "./dto/update-case.dto";
+import type { TransitionCaseDto } from "./dto/transition-case.dto";
+import type { AssignCaseDto } from "./dto/assign-case.dto";
+import { computeCompleteness } from "./case-assessment";
+import { checkTransition, isEditable, MANUAL_TRANSITIONS } from "./case-transition";
 import {
   caseDetailInclude,
   caseSummaryInclude,
+  toAssessmentInput,
   toCaseDetail,
   toCaseSummary,
   type CaseDetail,
   type CaseSummary,
 } from "./cases.serializer";
+
+const SORTABLE = new Set(["expectedDischargeDate", "updatedAt", "createdAt", "status", "caseNumber"]);
+const NON_TERMINAL: CaseStatus[] = ["DRAFT", "READY_FOR_REVIEW", "MATCHING", "REFERRAL_SENT", "PROVIDER_REVIEWING", "ADDITIONAL_INFORMATION_REQUIRED", "ACCEPTED", "DECLINED", "SERVICES_BEING_COORDINATED", "READY_FOR_DISCHARGE", "SERVICE_STARTED", "FOLLOW_UP_REQUIRED"];
+
+function allowedTransitionsFor(status: CaseStatus): CaseStatus[] {
+  return MANUAL_TRANSITIONS[status] ?? [];
+}
+
+function startOfTodayUtc(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
 
 @Injectable()
 export class CasesService {
@@ -27,54 +50,106 @@ export class CasesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** List cases within the caller's active organization. */
   async list(user: RequestUser, query: ListCasesQueryDto): Promise<PaginatedResult<CaseSummary>> {
     const organizationId = requireActiveOrganization(user);
-    const { page, pageSize, status } = query;
-    const where: Prisma.CaseWhereInput = { organizationId, ...(status ? { status } : {}) };
+    const now = new Date();
+    const where = this.buildWhere(user, organizationId, query, now);
+
+    const sortField = query.sort && SORTABLE.has(query.sort) ? query.sort : "updatedAt";
+    const order = query.order === "asc" ? "asc" : "desc";
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.case.findMany({
         where,
         include: caseSummaryInclude,
-        orderBy: { updatedAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        orderBy: { [sortField]: order },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
       }),
       this.prisma.case.count({ where }),
     ]);
 
     return {
-      items: rows.map(toCaseSummary),
-      page,
-      pageSize,
+      items: rows.map((r) => toCaseSummary(r, now)),
+      page: query.page,
+      pageSize: query.pageSize,
       total,
-      totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
+      totalPages: total === 0 ? 0 : Math.ceil(total / query.pageSize),
     };
   }
 
-  /**
-   * Fetch a single case. Cross-organization access is denied with 404 (not 403)
-   * so record existence is never revealed, unless the caller holds cases.read_all.
-   */
-  async findOne(user: RequestUser, id: string): Promise<CaseDetail> {
-    const row = await this.prisma.case.findUnique({ where: { id }, include: caseDetailInclude });
-    if (!row) {
-      throw new NotFoundException(`Case ${id} not found`);
+  private buildWhere(user: RequestUser, organizationId: string, query: ListCasesQueryDto, now: Date): Prisma.CaseWhereInput {
+    const and: Prisma.CaseWhereInput[] = [{ organizationId }];
+
+    if (query.status) and.push({ status: query.status });
+    if (query.facilityId) and.push({ originatingFacilityId: query.facilityId });
+
+    if (query.assignedToMe) {
+      and.push({ assignedDischargeProfessionalId: user.id });
+    } else if (query.assignedUserId) {
+      const canBroad = user.activePermissions.has(PERMISSIONS.CASES_READ_ALL);
+      if (query.assignedUserId !== user.id && !canBroad) {
+        throw new BadRequestException("You are not permitted to filter by another user's assignments.");
+      }
+      and.push({ assignedDischargeProfessionalId: query.assignedUserId });
     }
 
-    const canReadAll = user.activePermissions.has(PERMISSIONS.CASES_READ_ALL);
-    if (!canReadAll && row.organizationId !== user.activeOrganizationId) {
-      throw new NotFoundException(`Case ${id} not found`);
+    if (query.search) {
+      const s = query.search;
+      and.push({
+        OR: [
+          { caseNumber: { contains: s, mode: "insensitive" } },
+          { externalCaseId: { contains: s, mode: "insensitive" } },
+          { patient: { firstName: { contains: s, mode: "insensitive" } } },
+          { patient: { lastName: { contains: s, mode: "insensitive" } } },
+        ],
+      });
     }
 
-    return toCaseDetail(row);
+    if (query.expectedFrom) and.push({ expectedDischargeDate: { gte: new Date(query.expectedFrom) } });
+    if (query.expectedTo) and.push({ expectedDischargeDate: { lte: new Date(query.expectedTo) } });
+
+    if (query.overdue) {
+      and.push({ status: { in: NON_TERMINAL }, expectedDischargeDate: { lt: startOfTodayUtc(now) } });
+    }
+
+    if (query.attentionOnly) and.push({ OR: this.attentionOr(now) });
+    if (query.incompleteOnly) and.push({ OR: this.incompleteOr() });
+
+    return { AND: and };
   }
 
-  /** Create a case within the caller's active organization only. */
+  private attentionOr(now: Date): Prisma.CaseWhereInput[] {
+    const notTerminal: Prisma.CaseWhereInput = { status: { in: NON_TERMINAL } };
+    return [
+      { blocked: true },
+      { AND: [notTerminal, { expectedDischargeDate: { lt: startOfTodayUtc(now) } }] },
+      { AND: [notTerminal, { assignedDischargeProfessionalId: null }] },
+      { AND: [notTerminal, { preferredServiceLocation: null }] },
+      { requirements: { some: { status: "BLOCKED" } } },
+      { AND: [notTerminal, { requirements: { some: { mandatory: true, status: { notIn: ["COMPLETE", "NOT_REQUIRED"] } } } }] },
+    ];
+  }
+
+  private incompleteOr(): Prisma.CaseWhereInput[] {
+    return [
+      { expectedDischargeDate: null },
+      { currentCareSetting: null },
+      { preferredServiceLocation: null },
+      { assignedDischargeProfessionalId: null },
+      { serviceRequests: { none: {} } },
+      { requirements: { some: { mandatory: true, status: { notIn: ["COMPLETE", "NOT_REQUIRED"] } } } },
+      { blocked: true },
+    ];
+  }
+
+  async findOne(user: RequestUser, id: string): Promise<CaseDetail> {
+    const row = await this.loadDetailOrThrow(user, id);
+    return toCaseDetail(row, allowedTransitionsFor(row.status));
+  }
+
   async create(user: RequestUser, dto: CreateCaseDto): Promise<CaseDetail> {
     const organizationId = requireActiveOrganization(user);
-
     if ((dto.patientId && dto.patient) || (!dto.patientId && !dto.patient)) {
       throw new BadRequestException("Provide exactly one of `patientId` or `patient`.");
     }
@@ -82,21 +157,19 @@ export class CasesService {
     const detail = await this.prisma.$transaction(async (tx) => {
       const facility = await tx.facility.findUnique({ where: { id: dto.originatingFacilityId } });
       if (!facility || facility.organizationId !== organizationId) {
-        // Do not reveal whether a facility in another organization exists.
         throw new BadRequestException("Originating facility is not valid for this organization.");
       }
-
       const patientId = await this.resolvePatientId(tx, dto, organizationId);
 
       const created = await tx.case.create({
         data: {
           caseNumber: this.generateCaseNumber(),
           externalCaseId: dto.externalCaseId,
-          status: dto.status ?? "DRAFT",
+          status: "DRAFT",
           organizationId,
           patientId,
           originatingFacilityId: facility.id,
-          assignedDischargeProfessionalId: user.id,
+          assignedDischargeProfessionalId: dto.assignSelf === false ? undefined : user.id,
           expectedDischargeDate: dto.expectedDischargeDate ? new Date(dto.expectedDischargeDate) : undefined,
           currentCareSetting: dto.currentCareSetting,
           preferredServiceLocation: dto.preferredServiceLocation,
@@ -104,71 +177,160 @@ export class CasesService {
           interpreterRequired: dto.interpreterRequired ?? false,
           communicationPreference: dto.communicationPreference,
           accessibilityNeeds: dto.accessibilityNeeds ?? [],
-          serviceRequests: {
-            create: (dto.serviceRequests ?? []).map((sr) => ({
-              category: sr.category,
-              levelOfCare: sr.levelOfCare,
-              requestedStartDate: sr.requestedStartDate ? new Date(sr.requestedStartDate) : undefined,
-              frequency: sr.frequency,
-              durationText: sr.durationText,
-              serviceCity: sr.serviceCity,
-              serviceState: sr.serviceState,
-              servicePostalCode: sr.servicePostalCode,
-              serviceRadiusMiles: sr.serviceRadiusMiles,
-              fundingSource: sr.fundingSource,
-              insurancePlan: sr.insurancePlan,
-              authorizationReference: sr.authorizationReference,
-              notes: sr.notes,
-            })),
-          },
-          requirements: {
-            create: (dto.requirements ?? []).map((r) => ({
-              category: r.category,
-              label: r.label,
-              detail: r.detail,
-              mandatory: r.mandatory ?? true,
-            })),
-          },
+          patientContactPhone: dto.patientContactPhone,
+          representativeName: dto.representativeName,
+          representativeRelationship: dto.representativeRelationship,
+          representativeContact: dto.representativeContact,
         },
       });
 
       await this.workflowEvents.record(
-        {
-          organizationId,
-          caseId: created.id,
-          type: "CASE_CREATED",
-          newStatus: created.status,
-          source: "MANUAL",
-          actorUserId: user.id,
-          metadata: { caseNumber: created.caseNumber },
-        },
+        { organizationId, caseId: created.id, type: "CASE_CREATED", newStatus: "DRAFT", source: "MANUAL", actorUserId: user.id, metadata: { caseNumber: created.caseNumber } },
         tx,
       );
-
       await this.audit.record(
-        {
-          action: "case.created",
-          entityType: "Case",
-          entityId: created.id,
-          organizationId,
-          actorUserId: user.id,
-          metadata: { caseNumber: created.caseNumber },
-        },
+        { action: "case.created", entityType: "Case", entityId: created.id, organizationId, actorUserId: user.id, metadata: { caseNumber: created.caseNumber } },
         tx,
       );
 
       const full = await tx.case.findUniqueOrThrow({ where: { id: created.id }, include: caseDetailInclude });
-      return toCaseDetail(full);
+      return toCaseDetail(full, allowedTransitionsFor(full.status));
     });
-
     return detail;
   }
 
-  private async resolvePatientId(
-    tx: Prisma.TransactionClient,
-    dto: CreateCaseDto,
-    organizationId: string,
-  ): Promise<string> {
+  async update(user: RequestUser, id: string, dto: UpdateCaseDto): Promise<CaseDetail> {
+    const existing = await this.loadDetailOrThrow(user, id);
+    if (!isEditable(existing.status)) {
+      throw new ConflictException("This case can no longer be edited.");
+    }
+    this.validateDates(dto.expectedDischargeDate, dto.actualDischargeDate);
+
+    const detail = await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({
+        where: { id },
+        data: {
+          externalCaseId: dto.externalCaseId,
+          expectedDischargeDate: dto.expectedDischargeDate ? new Date(dto.expectedDischargeDate) : undefined,
+          actualDischargeDate: dto.actualDischargeDate ? new Date(dto.actualDischargeDate) : undefined,
+          currentCareSetting: dto.currentCareSetting,
+          preferredServiceLocation: dto.preferredServiceLocation,
+          primaryLanguage: dto.primaryLanguage,
+          interpreterRequired: dto.interpreterRequired,
+          communicationPreference: dto.communicationPreference,
+          accessibilityNeeds: dto.accessibilityNeeds,
+          patientContactPhone: dto.patientContactPhone,
+          representativeName: dto.representativeName,
+          representativeRelationship: dto.representativeRelationship,
+          representativeContact: dto.representativeContact,
+          blocked: dto.blocked,
+          blockReason: dto.blockReason,
+        },
+      });
+      await this.workflowEvents.record(
+        { organizationId: existing.organization.id, caseId: id, type: "CASE_UPDATED", source: "MANUAL", actorUserId: user.id, metadata: { fields: Object.keys(dto) } },
+        tx,
+      );
+      const full = await tx.case.findUniqueOrThrow({ where: { id }, include: caseDetailInclude });
+      return toCaseDetail(full, allowedTransitionsFor(full.status));
+    });
+    return detail;
+  }
+
+  async transition(user: RequestUser, id: string, dto: TransitionCaseDto): Promise<CaseDetail> {
+    const row = await this.loadDetailOrThrow(user, id);
+    const completeness = computeCompleteness(toAssessmentInput(row));
+    const check = checkTransition(row.status, dto.toStatus, completeness);
+    if (!check.allowed) {
+      throw new UnprocessableEntityException({
+        message: check.reason ?? "Transition not permitted.",
+        details: { code: "TRANSITION_BLOCKED", blockers: check.blockers ?? [] },
+      });
+    }
+
+    const detail = await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({ where: { id }, data: { status: dto.toStatus } });
+      await this.workflowEvents.record(
+        { organizationId: row.organization.id, caseId: id, type: "STATUS_CHANGED", previousStatus: row.status, newStatus: dto.toStatus, source: "MANUAL", actorUserId: user.id, metadata: dto.reason ? { reason: dto.reason } : undefined },
+        tx,
+      );
+      if (dto.toStatus === "CANCELLED") {
+        await this.audit.record(
+          { action: "case.cancelled", entityType: "Case", entityId: id, organizationId: row.organization.id, actorUserId: user.id, metadata: dto.reason ? { reason: dto.reason } : undefined },
+          tx,
+        );
+      }
+      const full = await tx.case.findUniqueOrThrow({ where: { id }, include: caseDetailInclude });
+      return toCaseDetail(full, allowedTransitionsFor(full.status));
+    });
+    return detail;
+  }
+
+  async assign(user: RequestUser, id: string, dto: AssignCaseDto): Promise<CaseDetail> {
+    const row = await this.loadDetailOrThrow(user, id);
+    if (!isEditable(row.status)) {
+      throw new ConflictException("This case can no longer be reassigned.");
+    }
+    const organizationId = row.organization.id;
+    const previous = row.assignedDischargeProfessional?.id ?? null;
+    const next = dto.assignedUserId ?? null;
+
+    if (next) {
+      const eligible = await this.prisma.organizationMembership.findFirst({
+        where: {
+          userId: next,
+          organizationId,
+          status: "ACTIVE",
+          role: { permissions: { some: { permission: { code: PERMISSIONS.CASES_READ } } } },
+        },
+      });
+      if (!eligible) {
+        throw new BadRequestException("The selected user is not eligible for assignment in this organization.");
+      }
+    }
+
+    const type = next === null ? "CASE_UNASSIGNED" : previous === null ? "CASE_ASSIGNED" : "CASE_REASSIGNED";
+
+    const detail = await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({ where: { id }, data: { assignedDischargeProfessionalId: next } });
+      await this.workflowEvents.record(
+        { organizationId, caseId: id, type, source: "MANUAL", actorUserId: user.id, metadata: { previous, next } },
+        tx,
+      );
+      if (type === "CASE_REASSIGNED") {
+        await this.audit.record(
+          { action: "case.reassigned", entityType: "Case", entityId: id, organizationId, actorUserId: user.id, metadata: { previous, next } },
+          tx,
+        );
+      }
+      const full = await tx.case.findUniqueOrThrow({ where: { id }, include: caseDetailInclude });
+      return toCaseDetail(full, allowedTransitionsFor(full.status));
+    });
+    return detail;
+  }
+
+  // ---- helpers ----
+
+  /** Loads a case detail row bounded by org access (404 for cross-org unless read_all). */
+  private async loadDetailOrThrow(user: RequestUser, id: string) {
+    const row = await this.prisma.case.findUnique({ where: { id }, include: caseDetailInclude });
+    if (!row) throw new NotFoundException(`Case ${id} not found`);
+    const canReadAll = user.activePermissions.has(PERMISSIONS.CASES_READ_ALL);
+    if (!canReadAll && row.organizationId !== user.activeOrganizationId) {
+      throw new NotFoundException(`Case ${id} not found`);
+    }
+    return row;
+  }
+
+  private validateDates(expected?: string | null, actual?: string | null): void {
+    if (expected && actual) {
+      if (new Date(actual).getTime() < new Date(expected).getTime() - 365 * 86_400_000) {
+        throw new BadRequestException("Actual discharge date is inconsistent with the expected date.");
+      }
+    }
+  }
+
+  private async resolvePatientId(tx: Prisma.TransactionClient, dto: CreateCaseDto, organizationId: string): Promise<string> {
     if (dto.patientId) {
       const patient = await tx.patient.findUnique({ where: { id: dto.patientId } });
       if (!patient || patient.organizationId !== organizationId) {
@@ -176,16 +338,9 @@ export class CasesService {
       }
       return patient.id;
     }
-
-    const patientInput = dto.patient!;
+    const p = dto.patient!;
     const patient = await tx.patient.create({
-      data: {
-        organizationId,
-        firstName: patientInput.firstName,
-        lastName: patientInput.lastName,
-        dateOfBirth: patientInput.dateOfBirth ? new Date(patientInput.dateOfBirth) : undefined,
-        externalRef: patientInput.externalRef,
-      },
+      data: { organizationId, firstName: p.firstName, lastName: p.lastName, dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined, externalRef: p.externalRef },
     });
     return patient.id;
   }

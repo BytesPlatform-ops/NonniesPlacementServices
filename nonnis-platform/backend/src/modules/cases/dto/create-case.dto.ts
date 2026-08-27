@@ -191,6 +191,31 @@ export class CreateCaseDto {
   accessibilityNeeds?: string[];
 
   @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  patientContactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  representativeName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  representativeRelationship?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  representativeContact?: string;
+
+  /** When false, the case is created unassigned (default assigns the creator). */
+  @IsOptional()
+  @IsBoolean()
+  assignSelf?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateServiceRequestDto)

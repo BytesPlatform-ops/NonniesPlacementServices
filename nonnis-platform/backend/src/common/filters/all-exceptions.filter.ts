@@ -49,13 +49,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (typeof res === "string") {
         return { status, code: this.codeFor(status), message: res };
       }
-      const obj = res as { message?: string | string[]; error?: string };
+      const obj = res as { message?: string | string[]; error?: string; details?: unknown };
       const message = Array.isArray(obj.message) ? obj.message.join("; ") : (obj.message ?? exception.message);
       return {
         status,
         code: this.codeFor(status),
         message,
-        details: Array.isArray(obj.message) ? obj.message : undefined,
+        details: obj.details ?? (Array.isArray(obj.message) ? obj.message : undefined),
       };
     }
 
