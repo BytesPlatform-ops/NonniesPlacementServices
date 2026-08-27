@@ -9,9 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Runtime queries go through the Supabase transaction-mode pooler (pgbouncer).
-  url = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
   // Migrations use the Supabase session-mode pooler / direct connection.
   directUrl = env("DIRECT_URL")
 }
@@ -130,6 +130,35 @@ enum WorkflowEventSource {
   SYSTEM
 }
 
+/// Lifecycle of an application user. Supabase Auth owns credentials; this is
+/// the Nonnis application identity state.
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+/// Lifecycle of a user's membership within an organization.
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+/// Active-state of an organization.
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// Active-state of a facility.
+enum FacilityStatus {
+  ACTIVE
+  INACTIVE
+}
+
 // ---------------------------------------------------------------------------
 // Core domain
 // ---------------------------------------------------------------------------
@@ -137,32 +166,36 @@ enum WorkflowEventSource {
 /// A participating organization — Nonnis itself, a discharging facility's
 /// parent org, a provider org, or another partner.
 model Organization {
-  id           String           @id @default(uuid()) @db.Uuid
-  type         OrganizationType
-  name         String
-  legalName    String?
+  id          String             @id @default(uuid()) @db.Uuid
+  type        OrganizationType
+  status      OrganizationStatus @default(ACTIVE)
+  name        String
+  legalName   String?
   /// External reference (e.g. partner/EHR org id). Never used as a primary key.
-  externalRef  String?
+  externalRef String?
   /// Extensible, non-workflow-critical metadata only.
-  metadata     Json?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  metadata    Json?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   facilities     Facility[]
   patients       Patient[]
   cases          Case[]
+  memberships    OrganizationMembership[]
   workflowEvents WorkflowEvent[]
   auditEvents    AuditEvent[]
 
   @@index([type])
+  @@index([status])
   @@map("organizations")
 }
 
 /// A physical facility belonging to an organization. Discharge cases originate
 /// from a facility.
 model Facility {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  status         FacilityStatus @default(ACTIVE)
   name           String
   externalRef    String?
   addressLine1   String?
@@ -170,11 +203,11 @@ model Facility {
   city           String?
   state          String?
   postalCode     String?
-  country        String?  @default("US")
+  country        String?        @default("US")
   phone          String?
   metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   cases        Case[]
@@ -217,9 +250,12 @@ model Case {
   patientId             String @db.Uuid
   originatingFacilityId String @db.Uuid
 
-  /// Placeholder reference to the discharge professional (a User id once
-  /// identity exists). Kept as a nullable string until auth is added.
+  /// Legacy placeholder reference retained for backward compatibility; the
+  /// relational `assignedDischargeProfessionalId` below is authoritative.
   dischargeProfessionalRef String?
+
+  /// Authenticated discharge professional (User) assigned to this case.
+  assignedDischargeProfessionalId String? @db.Uuid
 
   expectedDischargeDate DateTime?
   actualDischargeDate   DateTime?
@@ -239,16 +275,18 @@ model Case {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  patient             Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  originatingFacility Facility         @relation(fields: [originatingFacilityId], references: [id], onDelete: Restrict)
-  requirements        CaseRequirement[]
-  serviceRequests     ServiceRequest[]
-  workflowEvents      WorkflowEvent[]
+  organization                  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  patient                       Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  originatingFacility           Facility          @relation(fields: [originatingFacilityId], references: [id], onDelete: Restrict)
+  assignedDischargeProfessional User?             @relation("CaseAssignedProfessional", fields: [assignedDischargeProfessionalId], references: [id], onDelete: SetNull)
+  requirements                  CaseRequirement[]
+  serviceRequests               ServiceRequest[]
+  workflowEvents                WorkflowEvent[]
 
   @@index([organizationId])
   @@index([patientId])
   @@index([originatingFacilityId])
+  @@index([assignedDischargeProfessionalId])
   @@index([status])
   @@index([updatedAt])
   @@map("cases")
@@ -260,11 +298,11 @@ model ServiceRequest {
   caseId String               @db.Uuid
   status ServiceRequestStatus @default(REQUESTED)
 
-  category         ServiceCategory
-  levelOfCare      LevelOfCare?
+  category           ServiceCategory
+  levelOfCare        LevelOfCare?
   requestedStartDate DateTime?
-  frequency        String?
-  durationText     String?
+  frequency          String?
+  durationText       String?
 
   // Geographic requirements.
   serviceCity        String?
@@ -277,8 +315,8 @@ model ServiceRequest {
   insurancePlan          String?
   authorizationReference String?
 
-  notes    String?
-  metadata Json?
+  notes     String?
+  metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -322,17 +360,21 @@ model WorkflowEvent {
   type           WorkflowEventType
   previousStatus CaseStatus?
   newStatus      CaseStatus?
-  /// Actor reference (a User id once identity exists), when available.
+  /// Legacy free-form actor reference, retained for backward compatibility.
   actorRef       String?
+  /// Authenticated user responsible for this event (null for automated/system).
+  actorUserId    String?             @db.Uuid
   source         WorkflowEventSource @default(SYSTEM)
   metadata       Json?
   createdAt      DateTime            @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   case         Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actorUser    User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([organizationId])
+  @@index([actorUserId])
   @@index([type])
   @@index([createdAt])
   @@map("workflow_events")
@@ -343,8 +385,10 @@ model WorkflowEvent {
 model AuditEvent {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String?  @db.Uuid
-  /// Actor reference (a User id once identity exists), when available.
+  /// Legacy free-form actor reference, retained for backward compatibility.
   actorRef       String?
+  /// Authenticated user who performed the action, when available.
+  actorUserId    String?  @db.Uuid
   action         String
   entityType     String
   entityId       String
@@ -352,9 +396,111 @@ model AuditEvent {
   createdAt      DateTime @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorUser    User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([actorUserId])
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------
+// Identity, access control & multi-tenancy
+// ---------------------------------------------------------------------------
+
+/// Nonnis application identity. Supabase Auth owns credentials; this owns the
+/// application profile. Passwords are never stored here.
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  /// Supabase Auth user id. Nullable until the auth identity is linked.
+  supabaseAuthUserId String?    @unique @db.Uuid
+  email              String     @unique
+  firstName          String?
+  lastName           String?
+  displayName        String?
+  status             UserStatus @default(INVITED)
+  metadata           Json?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  memberships    OrganizationMembership[]
+  assignedCases  Case[]                   @relation("CaseAssignedProfessional")
+  workflowEvents WorkflowEvent[]
+  auditEvents    AuditEvent[]
+
+  @@index([status])
+  @@map("users")
+}
+
+/// A stable, code-identified role. Roles map to permissions; guards resolve
+/// permissions rather than hardcoding role names.
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Stable machine code, e.g. NONNIS_ADMIN.
+  code        String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  memberships OrganizationMembership[]
+
+  @@map("roles")
+}
+
+/// A stable, code-identified permission. Authorization decisions check
+/// permission codes, never role names.
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Stable machine code, e.g. cases.read.
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Join table mapping roles to their granted permissions.
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// A user's membership of an organization, carrying a single role. A user may
+/// belong to multiple organizations; membership — not a column on User — is the
+/// authoritative access mechanism.
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  organizationId String           @db.Uuid
+  roleId         String           @db.Uuid
+  status         MembershipStatus @default(INVITED)
+  isPrimary      Boolean          @default(false)
+  invitedAt      DateTime?
+  joinedAt       DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([status])
+  @@map("organization_memberships")
 }
