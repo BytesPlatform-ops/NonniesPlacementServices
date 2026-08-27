@@ -156,9 +156,13 @@ database.
 
 | Variable       | Purpose                                | Example                                                       |
 | -------------- | -------------------------------------- | ------------------------------------------------------------ |
-| `DATABASE_URL` | Postgres connection string for Prisma  | `postgresql://user:pass@localhost:5432/nonnis_platform`      |
-| `PORT`         | API port                               | `4000`                                                       |
-| `FRONTEND_URL` | Allowed CORS origin for the frontend   | `http://localhost:3001`                                      |
+| `DATABASE_URL`               | Postgres connection string for Prisma      | `postgresql://user:pass@host:6543/postgres?pgbouncer=true` |
+| `DIRECT_URL`                 | Direct/session-pooler URL for migrations    | `postgresql://user:pass@host:5432/postgres`                |
+| `PORT`                       | API port                                    | `4000`                                                     |
+| `FRONTEND_URL`               | Allowed CORS origin for the frontend        | `http://localhost:3001`                                    |
+| `SUPABASE_URL`               | Supabase project URL                        | `https://[ref].supabase.co`                                |
+| `SUPABASE_ANON_KEY`          | Supabase anon key (token verification)      | *(from Supabase dashboard)*                                |
+| `SUPABASE_SERVICE_ROLE_KEY`  | **Secret** — admin ops (invites) only       | *(backend only; never sent to the frontend)*               |
 
 ---
 
@@ -175,9 +179,11 @@ Commands: `npm run typecheck` · `npm run lint` · `npm run build` · `npm test`
 
 ### Frontend environment variables
 
-| Variable              | Purpose                     | Example                 |
-| --------------------- | --------------------------- | ----------------------- |
-| `NEXT_PUBLIC_API_URL` | Base URL of the backend API | `http://localhost:4000` |
+| Variable                        | Purpose                             | Example                     |
+| ------------------------------- | ----------------------------------- | --------------------------- |
+| `NEXT_PUBLIC_API_URL`           | Base URL of the backend API         | `http://localhost:4000`     |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL (public)       | `https://[ref].supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public/safe)     | *(from Supabase dashboard)* |
 
 ---
 
@@ -190,6 +196,45 @@ Commands: `npm run typecheck` · `npm run lint` · `npm run build` · `npm test`
   once `DATABASE_URL` points at a real Postgres instance.
 
 ---
+
+## Identity, authentication & access control
+
+- **Authentication** is provided by **Supabase Auth**. The backend verifies access
+  tokens server-side (signature validated via Supabase, not merely decoded) behind
+  a mockable `TokenVerifier`. Passwords are never stored in Prisma.
+- **Authorization is enforced in the backend.** A global `AuthGuard` resolves the
+  application user + active-organization context; a global `PermissionsGuard`
+  enforces `@RequirePermissions` / `@RequireAnyPermission`. Nothing trusts the
+  browser's role, org id, or user id.
+- **RBAC:** roles map to permissions (seeded, idempotent). System roles:
+  `NONNIS_ADMIN`, `NONNIS_OPERATIONS`, `DISCHARGE_PROFESSIONAL`, `PROVIDER_ADMIN`,
+  `PROVIDER_STAFF`. Permission codes cover platform/orgs/users/facilities/cases/audit.
+- **Multi-tenancy:** organization-scoped requests carry `X-Organization-Id`, which
+  the backend re-validates against active membership. Case, facility and user
+  queries are bounded by organization; cross-org detail access returns 404 to avoid
+  revealing record existence. `cases.read_all` is seeded for a future platform-wide
+  Operations view (not built here).
+- **Role escalation is prevented:** a provider admin can only assign/manage provider
+  roles within its own organization; it can never grant Nonnis roles.
+- **Audit:** administrative actions (organization/user/membership/facility changes)
+  write `AuditEvent` records with safe metadata (no secrets/tokens).
+
+Key endpoints added: `GET /api/v1/auth/me`; `GET/POST/PATCH /api/v1/organizations`
+(+`/status`); `GET/POST/PATCH /api/v1/facilities` (+`/status`);
+`GET /api/v1/users`, `GET /api/v1/users/assignable-roles`, `POST /api/v1/users/invite`,
+`PATCH /api/v1/users/:id`, `.../status`, `.../memberships/:membershipId`. The existing
+`/api/v1/cases` endpoints are now authenticated and organization-scoped.
+
+### Seed & bootstrap
+
+```bash
+cd nonnis-platform/backend
+npm run prisma:seed                    # idempotent roles + permissions
+npm run bootstrap:admin -- you@org.com # first NONNIS_ADMIN (email supplied by you)
+```
+
+`bootstrap:admin` is idempotent and requires `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
+It never hardcodes an email or secret.
 
 ## Relationship to the existing website
 
