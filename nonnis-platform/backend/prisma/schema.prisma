@@ -116,10 +116,26 @@ enum WorkflowEventType {
   CASE_CREATED
   CASE_UPDATED
   STATUS_CHANGED
+  CASE_ASSIGNED
+  CASE_REASSIGNED
+  CASE_UNASSIGNED
   REQUIREMENT_ADDED
+  REQUIREMENT_UPDATED
+  REQUIREMENT_STATUS_CHANGED
   SERVICE_REQUEST_ADDED
+  SERVICE_REQUEST_UPDATED
+  SERVICE_REQUEST_REMOVED
   NOTE_ADDED
   CASE_CANCELLED
+}
+
+/// Lifecycle of a discrete case requirement.
+enum RequirementStatus {
+  PENDING
+  IN_PROGRESS
+  BLOCKED
+  COMPLETE
+  NOT_REQUIRED
 }
 
 /// Whether a workflow event was produced by a human, an automation, or the
@@ -271,6 +287,16 @@ model Case {
   communicationPreference String?
   accessibilityNeeds      String[]
 
+  // Patient contact & authorized representative.
+  patientContactPhone        String?
+  representativeName         String?
+  representativeRelationship String?
+  representativeContact      String?
+
+  // Manual blocked flag (contributes to case attention).
+  blocked     Boolean @default(false)
+  blockReason String?
+
   metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,6 +341,12 @@ model ServiceRequest {
   insurancePlan          String?
   authorizationReference String?
 
+  // Additional matching inputs (used by future matching; captured now).
+  requiredQualifications String?
+  mandatoryLanguage      String?
+  equipmentNeeds         String?
+  transportationRequired Boolean @default(false)
+
   notes     String?
   metadata  Json?
   createdAt DateTime @default(now())
@@ -331,23 +363,30 @@ model ServiceRequest {
 /// A discrete requirement or constraint on a case, optionally scoped to a
 /// specific service request.
 model CaseRequirement {
-  id               String              @id @default(uuid()) @db.Uuid
-  caseId           String              @db.Uuid
-  serviceRequestId String?             @db.Uuid
-  category         RequirementCategory
-  label            String
-  detail           String?
-  mandatory        Boolean             @default(true)
-  metadata         Json?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                String              @id @default(uuid()) @db.Uuid
+  caseId            String              @db.Uuid
+  serviceRequestId  String?             @db.Uuid
+  category          RequirementCategory
+  status            RequirementStatus   @default(PENDING)
+  label             String
+  detail            String?
+  mandatory         Boolean             @default(true)
+  dueDate           DateTime?
+  notes             String?
+  completedAt       DateTime?
+  completedByUserId String?             @db.Uuid
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   case           Case            @relation(fields: [caseId], references: [id], onDelete: Cascade)
   serviceRequest ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  completedBy    User?           @relation("RequirementCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([serviceRequestId])
   @@index([category])
+  @@index([status])
   @@map("case_requirements")
 }
 
@@ -424,10 +463,11 @@ model User {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  memberships    OrganizationMembership[]
-  assignedCases  Case[]                   @relation("CaseAssignedProfessional")
-  workflowEvents WorkflowEvent[]
-  auditEvents    AuditEvent[]
+  memberships           OrganizationMembership[]
+  assignedCases         Case[]                   @relation("CaseAssignedProfessional")
+  completedRequirements CaseRequirement[]        @relation("RequirementCompletedBy")
+  workflowEvents        WorkflowEvent[]
+  auditEvents           AuditEvent[]
 
   @@index([status])
   @@map("users")
