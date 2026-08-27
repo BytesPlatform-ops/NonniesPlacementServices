@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { caseStatusMeta } from "@/lib/case-status";
 import { formatDate, formatDateTime, humanizeEnum } from "@/lib/format";
 import { useAsync } from "@/hooks/use-async";
+import { useAuth } from "@/providers/auth-provider";
 import { getCase } from "@/services/cases.service";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
@@ -44,7 +45,8 @@ function dischargeItems(detail: CaseDetail): DescriptionItem[] {
 }
 
 export function CaseDetailView({ caseId }: { caseId: string }) {
-  const { data, loading, error, reload } = useAsync(() => getCase(caseId), [caseId]);
+  const { activeOrganizationId } = useAuth();
+  const { data, loading, error, reload } = useAsync(() => getCase(caseId), [caseId, activeOrganizationId]);
 
   const backLink = (
     <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">

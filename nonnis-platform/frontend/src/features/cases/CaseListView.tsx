@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CASE_STATUS_ORDER, caseStatusMeta } from "@/lib/case-status";
 import { formatDate } from "@/lib/format";
 import { useAsync } from "@/hooks/use-async";
+import { useAuth } from "@/providers/auth-provider";
 import { listCases } from "@/services/cases.service";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
@@ -42,12 +43,13 @@ const columns: Column<CaseSummary>[] = [
 const PAGE_SIZE = 20;
 
 export function CaseListView() {
+  const { activeOrganizationId } = useAuth();
   const [status, setStatus] = useState<CaseStatus | "">("");
   const [page, setPage] = useState(1);
 
   const { data, loading, error, reload } = useAsync(
     () => listCases({ page, pageSize: PAGE_SIZE, status: status || undefined }),
-    [page, status],
+    [page, status, activeOrganizationId],
   );
 
   const statusFilter = (
