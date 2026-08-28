@@ -4,6 +4,7 @@ import { PrismaService } from "../../database/prisma.service";
 import { requireActiveOrganization } from "../auth/org-context";
 import type { RequestUser } from "../auth/request-user";
 import { caseSummaryInclude, toCaseSummary, type CaseSummary } from "../cases/cases.serializer";
+import { ReadinessService } from "../readiness/readiness.service";
 
 const NON_TERMINAL: CaseStatus[] = ["DRAFT", "READY_FOR_REVIEW", "MATCHING", "REFERRAL_SENT", "PROVIDER_REVIEWING", "ADDITIONAL_INFORMATION_REQUIRED", "ACCEPTED", "DECLINED", "SERVICES_BEING_COORDINATED", "READY_FOR_DISCHARGE", "SERVICE_STARTED", "FOLLOW_UP_REQUIRED"];
 const LIST_LIMIT = 8;
@@ -22,6 +23,13 @@ export interface DischargeDashboard {
     missingInfo: number;
     blockedRequirements: number;
   };
+  readiness: {
+    readyForDischarge: number;
+    criticalBlockers: number;
+    nearTermNotReady: number;
+    placementMissing: number;
+    readinessRegression: number;
+  };
   dischargesByBucket: Array<{ bucket: string; label: string; count: number }>;
   assignedToMe: CaseSummary[];
   requiringAttention: CaseSummary[];
@@ -32,7 +40,10 @@ export interface DischargeDashboard {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly readiness: ReadinessService,
+  ) {}
 
   async dischargeProfessional(user: RequestUser): Promise<DischargeDashboard> {
     const organizationId = requireActiveOrganization(user);
@@ -59,6 +70,7 @@ export class DashboardService {
       ]);
 
     const dischargesByBucket = await this.bucketCounts(organizationId, now);
+    const readiness = await this.readiness.dashboardSummary(organizationId);
 
     const [assignedToMe, requiringAttention, overdue, recentlyUpdated, activity] = await Promise.all([
       this.list(assignedWhere),
@@ -83,6 +95,7 @@ export class DashboardService {
         missingInfo: missingCount,
         blockedRequirements: blockedReqCount,
       },
+      readiness,
       dischargesByBucket,
       assignedToMe,
       requiringAttention,
