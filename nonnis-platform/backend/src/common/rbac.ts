@@ -26,6 +26,8 @@ export const PERMISSIONS = {
   SERVICE_CATEGORIES_MANAGE: "service_categories.manage",
   PROVIDER_CAPACITY_MANAGE: "provider_capacity.manage",
   PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
+  FORM_SUBMISSIONS_READ: "form_submissions.read",
+  FORM_SUBMISSIONS_MANAGE: "form_submissions.manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -52,6 +54,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.SERVICE_CATEGORIES_MANAGE]: "Create, update and (de)activate service categories and reference catalogs",
   [PERMISSIONS.PROVIDER_CAPACITY_MANAGE]: "Update capacity/availability for any provider",
   [PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN]: "Update capacity/availability for the actor's own provider",
+  [PERMISSIONS.FORM_SUBMISSIONS_READ]: "Read website form submissions",
+  [PERMISSIONS.FORM_SUBMISSIONS_MANAGE]: "Review, annotate and update website form submissions",
 };
 
 export const ROLES = {
@@ -93,6 +97,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDERS_MANAGE,
       PERMISSIONS.SERVICE_CATEGORIES_READ,
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE,
+      PERMISSIONS.FORM_SUBMISSIONS_READ,
+      PERMISSIONS.FORM_SUBMISSIONS_MANAGE,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
