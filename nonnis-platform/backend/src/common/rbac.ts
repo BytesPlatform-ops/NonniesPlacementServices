@@ -19,6 +19,13 @@ export const PERMISSIONS = {
   CASES_ASSIGN: "cases.assign",
   CASES_READ_ALL: "cases.read_all",
   AUDIT_READ: "audit.read",
+  PROVIDERS_READ: "providers.read",
+  PROVIDERS_MANAGE: "providers.manage",
+  PROVIDERS_MANAGE_OWN: "providers.manage_own",
+  SERVICE_CATEGORIES_READ: "service_categories.read",
+  SERVICE_CATEGORIES_MANAGE: "service_categories.manage",
+  PROVIDER_CAPACITY_MANAGE: "provider_capacity.manage",
+  PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -38,6 +45,13 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.CASES_ASSIGN]: "Assign a discharge professional to a case",
   [PERMISSIONS.CASES_READ_ALL]: "Read cases across all organizations (platform-wide)",
   [PERMISSIONS.AUDIT_READ]: "Read audit history",
+  [PERMISSIONS.PROVIDERS_READ]: "Read the provider directory",
+  [PERMISSIONS.PROVIDERS_MANAGE]: "Create, update and (de)activate any provider and its profile",
+  [PERMISSIONS.PROVIDERS_MANAGE_OWN]: "Manage the actor's own provider profile, services and coverage",
+  [PERMISSIONS.SERVICE_CATEGORIES_READ]: "Read service categories",
+  [PERMISSIONS.SERVICE_CATEGORIES_MANAGE]: "Create, update and (de)activate service categories and reference catalogs",
+  [PERMISSIONS.PROVIDER_CAPACITY_MANAGE]: "Update capacity/availability for any provider",
+  [PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN]: "Update capacity/availability for the actor's own provider",
 };
 
 export const ROLES = {
@@ -75,6 +89,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.CASES_ASSIGN,
       PERMISSIONS.CASES_READ_ALL,
       PERMISSIONS.AUDIT_READ,
+      PERMISSIONS.PROVIDERS_READ,
+      PERMISSIONS.PROVIDERS_MANAGE,
+      PERMISSIONS.SERVICE_CATEGORIES_READ,
+      PERMISSIONS.PROVIDER_CAPACITY_MANAGE,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
@@ -86,23 +104,35 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.CASES_READ,
       PERMISSIONS.CASES_CREATE,
       PERMISSIONS.CASES_UPDATE,
+      PERMISSIONS.PROVIDERS_READ,
+      PERMISSIONS.SERVICE_CATEGORIES_READ,
     ],
   },
   [ROLES.PROVIDER_ADMIN]: {
     name: "Provider Administrator",
-    description: "Manage users and facilities within its own provider organization.",
+    description: "Manage users, facilities and the provider profile within its own provider organization.",
     permissions: [
       PERMISSIONS.ORGANIZATIONS_READ,
       PERMISSIONS.USERS_READ,
       PERMISSIONS.USERS_MANAGE_OWN_ORGANIZATION,
       PERMISSIONS.FACILITIES_READ,
       PERMISSIONS.FACILITIES_MANAGE,
+      PERMISSIONS.PROVIDERS_READ,
+      PERMISSIONS.PROVIDERS_MANAGE_OWN,
+      PERMISSIONS.SERVICE_CATEGORIES_READ,
+      PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
     ],
   },
   [ROLES.PROVIDER_STAFF]: {
     name: "Provider Staff",
-    description: "Organization-scoped operational access.",
-    permissions: [PERMISSIONS.ORGANIZATIONS_READ, PERMISSIONS.FACILITIES_READ],
+    description: "Organization-scoped operational access, including own-provider capacity updates.",
+    permissions: [
+      PERMISSIONS.ORGANIZATIONS_READ,
+      PERMISSIONS.FACILITIES_READ,
+      PERMISSIONS.PROVIDERS_READ,
+      PERMISSIONS.SERVICE_CATEGORIES_READ,
+      PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
+    ],
   },
 };
 
