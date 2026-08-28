@@ -156,6 +156,15 @@ and do not let an in-scope feature evolve into them.
   Role-aware landing sends provider users to the portal. Internal notes and provider
   status are Nonnis-only (never readable/writable by provider users). No referrals,
   matching, automation, compliance, or analytics.
+- **Slice 7 — Nonnis Admin Operations Control Center:** a Nonnis-only, cross-org
+  operational surface (`/operations`) gated by `cases.read_all`. Platform-wide
+  operational summary counts, a cross-organization case queue (search + status +
+  overdue/attention/unassigned/blocked/incomplete filters, reusing the shared
+  deterministic attention model), a provider operational overview (status /
+  availability / no-services / no-coverage filters), and recent workflow activity.
+  Manual quick actions (reassign, block/unblock) reuse the existing case endpoints
+  (which already honour `cases.read_all`) — no new mutation logic and no weakening of
+  tenant isolation elsewhere. No referral/matching/automation/analytics/compliance.
 
 ---
 
@@ -168,22 +177,22 @@ COMPLETED
   3. Discharge Professional Dashboard & Case Workspace
   4. Scope Realignment & Architecture Cleanup
   5. Provider Management + Service Categories + Capacity
-  6. Basic Provider Portal   ← current slice
+  6. Basic Provider Portal
+  7. Nonnis Admin Operations Control Center   ← current slice
 
 NEXT
-  7.  Nonnis Admin Operations Control Center
+  8.  Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
 
 REMAINING
-  8.  Referral Workflow with Manual Provider Selection
-  9.  Tasks + Basic Case Messaging + Unified Timeline
-  10. Discharge Readiness Score + Operational Blockers
-  11. Basic Reporting + Administrative Reports
-  12. Public Residential Provider Directory
-  13. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
+  9.  Referral Workflow + Manual Provider Selection
+  10. Tasks + Basic Case Messaging + Unified Timeline
+  11. Discharge Readiness Score + Operational Blockers
+  12. Basic Reporting + Administrative Reports
+  13. Public Residential Provider Directory
   14. Full Core-System Audit + Production Hardening
 ```
 
-> Slice 13 (Website Form Submissions) is additive: the existing public-website
+> Slice 8 (Website Form Submissions) is additive: the existing public-website
 > email delivery and document/report output must keep working; platform
 > persistence is added alongside so admin staff can view submissions internally.
 
@@ -195,8 +204,8 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Nonnis Admin Operations Control Center** (item 7): a Nonnis-staff operations
-surface to oversee cases and providers across organizations — cross-org case
-visibility (via `cases.read_all`), provider oversight, and manual operational
-intervention. Basic operational dashboards/counts only — no automation, matching,
-advanced analytics, or referral workflow (referrals come in item 8).
+**Website Form Submissions -> Admin Panel + Existing Email Flow** (item 8):
+persist existing public-website form submissions into the platform so Nonnis staff
+can view them internally. **Additive only** — the current email delivery and any
+document/report output must keep working unchanged; platform persistence is added
+alongside, never replacing them. Do not alter existing public-website form behavior.

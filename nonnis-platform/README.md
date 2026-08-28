@@ -132,11 +132,15 @@ payment/insurance types, languages, operating hours, eligibility, capacity, stat
 search/filter) and the admin-managed **service-category / payment-type / language**
 catalogs are now implemented (see **Provider directory** below).
 
-Not yet built but **in scope** for later slices: a basic provider portal, the Nonnis
-operations control center, a manual-provider-selection referral workflow, tasks &
-basic case messaging, the Discharge Readiness Score, basic reporting/exports, the
-public provider directory, and additive persistence of public-website form
-submissions into the platform (alongside the existing email flow).
+The **Provider Portal** (self-service for provider users) and the **Nonnis Admin
+Operations Control Center** (cross-org operational oversight) are now implemented
+(see below).
+
+Not yet built but **in scope** for later slices (next first): additive persistence of
+public-website form submissions into the platform (alongside the existing email
+flow), a manual-provider-selection referral workflow, tasks & basic case messaging,
+the Discharge Readiness Score, basic reporting/exports, and the public provider
+directory.
 
 ### Excluded advanced modules — DO NOT BUILD
 
@@ -362,6 +366,30 @@ or analytics.
   languages,hours,capacity,team}`. A role-aware landing (`/home`) sends provider-org
   users to the portal; other roles keep the operations console. The sidebar swaps to
   portal navigation when the active organization is a provider.
+
+## Operations control center (Slice 7)
+
+A Nonnis-only, cross-organization operational surface at `/operations`, gated by
+`cases.read_all` (held only by `NONNIS_ADMIN` / `NONNIS_OPERATIONS`).
+
+- **Endpoints:** `GET /api/v1/operations/summary` (platform-wide counts: active,
+  attention, overdue, due-today/-this-week, unassigned, blocked, incomplete +
+  active/no-capacity/unavailable providers + recent workflow activity),
+  `GET /operations/cases` (cross-org case queue with search, org/facility/status/
+  assignee/date filters and overdue/attention/blocked/incomplete/unassigned toggles),
+  `GET /operations/cases/:id/assignees` (eligible reassignment targets), and
+  `GET /operations/providers` (delegates to the Slice 5 provider list, with added
+  `noServices` / `noCoverage` operational filters).
+- **Reuse, not duplication:** the deterministic attention/overdue/incomplete
+  where-clauses are shared with the case list via `cases/case-query.ts`; quick
+  actions (reassign, block/unblock, transition) reuse the existing `/cases/:id`
+  endpoints, which already honour `cases.read_all` cross-org. No new mutation logic.
+- **Isolation:** operations is the only platform-wide read surface; ordinary
+  org-scoped case/provider routes remain tenant-bound. Role-aware landing sends
+  Nonnis staff to `/operations`, provider users to `/provider`, others to `/cases`.
+- **UI:** `/operations` (metrics + attention queue + recent activity),
+  `/operations/cases` (full filterable queue with reassign/block actions), and
+  `/operations/providers`. No referral/matching/analytics/compliance widgets.
 
 ## Relationship to the existing website
 
