@@ -14,6 +14,9 @@ import { OrganizationsModule } from "./modules/organizations/organizations.modul
 import { ProvidersModule } from "./modules/providers/providers.module";
 import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.module";
 import { ReferralsModule } from "./modules/referrals/referrals.module";
+import { TasksModule } from "./modules/tasks/tasks.module";
+import { MessagesModule } from "./modules/messages/messages.module";
+import { TimelineModule } from "./modules/timeline/timeline.module";
 import { UsersModule } from "./modules/users/users.module";
 
 @Module({
@@ -33,6 +36,9 @@ import { UsersModule } from "./modules/users/users.module";
     OperationsModule,
     FormSubmissionsModule,
     ReferralsModule,
+    TasksModule,
+    MessagesModule,
+    TimelineModule,
   ],
 })
 export class AppModule {}
