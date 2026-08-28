@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import type { CaseSummary } from "@/types/domain";
 import type { DischargeDashboard } from "@/types/dashboard";
+import { DashboardTasksWidget } from "./DashboardTasksWidget";
 
 export function DashboardView() {
   const { activeOrganizationId, me } = useAuth();
@@ -39,6 +40,8 @@ export function DashboardView() {
   return (
     <div className="space-y-6">
       <PageHeading title={`Welcome back, ${name}`} description="What must happen before your patients can be discharged safely." />
+
+      <DashboardTasksWidget />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Assigned to me" value={data.metrics.assignedToMe} />
