@@ -6,6 +6,10 @@ import { ChevronLeft } from "lucide-react";
 import { formatDate, formatDateTime, humanizeEnum } from "@/lib/format";
 import { placementStatusLabel, placementStatusTone, referralStatusLabel, referralStatusTone } from "@/lib/referral-status";
 import { ApiError } from "@/lib/api-client";
+import { useAuth } from "@/providers/auth-provider";
+import { PERMISSIONS } from "@/lib/permissions";
+import { listReferralMessages, sendReferralMessage } from "@/services/messages.service";
+import { MessageThread } from "@/features/messages/MessageThread";
 import { useAsync } from "@/hooks/use-async";
 import {
   confirmReferralStart,
@@ -30,6 +34,8 @@ const ACTIVE = ["SENT", "VIEWED", "INFORMATION_REQUESTED", "CONDITIONALLY_ACCEPT
 type Action = RespondBody["action"];
 
 export function ReferralDetail({ referralId }: { referralId: string }) {
+  const { hasPermission } = useAuth();
+  const canMessage = hasPermission(PERMISSIONS.MESSAGES_SEND);
   const { data, loading, error, reload } = useAsync(() => getProviderReferral(referralId), [referralId]);
   const [action, setAction] = useState<Action | null>(null);
   const [placementModal, setPlacementModal] = useState<"schedule" | "unsuccessful" | null>(null);
@@ -169,6 +175,15 @@ export function ReferralDetail({ referralId }: { referralId: string }) {
             ))}
           </ul>
         )}
+      </Panel>
+
+      <Panel title="Messages" description="Follow-up communication with the case/Nonnis team about this referral.">
+        <MessageThread
+          load={() => listReferralMessages(referralId)}
+          send={(body) => sendReferralMessage(referralId, body)}
+          canSend={canMessage}
+          emptyLabel="No messages yet. Use formal actions above for accept/decline/information requests."
+        />
       </Panel>
 
       {action ? <ResponseModal referralId={referralId} action={action} onClose={() => setAction(null)} onDone={() => { setAction(null); reload(); }} /> : null}

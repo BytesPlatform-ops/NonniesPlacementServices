@@ -18,6 +18,8 @@ import {
 } from "@/services/referrals.service";
 import { listProviders } from "@/services/providers.service";
 import { listServiceCategories } from "@/services/catalog.service";
+import { listReferralMessages, sendReferralMessage } from "@/services/messages.service";
+import { MessageThread } from "@/features/messages/MessageThread";
 import type { CaseDetail, ServiceRequestView } from "@/types/domain";
 import type { StaffReferralSummary } from "@/types/referrals";
 import { Panel } from "@/components/ui/Panel";
@@ -31,9 +33,11 @@ const inputCls =
 export function ReferralsTab({ caseDetail, onChange }: { caseDetail: CaseDetail; onChange: () => void }) {
   const { hasPermission } = useAuth();
   const canManage = hasPermission(PERMISSIONS.REFERRALS_MANAGE);
+  const canMessage = hasPermission(PERMISSIONS.MESSAGES_SEND);
   const { data, loading, reload } = useAsync(() => listCaseReferrals(caseDetail.id), [caseDetail.id]);
   const [picker, setPicker] = useState<ServiceRequestView | null>(null);
   const [infoFor, setInfoFor] = useState<StaffReferralSummary | null>(null);
+  const [msgFor, setMsgFor] = useState<StaffReferralSummary | null>(null);
 
   const byService = useMemo(() => {
     const map = new Map<string, StaffReferralSummary[]>();
@@ -105,6 +109,7 @@ export function ReferralsTab({ caseDetail, onChange }: { caseDetail: CaseDetail;
                           {r.status === "INFORMATION_REQUESTED" ? <button type="button" onClick={() => setInfoFor(r)} className="font-medium text-brand-700 hover:underline">Provide information</button> : null}
                           {r.notificationStatus === "FAILED" ? <button type="button" onClick={() => void act(() => resendReferralNotification(r.id))} className="text-slate-500 hover:text-umber">Resend email</button> : null}
                           {!["DECLINED", "WITHDRAWN", "CANCELLED", "ACCEPTED"].includes(r.status) ? <button type="button" onClick={() => void act(() => withdrawReferral(r.id))} className="text-rose-600 hover:underline">Withdraw</button> : null}
+                          {r.status !== "DRAFT" ? <button type="button" onClick={() => setMsgFor(r)} className="text-slate-500 hover:text-umber">Messages</button> : null}
                         </div>
                       ) : null}
                     </li>
@@ -130,6 +135,16 @@ export function ReferralsTab({ caseDetail, onChange }: { caseDetail: CaseDetail;
           onClose={() => setInfoFor(null)}
           onDone={() => { setInfoFor(null); refresh(); }}
         />
+      ) : null}
+      {msgFor ? (
+        <Modal title={`Messages — ${msgFor.reference}`} onClose={() => setMsgFor(null)} size="lg">
+          <MessageThread
+            load={() => listReferralMessages(msgFor.id)}
+            send={(body) => sendReferralMessage(msgFor.id, body)}
+            canSend={canMessage}
+            emptyLabel="No messages with this provider yet."
+          />
+        </Modal>
       ) : null}
     </div>
   );
