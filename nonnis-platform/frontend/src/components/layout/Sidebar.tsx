@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Boxes, Building2, ClipboardList, Users, type LucideIcon } from "lucide-react";
+import { Activity, Boxes, Building2, ClipboardList, Stethoscope, Tags, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { visibleNav } from "@/lib/navigation";
 import { useAuth } from "@/providers/auth-provider";
 
 const ICONS: Record<string, LucideIcon> = {
   Cases: ClipboardList,
+  Providers: Stethoscope,
   Organizations: Building2,
   Users,
   Facilities: Boxes,
+  "Service Categories": Tags,
 };
 
 export function Sidebar() {

@@ -10,4 +10,11 @@ export const PERMISSIONS = {
   FACILITIES_MANAGE: "facilities.manage",
   CASES_READ: "cases.read",
   CASES_CREATE: "cases.create",
+  PROVIDERS_READ: "providers.read",
+  PROVIDERS_MANAGE: "providers.manage",
+  PROVIDERS_MANAGE_OWN: "providers.manage_own",
+  SERVICE_CATEGORIES_READ: "service_categories.read",
+  SERVICE_CATEGORIES_MANAGE: "service_categories.manage",
+  PROVIDER_CAPACITY_MANAGE: "provider_capacity.manage",
+  PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
 } as const;
