@@ -2,9 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Boxes, Building2, ClipboardList, Stethoscope, Tags, Users, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Boxes,
+  Building2,
+  Clock,
+  CreditCard,
+  Gauge,
+  IdCard,
+  LayoutDashboard,
+  Languages as LanguagesIcon,
+  MapPin,
+  ClipboardList,
+  Stethoscope,
+  Tags,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { visibleNav } from "@/lib/navigation";
+import { visibleNav, visibleProviderNav } from "@/lib/navigation";
+import { activeOrgIsProvider } from "@/lib/landing";
 import { useAuth } from "@/providers/auth-provider";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -14,12 +31,22 @@ const ICONS: Record<string, LucideIcon> = {
   Users,
   Facilities: Boxes,
   "Service Categories": Tags,
+  Overview: LayoutDashboard,
+  Profile: IdCard,
+  Services: Stethoscope,
+  Coverage: MapPin,
+  "Payment / Insurance": CreditCard,
+  Languages: LanguagesIcon,
+  Hours: Clock,
+  Capacity: Gauge,
+  Team: Users,
 };
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { permissions } = useAuth();
-  const groups = visibleNav(permissions);
+  const { permissions, me, activeOrganizationId } = useAuth();
+  const isProvider = activeOrgIsProvider(me, activeOrganizationId);
+  const groups = isProvider ? visibleProviderNav(permissions) : visibleNav(permissions);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sage bg-ivory lg:flex">
@@ -41,7 +68,12 @@ export function Sidebar() {
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = ICONS[item.label] ?? ClipboardList;
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                // "/provider" is the portal root; match it exactly so it doesn't
+                // stay highlighted on its sub-routes.
+                const active =
+                  item.href === "/provider"
+                    ? pathname === "/provider"
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <li key={item.href}>
                     <Link

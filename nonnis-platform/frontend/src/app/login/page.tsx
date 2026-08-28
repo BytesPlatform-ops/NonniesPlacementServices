@@ -27,7 +27,7 @@ export default function LoginPage() {
       return;
     }
     const params = new URLSearchParams(window.location.search);
-    router.replace(params.get("redirectTo") || "/cases");
+    router.replace(params.get("redirectTo") || "/home");
   };
 
   const onReset = async (event: React.FormEvent) => {
