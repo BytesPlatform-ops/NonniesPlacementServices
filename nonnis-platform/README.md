@@ -139,10 +139,12 @@ Operations Control Center** (cross-org operational oversight) are now implemente
 Public-website form submissions are now **additionally persisted** into the platform
 (alongside the unchanged email/PDF flow) — see **Website form submissions** below.
 
-Not yet built but **in scope** for later slices (next first): a
-manual-provider-selection referral workflow, tasks & basic case messaging, the
-Discharge Readiness Score, basic reporting/exports, and the public provider
-directory.
+The **Referral Workflow** (manual provider selection → provider response →
+placement → service start) is now implemented (see **Referral workflow** below).
+
+Not yet built but **in scope** for later slices (next first): tasks & basic case
+messaging with a unified timeline, the Discharge Readiness Score, basic
+reporting/exports, and the public provider directory.
 
 ### Excluded advanced modules — DO NOT BUILD
 
@@ -412,6 +414,41 @@ email/PDF flow.
   table + detail drawer with a manual NEW/IN_REVIEW/RESOLVED/ARCHIVED workflow, notes,
   and optional case/provider links. No document-management system, automation, or
   auto-creation of cases. Full detail in [`docs/WEBSITE_FORM_INGESTION.md`](./docs/WEBSITE_FORM_INGESTION.md).
+
+## Referral workflow (Slice 9)
+
+Connects the case and provider domains with an entirely **manual** referral flow — no
+matching, scoring, ranking, or recommendation anywhere.
+
+- **Models:** `Referral` (DRAFT/SENT/VIEWED/INFORMATION_REQUESTED/
+  CONDITIONALLY_ACCEPTED/ACCEPTED/DECLINED/WITHDRAWN/CANCELLED, reference
+  `REF-YYYY-XXXXXX`), append-only `ReferralResponse` history, and `Placement`
+  (ACCEPTED→COORDINATING→SCHEDULED→STARTED/UNSUCCESSFUL). Transitions are enforced by
+  a centralized server-side policy.
+- **Staff API:** `GET /cases/:id/referrals`, `POST /cases/:id/service-requests/:srId/referrals`,
+  `GET /referrals/:id`, `POST /referrals/:id/{send,withdraw,information,resend-notification}`,
+  `PATCH /referrals/:id/placement`, `GET /operations/referrals`
+  (`referrals.read/manage/read_all`).
+- **Provider API:** `GET /provider-portal/referrals`, `GET /provider-portal/referrals/:id`
+  (records `viewedAt` once), `POST …/respond`, `PATCH …/{assignment,schedule}`,
+  `POST …/{confirm-start,report-unsuccessful-start}` (`referrals.respond_own`).
+  Provider referral views are minimum-necessary serializers — internal notes and
+  unrelated case data are never exposed; cross-provider access → 404.
+- **Manual selection:** from a case service request, staff open a provider picker over
+  the existing directory with **visible** filters (optionally prefilled from the
+  service request) and choose a provider explicitly, then draft or send.
+- **Notification:** a basic transactional email (nodemailer, mockable transport) to
+  active provider admins (else the provider email) with the reference, a generic
+  service label, due date, and a secure portal link — no patient/clinical detail.
+  Delivery failure is recorded as `FAILED` (referral preserved) with a manual resend;
+  no automated retry/escalation.
+- **Distinct events:** referral accepted, service scheduled, patient discharged, and
+  service actually started are never conflated. The case only reaches `ACCEPTED` when
+  every service request has an accepted placement.
+- **UI:** case workspace **Referrals** tab (create/send/withdraw/clarify per service
+  request), provider portal **Referrals** inbox + detail with Accept / Conditionally
+  Accept / Request Information / Decline dialogs and service-start controls, and an
+  Operations referral queue. All referral/placement events appear in the case timeline.
 
 ## Relationship to the existing website
 

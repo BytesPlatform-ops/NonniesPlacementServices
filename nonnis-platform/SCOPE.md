@@ -173,6 +173,22 @@ and do not let an in-scope feature evolve into them.
   (`form_submissions.read/manage`) with a manual NEW/IN_REVIEW/RESOLVED/ARCHIVED
   workflow and notes. File bytes and secrets are never stored; email/PDF behavior is
   unchanged. See `docs/WEBSITE_FORM_INGESTION.md`.
+- **Slice 9 — Referral Workflow + Manual Provider Selection:** from a case service
+  request, staff **manually** search/filter the provider directory and select a
+  provider (no matching/scoring), creating a `Referral` (DRAFT→SENT→VIEWED→…) with a
+  basic transactional email notification (recipient = active provider admins, else
+  the provider email; failure recorded as FAILED, manual resend, referral preserved).
+  Providers review referrals in their portal (`/provider/referrals`) and respond:
+  Accept (creates a `Placement`), Conditionally Accept (kept distinct), Request
+  Information, or Decline (structured reason). Staff can provide clarification and
+  withdraw. Placements carry a distinct service-start lifecycle
+  (ACCEPTED→SCHEDULED→STARTED / UNSUCCESSFUL) — referral acceptance, service
+  scheduling, patient discharge, and actual service start are kept separate. Case
+  status advances conservatively via a centralized policy (MATCHING/REFERRAL_SENT/
+  PROVIDER_REVIEWING/ADDITIONAL_INFORMATION_REQUIRED; ACCEPTED only when *every*
+  service request has an accepted placement). All referral/placement events flow into
+  the existing case timeline. Operations gains a cross-org referral queue. No
+  automation, escalation, matching, or document system.
 
 ---
 
@@ -187,13 +203,13 @@ COMPLETED
   5. Provider Management + Service Categories + Capacity
   6. Basic Provider Portal
   7. Nonnis Admin Operations Control Center
-  8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)   ← current slice
+  8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
+  9. Referral Workflow + Manual Provider Selection   ← current slice
 
 NEXT
-  9.  Referral Workflow + Manual Provider Selection
+  10. Tasks + Basic Case Messaging + Unified Timeline
 
 REMAINING
-  10. Tasks + Basic Case Messaging + Unified Timeline
   11. Discharge Readiness Score + Operational Blockers
   12. Basic Reporting + Administrative Reports
   13. Public Residential Provider Directory
@@ -212,8 +228,7 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Referral Workflow + Manual Provider Selection** (item 9): let staff manually
-select a provider for a case's service request and send a referral, then capture the
-provider's response (accept / conditional accept / request information / decline) and
-service coordination — all manual, no matching/scoring engine. This is the workflow
-that connects the completed case and provider domains.
+**Tasks + Basic Case Messaging + Unified Timeline** (item 10): a simple manual
+task-management feature (assignee, due date, priority, status, related case) and a
+basic case-linked messaging/notes surface, unified into the existing case activity
+timeline. Manual only — no automated task creation, reminders, or escalation.
