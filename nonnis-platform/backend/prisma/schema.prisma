@@ -129,6 +129,22 @@ enum WorkflowEventType {
   SERVICE_REQUEST_REMOVED
   NOTE_ADDED
   CASE_CANCELLED
+  PROVIDER_SELECTION_STARTED
+  REFERRAL_CREATED
+  REFERRAL_SENT
+  REFERRAL_VIEWED
+  REFERRAL_INFORMATION_REQUESTED
+  REFERRAL_INFORMATION_PROVIDED
+  REFERRAL_CONDITIONALLY_ACCEPTED
+  REFERRAL_ACCEPTED
+  REFERRAL_DECLINED
+  REFERRAL_WITHDRAWN
+  REFERRAL_NOTIFICATION_SENT
+  REFERRAL_NOTIFICATION_FAILED
+  PLACEMENT_CREATED
+  SERVICE_START_SCHEDULED
+  SERVICE_STARTED
+  SERVICE_START_UNSUCCESSFUL
 }
 
 /// Lifecycle of a discrete case requirement.
@@ -312,6 +328,7 @@ model Case {
   requirements                  CaseRequirement[]
   serviceRequests               ServiceRequest[]
   workflowEvents                WorkflowEvent[]
+  referrals                     Referral[]
 
   @@index([organizationId])
   @@index([patientId])
@@ -364,6 +381,7 @@ model ServiceRequest {
   case            Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
   requirements    CaseRequirement[]
   serviceCategory ServiceCategory?  @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
+  referrals       Referral[]
 
   @@index([caseId])
   @@index([category])
@@ -644,6 +662,7 @@ model Provider {
   languages     ProviderLanguage[]
   hours         ProviderHours[]
   capacity      ProviderCapacity[]
+  referrals     Referral[]
 
   @@index([status])
   @@index([state])
@@ -894,4 +913,159 @@ model WebsiteFormSubmission {
   @@index([submittedAt])
   @@index([submitterEmail])
   @@map("website_form_submissions")
+}
+
+// ---------------------------------------------------------------------------
+// Referral workflow (manual provider selection -> provider response -> placement)
+//
+// Provider selection is entirely MANUAL — staff search/filter the existing
+// provider directory and choose. There is no matching/scoring/ranking engine.
+// ---------------------------------------------------------------------------
+
+/// Lifecycle of a single referral to one provider.
+enum ReferralStatus {
+  DRAFT
+  SENT
+  VIEWED
+  INFORMATION_REQUESTED
+  CONDITIONALLY_ACCEPTED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  CANCELLED
+}
+
+/// A discrete response/action recorded against a referral (append-only history).
+enum ReferralResponseType {
+  INFORMATION_REQUESTED
+  INFORMATION_PROVIDED
+  CONDITIONALLY_ACCEPTED
+  ACCEPTED
+  DECLINED
+}
+
+/// Structured reason a provider declined a referral.
+enum ReferralDeclineReason {
+  NO_CAPACITY
+  OUTSIDE_COVERAGE
+  SERVICE_NOT_OFFERED
+  FUNDING_NOT_ACCEPTED
+  CLINICAL_NEEDS_UNSUPPORTED
+  START_DATE_UNAVAILABLE
+  ELIGIBILITY_NOT_MET
+  OTHER
+}
+
+/// Delivery state of the (basic, manual) transactional referral notification.
+enum ReferralNotificationStatus {
+  NOT_SENT
+  SENT
+  FAILED
+}
+
+/// Lifecycle of an accepted placement (the accepted service arrangement).
+enum PlacementStatus {
+  ACCEPTED
+  COORDINATING
+  SCHEDULED
+  STARTED
+  UNSUCCESSFUL
+  CANCELLED
+}
+
+/// Structured reason a scheduled service start did not occur.
+enum ServiceStartFailureReason {
+  PATIENT_UNAVAILABLE
+  PATIENT_DECLINED
+  PROVIDER_UNAVAILABLE
+  AUTHORIZATION_ISSUE
+  SCHEDULE_CHANGED
+  OTHER
+}
+
+/// A referral of one case service request to one manually selected provider.
+model Referral {
+  id               String         @id @default(uuid()) @db.Uuid
+  /// User-facing reference (REF-<year>-XXXXXX). UUID remains the PK.
+  reference        String         @unique
+  caseId           String         @db.Uuid
+  serviceRequestId String         @db.Uuid
+  providerId       String         @db.Uuid
+  status           ReferralStatus @default(DRAFT)
+
+  selectedByUserId String?   @db.Uuid
+  sentByUserId     String?   @db.Uuid
+  sentAt           DateTime?
+  viewedAt         DateTime?
+  responseDueAt    DateTime?
+  lastResponseAt   DateTime?
+  withdrawnAt      DateTime?
+  withdrawReason   String?
+
+  /// Provider's internal assignee (a User in the provider organization).
+  assignedProviderUserId String? @db.Uuid
+  coordinationNote       String?
+
+  notificationStatus    ReferralNotificationStatus @default(NOT_SENT)
+  notificationSentAt    DateTime?
+  notificationLastError String?
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case           Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  serviceRequest ServiceRequest     @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  provider       Provider           @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  responses      ReferralResponse[]
+  placement      Placement?
+
+  @@index([caseId])
+  @@index([serviceRequestId])
+  @@index([providerId])
+  @@index([status])
+  @@map("referrals")
+}
+
+/// Append-only response/history entry for a referral.
+model ReferralResponse {
+  id                String                 @id @default(uuid()) @db.Uuid
+  referralId        String                 @db.Uuid
+  type              ReferralResponseType
+  actorUserId       String?                @db.Uuid
+  message           String?
+  declineReason     ReferralDeclineReason?
+  conditions        String?
+  proposedStartDate DateTime?
+  fundingConfirmed  Boolean?
+  capacityConfirmed Boolean?
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([referralId])
+  @@map("referral_responses")
+}
+
+/// The accepted service arrangement created when a referral is accepted.
+model Placement {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  referralId         String                     @unique @db.Uuid
+  status             PlacementStatus            @default(ACCEPTED)
+  acceptedAt         DateTime?
+  scheduledStartAt   DateTime?
+  actualStartAt      DateTime?
+  unsuccessfulAt     DateTime?
+  unsuccessfulReason ServiceStartFailureReason?
+  unsuccessfulNote   String?
+  cancelledAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("placements")
 }
