@@ -32,6 +32,13 @@ export const PERMISSIONS = {
   REFERRALS_MANAGE: "referrals.manage",
   REFERRALS_READ_ALL: "referrals.read_all",
   REFERRALS_RESPOND_OWN: "referrals.respond_own",
+  TASKS_READ: "tasks.read",
+  TASKS_MANAGE: "tasks.manage",
+  TASKS_READ_ALL: "tasks.read_all",
+  MESSAGES_READ: "messages.read",
+  MESSAGES_SEND: "messages.send",
+  MESSAGES_READ_ALL: "messages.read_all",
+  INTERNAL_NOTES_MANAGE: "internal_notes.manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -64,6 +71,13 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.REFERRALS_MANAGE]: "Create, send and manage referrals for authorized cases",
   [PERMISSIONS.REFERRALS_READ_ALL]: "Read referrals across all organizations (platform-wide)",
   [PERMISSIONS.REFERRALS_RESPOND_OWN]: "Respond to referrals for the actor's own provider",
+  [PERMISSIONS.TASKS_READ]: "Read case tasks for authorized cases",
+  [PERMISSIONS.TASKS_MANAGE]: "Create, assign and update case tasks",
+  [PERMISSIONS.TASKS_READ_ALL]: "Read case tasks across all organizations (platform-wide)",
+  [PERMISSIONS.MESSAGES_READ]: "Read case-linked messages the actor is authorized for",
+  [PERMISSIONS.MESSAGES_SEND]: "Send case-linked messages the actor is authorized for",
+  [PERMISSIONS.MESSAGES_READ_ALL]: "Read case messages across all organizations (platform-wide)",
+  [PERMISSIONS.INTERNAL_NOTES_MANAGE]: "Read and add Nonnis-internal case notes",
 };
 
 export const ROLES = {
@@ -110,6 +124,13 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.REFERRALS_READ,
       PERMISSIONS.REFERRALS_MANAGE,
       PERMISSIONS.REFERRALS_READ_ALL,
+      PERMISSIONS.TASKS_READ,
+      PERMISSIONS.TASKS_MANAGE,
+      PERMISSIONS.TASKS_READ_ALL,
+      PERMISSIONS.MESSAGES_READ,
+      PERMISSIONS.MESSAGES_SEND,
+      PERMISSIONS.MESSAGES_READ_ALL,
+      PERMISSIONS.INTERNAL_NOTES_MANAGE,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
@@ -125,6 +146,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.SERVICE_CATEGORIES_READ,
       PERMISSIONS.REFERRALS_READ,
       PERMISSIONS.REFERRALS_MANAGE,
+      PERMISSIONS.TASKS_READ,
+      PERMISSIONS.TASKS_MANAGE,
+      PERMISSIONS.MESSAGES_READ,
+      PERMISSIONS.MESSAGES_SEND,
     ],
   },
   [ROLES.PROVIDER_ADMIN]: {
@@ -142,6 +167,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
       PERMISSIONS.REFERRALS_READ,
       PERMISSIONS.REFERRALS_RESPOND_OWN,
+      PERMISSIONS.MESSAGES_READ,
+      PERMISSIONS.MESSAGES_SEND,
     ],
   },
   [ROLES.PROVIDER_STAFF]: {
@@ -155,6 +182,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
       PERMISSIONS.REFERRALS_READ,
       PERMISSIONS.REFERRALS_RESPOND_OWN,
+      PERMISSIONS.MESSAGES_READ,
+      PERMISSIONS.MESSAGES_SEND,
     ],
   },
 };
