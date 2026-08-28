@@ -16,6 +16,7 @@ const NAV: NavGroup[] = [
     title: null,
     items: [
       { label: "Operations", href: "/operations", permission: PERMISSIONS.CASES_READ_ALL },
+      { label: "Form Submissions", href: "/operations/form-submissions", permission: PERMISSIONS.FORM_SUBMISSIONS_READ },
       { label: "Dashboard", href: "/dashboard", permission: PERMISSIONS.CASES_READ },
       { label: "Cases", href: "/cases", permission: PERMISSIONS.CASES_READ },
       { label: "Providers", href: "/providers", permission: PERMISSIONS.PROVIDERS_READ },

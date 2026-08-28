@@ -21,4 +21,6 @@ export const PERMISSIONS = {
   SERVICE_CATEGORIES_MANAGE: "service_categories.manage",
   PROVIDER_CAPACITY_MANAGE: "provider_capacity.manage",
   PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
+  FORM_SUBMISSIONS_READ: "form_submissions.read",
+  FORM_SUBMISSIONS_MANAGE: "form_submissions.manage",
 } as const;
