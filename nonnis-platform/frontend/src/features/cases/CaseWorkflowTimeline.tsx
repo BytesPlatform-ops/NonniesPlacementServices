@@ -10,12 +10,12 @@ function toEntry(event: WorkflowEventView): TimelineEntry {
       : caseStatusMeta(event.newStatus).label
     : null;
 
-  const descriptionParts = [statusChange, humanizeEnum(event.source)].filter(Boolean);
+  const parts = [statusChange, event.actor ? `by ${event.actor.displayName}` : humanizeEnum(event.source)].filter(Boolean);
 
   return {
     id: event.id,
     title: humanizeEnum(event.type),
-    description: descriptionParts.join(" · "),
+    description: parts.join(" · "),
     timestamp: formatDateTime(event.createdAt),
     tone: event.newStatus ? caseStatusMeta(event.newStatus).tone : "neutral",
   };
