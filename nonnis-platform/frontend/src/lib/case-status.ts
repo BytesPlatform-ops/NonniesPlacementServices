@@ -11,7 +11,7 @@ interface StatusMeta {
 const STATUS_META: Record<CaseStatus, StatusMeta> = {
   DRAFT: { label: "Draft", tone: "neutral" },
   READY_FOR_REVIEW: { label: "Ready for Review", tone: "info" },
-  MATCHING: { label: "Matching", tone: "progress" },
+  MATCHING: { label: "Provider Selection", tone: "progress" },
   REFERRAL_SENT: { label: "Referral Sent", tone: "progress" },
   PROVIDER_REVIEWING: { label: "Provider Reviewing", tone: "progress" },
   ADDITIONAL_INFORMATION_REQUIRED: { label: "Info Required", tone: "warning" },

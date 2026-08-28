@@ -59,7 +59,7 @@ export function ServiceRequestsTab({ caseDetail: c, onChange }: { caseDetail: Ca
   return (
     <Panel
       title="Service requests"
-      description="The post-discharge services this case requires. Provider matching happens in a later step."
+      description="The post-discharge services this case requires. A provider is selected manually in a later step."
       actions={
         editable ? (
           <button type="button" onClick={() => setAdding((v) => !v)} className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">

@@ -3,8 +3,10 @@ import type { Completeness } from "./case-assessment";
 
 /**
  * Manual status transitions permitted in this slice. Later statuses
- * (MATCHING, REFERRAL_SENT, …) are driven by future matching/referral modules,
- * not by manual PATCH. Records already in those states remain readable.
+ * (MATCHING, REFERRAL_SENT, …) belong to the future manual referral workflow —
+ * a user searches/selects a provider and sends a referral by hand. There is no
+ * automated matching engine; these are not driven by manual PATCH here. Records
+ * already in those states remain readable.
  */
 export const MANUAL_TRANSITIONS: Partial<Record<CaseStatus, CaseStatus[]>> = {
   DRAFT: ["READY_FOR_REVIEW", "CANCELLED"],
