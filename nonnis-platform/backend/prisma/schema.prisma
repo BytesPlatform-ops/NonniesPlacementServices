@@ -830,3 +830,68 @@ model ProviderCapacity {
   @@index([status])
   @@map("provider_capacity")
 }
+
+// ---------------------------------------------------------------------------
+// Website form submissions
+//
+// Additive persistence of PUBLIC Nonnis website form submissions so Nonnis staff
+// can review them internally. The website's existing email / PDF / report flow is
+// unchanged; this only stores a normalized copy. This is NOT the excluded external
+// integration architecture — it is Nonnis's own website connecting to its own
+// platform. Never store passwords, SMTP creds, tokens, or uploaded file bytes here.
+// ---------------------------------------------------------------------------
+
+/// Manual internal review state for a website form submission.
+enum FormSubmissionStatus {
+  NEW
+  IN_REVIEW
+  RESOLVED
+  ARCHIVED
+}
+
+/// One persisted public website form submission.
+model WebsiteFormSubmission {
+  id        String @id @default(uuid()) @db.Uuid
+  /// The website's human-readable submission reference (PREFIX-YYYYMMDD-XXXXXX).
+  /// Also the idempotency key: re-ingesting the same reference is a no-op.
+  reference String @unique
+
+  /// Stable machine key for the form, e.g. "hospital_referral".
+  formKey    String
+  formName   String
+  sourcePage String?
+
+  // Promoted, searchable submitter fields (also present inside submittedData).
+  submitterName  String?
+  submitterEmail String?
+  submitterPhone String?
+
+  /// Full normalized submission payload (no secrets, no file bytes).
+  submittedData Json
+
+  // Metadata about the website's existing email/report/document flow, when known.
+  emailStatus       String?
+  reportGenerated   Boolean @default(false)
+  documentGenerated Boolean @default(false)
+  attachmentsCount  Int     @default(0)
+
+  // Internal review (manual only — no automation).
+  status           FormSubmissionStatus @default(NEW)
+  reviewedByUserId String?              @db.Uuid
+  reviewedAt       DateTime?
+  internalNotes    String?
+
+  // Optional manual links (soft references; no auto-creation).
+  relatedCaseId     String? @db.Uuid
+  relatedProviderId String? @db.Uuid
+
+  submittedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([formKey])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([submitterEmail])
+  @@map("website_form_submissions")
+}
