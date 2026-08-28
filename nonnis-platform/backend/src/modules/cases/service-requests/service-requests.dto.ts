@@ -1,5 +1,5 @@
 import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
-import { LevelOfCare, ServiceCategory } from "@prisma/client";
+import { LevelOfCare, ServiceCategoryCode } from "@prisma/client";
 
 class ServiceRequestFields {
   @IsOptional()
@@ -81,12 +81,12 @@ class ServiceRequestFields {
 }
 
 export class CreateServiceRequestDto extends ServiceRequestFields {
-  @IsEnum(ServiceCategory)
-  category!: ServiceCategory;
+  @IsEnum(ServiceCategoryCode)
+  category!: ServiceCategoryCode;
 }
 
 export class UpdateServiceRequestDto extends ServiceRequestFields {
   @IsOptional()
-  @IsEnum(ServiceCategory)
-  category?: ServiceCategory;
+  @IsEnum(ServiceCategoryCode)
+  category?: ServiceCategoryCode;
 }

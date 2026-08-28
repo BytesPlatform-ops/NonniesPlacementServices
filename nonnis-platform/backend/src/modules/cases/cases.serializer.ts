@@ -5,7 +5,7 @@ import type {
   LevelOfCare,
   RequirementCategory,
   RequirementStatus,
-  ServiceCategory,
+  ServiceCategoryCode,
   ServiceRequestStatus,
   WorkflowEventSource,
   WorkflowEventType,
@@ -69,7 +69,7 @@ export interface CaseSummary {
 export interface ServiceRequestView {
   id: string;
   status: ServiceRequestStatus;
-  category: ServiceCategory;
+  category: ServiceCategoryCode;
   levelOfCare: LevelOfCare | null;
   requestedStartDate: string | null;
   frequency: string | null;

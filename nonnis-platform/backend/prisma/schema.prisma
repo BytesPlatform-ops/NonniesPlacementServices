@@ -63,8 +63,10 @@ enum CareSetting {
   OTHER
 }
 
-/// High-level category of a requested post-discharge service.
-enum ServiceCategory {
+/// High-level category of a requested post-discharge service. Retained as a
+/// stable enum on ServiceRequest; the admin-managed ServiceCategory model
+/// (whose `code` mirrors these values) is the forward-looking source of truth.
+enum ServiceCategoryCode {
   HOME_HEALTH
   SKILLED_NURSING
   PHYSICAL_THERAPY
@@ -200,6 +202,8 @@ model Organization {
   memberships    OrganizationMembership[]
   workflowEvents WorkflowEvent[]
   auditEvents    AuditEvent[]
+  /// A provider organization has exactly one operational provider profile.
+  provider       Provider?
 
   @@index([type])
   @@index([status])
@@ -324,11 +328,16 @@ model ServiceRequest {
   caseId String               @db.Uuid
   status ServiceRequestStatus @default(REQUESTED)
 
-  category           ServiceCategory
+  category           ServiceCategoryCode
   levelOfCare        LevelOfCare?
   requestedStartDate DateTime?
-  frequency          String?
-  durationText       String?
+
+  /// Forward-looking link to the admin-managed ServiceCategory catalog. Nullable
+  /// and additive: the `category` enum above remains the current source of truth
+  /// until data is backfilled in a later slice.
+  serviceCategoryId String? @db.Uuid
+  frequency         String?
+  durationText      String?
 
   // Geographic requirements.
   serviceCity        String?
@@ -352,11 +361,13 @@ model ServiceRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  case         Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  requirements CaseRequirement[]
+  case            Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  requirements    CaseRequirement[]
+  serviceCategory ServiceCategory?  @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([category])
+  @@index([serviceCategoryId])
   @@map("service_requests")
 }
 
@@ -468,6 +479,7 @@ model User {
   completedRequirements CaseRequirement[]        @relation("RequirementCompletedBy")
   workflowEvents        WorkflowEvent[]
   auditEvents           AuditEvent[]
+  capacityUpdates       ProviderCapacity[]       @relation("CapacityUpdatedBy")
 
   @@index([status])
   @@map("users")
@@ -543,4 +555,278 @@ model OrganizationMembership {
   @@index([roleId])
   @@index([status])
   @@map("organization_memberships")
+}
+
+// ---------------------------------------------------------------------------
+// Provider directory (standard operational management — no matching, scoring,
+// or compliance workflows). Providers are a Nonnis-managed directory used to
+// browse, search and filter for later MANUAL provider selection.
+// ---------------------------------------------------------------------------
+
+/// Simple operational status for a provider. Not a compliance/approval state.
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  PAUSED
+}
+
+/// The kind of area a coverage row describes.
+enum CoverageType {
+  CITY
+  COUNTY
+  STATE
+  POSTAL_CODE
+  RADIUS
+}
+
+/// Days of the week for operating hours.
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+/// Simple current-availability status for a provider (optionally per category).
+enum CapacityStatus {
+  AVAILABLE
+  LIMITED
+  UNAVAILABLE
+  UNKNOWN
+}
+
+/// A provider's operational profile. One-to-one with a PROVIDER Organization,
+/// which owns the canonical legal identity; the Provider owns operational,
+/// directory-facing detail.
+model Provider {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @unique @db.Uuid
+  status         ProviderStatus @default(ACTIVE)
+
+  /// Public/display name. Falls back to the organization name when unset.
+  displayName String
+  description String?
+
+  phone   String?
+  email   String?
+  website String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String? @default("US")
+  timezone     String?
+
+  /// Descriptive eligibility information only (population served, admission
+  /// criteria, restrictions). NOT an eligibility engine.
+  eligibilityNotes String?
+  /// Internal Nonnis notes — never exposed to directory-read (non-manager) users.
+  internalNotes    String?
+
+  /// Simple informational credentials as plain metadata. NOT tracked, verified,
+  /// or expiry-monitored (the Document & Compliance module is out of scope).
+  licenseNumber String?
+  licenseType   String?
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services      ProviderService[]
+  coverageAreas ProviderCoverageArea[]
+  paymentTypes  ProviderPaymentType[]
+  languages     ProviderLanguage[]
+  hours         ProviderHours[]
+  capacity      ProviderCapacity[]
+
+  @@index([status])
+  @@index([state])
+  @@index([city])
+  @@map("providers")
+}
+
+/// Admin-managed catalog of service categories. `code` mirrors the stable
+/// ServiceCategoryCode enum values so historical service requests map cleanly.
+model ServiceCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  providerServices ProviderService[]
+  serviceRequests  ServiceRequest[]
+  capacityRows     ProviderCapacity[]
+
+  @@index([active])
+  @@map("service_categories")
+}
+
+/// A service a provider offers, linked to an admin-managed ServiceCategory.
+model ProviderService {
+  id                String       @id @default(uuid()) @db.Uuid
+  providerId        String       @db.Uuid
+  serviceCategoryId String       @db.Uuid
+  active            Boolean      @default(true)
+  description       String?
+  levelOfCare       LevelOfCare?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  provider        Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  serviceCategory ServiceCategory @relation(fields: [serviceCategoryId], references: [id], onDelete: Restrict)
+
+  @@unique([providerId, serviceCategoryId])
+  @@index([providerId])
+  @@index([serviceCategoryId])
+  @@map("provider_services")
+}
+
+/// A geographic area a provider covers. Plain searchable data — no GIS,
+/// distance scoring, or mapping-API integration.
+model ProviderCoverageArea {
+  id           String       @id @default(uuid()) @db.Uuid
+  providerId   String       @db.Uuid
+  coverageType CoverageType @default(CITY)
+  city         String?
+  county       String?
+  state        String?
+  postalCode   String?
+  radiusMiles  Int?
+  notes        String?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([state])
+  @@index([city])
+  @@index([postalCode])
+  @@map("provider_coverage_areas")
+}
+
+/// Admin-managed catalog of accepted payment / insurance types.
+model PaymentType {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerPaymentTypes ProviderPaymentType[]
+
+  @@index([active])
+  @@map("payment_types")
+}
+
+/// Payment/insurance type accepted by a provider.
+model ProviderPaymentType {
+  id            String   @id @default(uuid()) @db.Uuid
+  providerId    String   @db.Uuid
+  paymentTypeId String   @db.Uuid
+  active        Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  provider    Provider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  paymentType PaymentType @relation(fields: [paymentTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([providerId, paymentTypeId])
+  @@index([providerId])
+  @@index([paymentTypeId])
+  @@map("provider_payment_types")
+}
+
+/// Admin-managed catalog of languages.
+model Language {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerLanguages ProviderLanguage[]
+
+  @@index([active])
+  @@map("languages")
+}
+
+/// A language a provider supports.
+model ProviderLanguage {
+  id         String   @id @default(uuid()) @db.Uuid
+  providerId String   @db.Uuid
+  languageId String   @db.Uuid
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
+
+  @@unique([providerId, languageId])
+  @@index([providerId])
+  @@index([languageId])
+  @@map("provider_languages")
+}
+
+/// Operating hours for a provider, one row per weekday. Not a scheduling engine.
+model ProviderHours {
+  id         String    @id @default(uuid()) @db.Uuid
+  providerId String    @db.Uuid
+  dayOfWeek  DayOfWeek
+  closed     Boolean   @default(false)
+  open24     Boolean   @default(false)
+  /// "HH:MM" 24-hour local time. Null when closed or open24.
+  opensAt    String?
+  closesAt   String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, dayOfWeek])
+  @@index([providerId])
+  @@map("provider_hours")
+}
+
+/// Simple current capacity/availability for a provider, optionally scoped to a
+/// service category. Updates overwrite the row; history is captured via
+/// AuditEvent. No forecasting, sync, scheduling, or analytics.
+model ProviderCapacity {
+  id                String         @id @default(uuid()) @db.Uuid
+  providerId        String         @db.Uuid
+  serviceCategoryId String?        @db.Uuid
+  status            CapacityStatus @default(UNKNOWN)
+  availableCount    Int?
+  effectiveDate     DateTime?      @db.Date
+  notes             String?
+  updatedByUserId   String?        @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  provider        Provider         @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  serviceCategory ServiceCategory? @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
+  updatedBy       User?            @relation("CapacityUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([providerId, serviceCategoryId])
+  @@index([providerId])
+  @@index([status])
+  @@map("provider_capacity")
 }

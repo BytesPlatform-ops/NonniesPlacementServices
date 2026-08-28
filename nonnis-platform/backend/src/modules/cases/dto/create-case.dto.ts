@@ -18,7 +18,7 @@ import {
   CaseStatus,
   LevelOfCare,
   RequirementCategory,
-  ServiceCategory,
+  ServiceCategoryCode,
 } from "@prisma/client";
 
 /** New patient details, when the case is not associated to an existing patient. */
@@ -45,8 +45,8 @@ export class CreatePatientDto {
 
 /** A requested post-discharge service supplied at case-creation time. */
 export class CreateServiceRequestDto {
-  @IsEnum(ServiceCategory)
-  category!: ServiceCategory;
+  @IsEnum(ServiceCategoryCode)
+  category!: ServiceCategoryCode;
 
   @IsOptional()
   @IsEnum(LevelOfCare)
