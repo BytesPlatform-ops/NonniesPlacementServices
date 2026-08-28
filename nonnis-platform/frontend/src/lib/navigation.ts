@@ -39,6 +39,7 @@ const PROVIDER_NAV: NavGroup[] = [
     title: null,
     items: [
       { label: "Overview", href: "/provider", permission: PERMISSIONS.PROVIDERS_READ },
+      { label: "Referrals", href: "/provider/referrals", permission: PERMISSIONS.REFERRALS_READ },
       { label: "Profile", href: "/provider/profile", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Services", href: "/provider/services", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Coverage", href: "/provider/coverage", permission: PERMISSIONS.PROVIDERS_READ },
