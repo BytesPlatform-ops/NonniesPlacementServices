@@ -4,7 +4,8 @@
   "private": true,
   "description": "Nonnis Digital Optimization Platform — backend API (modular monolith)",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
+    "postinstall": "prisma generate",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",
