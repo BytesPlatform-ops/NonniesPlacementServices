@@ -23,4 +23,8 @@ export const PERMISSIONS = {
   PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
   FORM_SUBMISSIONS_READ: "form_submissions.read",
   FORM_SUBMISSIONS_MANAGE: "form_submissions.manage",
+  REFERRALS_READ: "referrals.read",
+  REFERRALS_MANAGE: "referrals.manage",
+  REFERRALS_READ_ALL: "referrals.read_all",
+  REFERRALS_RESPOND_OWN: "referrals.respond_own",
 } as const;
