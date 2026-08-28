@@ -148,6 +148,14 @@ and do not let an in-scope feature evolve into them.
   filtering, strict provider-organization isolation, and provider RBAC — all manual
   CRUD, no matching/scoring/compliance. Provider users reuse the existing
   User + OrganizationMembership identity model.
+- **Slice 6 — Basic Provider Portal:** a self-service portal (`/provider/*`) where
+  Provider Admin / Provider Staff maintain their OWN provider's profile, services,
+  coverage, payment types, languages, hours, capacity, and team. Provider identity
+  is derived server-side from the active organization (`GET /provider-portal/me`);
+  mutations reuse the Slice 5 provider APIs under ProviderAccessService isolation.
+  Role-aware landing sends provider users to the portal. Internal notes and provider
+  status are Nonnis-only (never readable/writable by provider users). No referrals,
+  matching, automation, compliance, or analytics.
 
 ---
 
@@ -159,13 +167,13 @@ COMPLETED
   2. Identity / Authentication / Authorization / Organizations / RBAC
   3. Discharge Professional Dashboard & Case Workspace
   4. Scope Realignment & Architecture Cleanup
-  5. Provider Management + Service Categories + Capacity   ← current slice
+  5. Provider Management + Service Categories + Capacity
+  6. Basic Provider Portal   ← current slice
 
 NEXT
-  6.  Basic Provider Portal
+  7.  Nonnis Admin Operations Control Center
 
 REMAINING
-  7.  Nonnis Admin Operations Control Center
   8.  Referral Workflow with Manual Provider Selection
   9.  Tasks + Basic Case Messaging + Unified Timeline
   10. Discharge Readiness Score + Operational Blockers
@@ -187,9 +195,8 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Basic Provider Portal** (item 6): a focused, permission-scoped surface for
-Provider Admin / Provider Staff users to view and maintain **their own** provider
-profile, services, coverage, payment types, languages, hours and capacity — reusing
-the Slice 5 provider APIs and the existing `providers.manage_own` /
-`provider_capacity.manage_own` boundaries. No matching, scoring, compliance, or
-cross-provider visibility.
+**Nonnis Admin Operations Control Center** (item 7): a Nonnis-staff operations
+surface to oversee cases and providers across organizations — cross-org case
+visibility (via `cases.read_all`), provider oversight, and manual operational
+intervention. Basic operational dashboards/counts only — no automation, matching,
+advanced analytics, or referral workflow (referrals come in item 8).

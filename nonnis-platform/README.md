@@ -339,6 +339,30 @@ scoring, ranking, or compliance workflows.
   `/providers/[id]` (Overview / Services / Coverage / Payment / Languages / Hours /
   Capacity / Users tabs), and `/admin/service-categories` (catalog admin).
 
+## Provider portal (Slice 6)
+
+A self-service portal for **Provider Admin / Provider Staff** to maintain their own
+provider organization's information — no referrals, matching, automation, compliance,
+or analytics.
+
+- **Provider context** is derived server-side from the caller's active organization
+  (`GET /api/v1/provider-portal/me`), never from a browser-supplied id. The response
+  carries the provider detail (internal notes excluded), a deterministic profile
+  **completeness** summary (transparent missing-info checks — not a score), and
+  operational counts. All mutations reuse the Slice 5 `/providers/:id/*` endpoints,
+  which re-validate ownership via `ProviderAccessService` (cross-provider → 404).
+- **Isolation hardening:** provider-org users (admin and staff) are org-scoped for
+  reads; **internal notes** and **provider status** are Nonnis-only — provider users
+  can neither read nor write internal notes, and cannot change their own status.
+- **Permissions:** Provider Admin (`providers.manage_own`) edits profile/services/
+  coverage/payment/languages/hours and (`users.manage_own_organization`) invites
+  teammates to provider roles only. Provider Staff are read-only except capacity
+  (`provider_capacity.manage_own`).
+- **Routing:** `/provider` (overview), `/provider/{profile,services,coverage,payment,
+  languages,hours,capacity,team}`. A role-aware landing (`/home`) sends provider-org
+  users to the portal; other roles keep the operations console. The sidebar swaps to
+  portal navigation when the active organization is a provider.
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root is untouched by this platform. The
