@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendFormEmail, type FormSubmission } from "@/lib/email/sendFormEmail";
 import { makeReferenceId } from "@/lib/forms/referenceId";
+import { persistSubmission } from "@/lib/platform/persistSubmission";
 
 // nodemailer needs the Node.js runtime (not Edge).
 export const runtime = "nodejs";
@@ -46,6 +47,20 @@ export async function POST(req: Request) {
     const referenceId = makeReferenceId(body.formName, submittedAt);
 
     await sendFormEmail({ ...body, referenceId });
+
+    // Additive: also persist the normalized submission to the Nonni's platform
+    // admin panel. Best-effort — a persistence failure must never affect the
+    // already-completed email/PDF flow or the user's success response. Only the
+    // reference id is logged (never the submission contents).
+    try {
+      await persistSubmission({ ...body, referenceId });
+    } catch (persistErr) {
+      console.error(
+        `[api/forms/submit] platform persistence failed for ${referenceId}:`,
+        persistErr instanceof Error ? persistErr.message : "unknown error",
+      );
+    }
+
     return NextResponse.json({ ok: true, referenceId });
   } catch (err) {
     console.error("[api/forms/submit] send failed:", err);
