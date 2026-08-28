@@ -14,6 +14,7 @@ import {
   Languages as LanguagesIcon,
   MapPin,
   ClipboardList,
+  CheckSquare,
   Inbox,
   Radar,
   Send,
@@ -30,6 +31,7 @@ import { useAuth } from "@/providers/auth-provider";
 const ICONS: Record<string, LucideIcon> = {
   Operations: Radar,
   "Form Submissions": Inbox,
+  Tasks: CheckSquare,
   Cases: ClipboardList,
   Providers: Stethoscope,
   Organizations: Building2,

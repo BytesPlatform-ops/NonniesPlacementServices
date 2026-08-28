@@ -27,4 +27,10 @@ export const PERMISSIONS = {
   REFERRALS_MANAGE: "referrals.manage",
   REFERRALS_READ_ALL: "referrals.read_all",
   REFERRALS_RESPOND_OWN: "referrals.respond_own",
+  TASKS_READ: "tasks.read",
+  TASKS_MANAGE: "tasks.manage",
+  TASKS_READ_ALL: "tasks.read_all",
+  MESSAGES_READ: "messages.read",
+  MESSAGES_SEND: "messages.send",
+  INTERNAL_NOTES_MANAGE: "internal_notes.manage",
 } as const;
