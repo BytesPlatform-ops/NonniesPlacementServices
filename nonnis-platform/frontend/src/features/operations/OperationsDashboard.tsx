@@ -20,6 +20,9 @@ export function OperationsDashboard() {
         description="Where coordination needs attention across the network — and who needs to act."
         actions={
           <div className="flex gap-2">
+            <Link href="/operations/tasks" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Tasks
+            </Link>
             <Link href="/operations/referrals" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Referrals
             </Link>
