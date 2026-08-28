@@ -165,6 +165,14 @@ and do not let an in-scope feature evolve into them.
   Manual quick actions (reassign, block/unblock) reuse the existing case endpoints
   (which already honour `cases.read_all`) — no new mutation logic and no weakening of
   tenant isolation elsewhere. No referral/matching/automation/analytics/compliance.
+- **Slice 8 — Website Form Submissions -> Admin Panel:** the public website's six
+  forms (single `/api/forms/submit` handler) now **additionally** persist each
+  submission to the platform after the existing email/PDF flow, via a server-to-server
+  token-guarded ingest (`POST /api/v1/form-submissions/ingest`, idempotent on the
+  website reference). Nonnis staff review them at `/operations/form-submissions`
+  (`form_submissions.read/manage`) with a manual NEW/IN_REVIEW/RESOLVED/ARCHIVED
+  workflow and notes. File bytes and secrets are never stored; email/PDF behavior is
+  unchanged. See `docs/WEBSITE_FORM_INGESTION.md`.
 
 ---
 
@@ -178,13 +186,13 @@ COMPLETED
   4. Scope Realignment & Architecture Cleanup
   5. Provider Management + Service Categories + Capacity
   6. Basic Provider Portal
-  7. Nonnis Admin Operations Control Center   ← current slice
+  7. Nonnis Admin Operations Control Center
+  8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)   ← current slice
 
 NEXT
-  8.  Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
+  9.  Referral Workflow + Manual Provider Selection
 
 REMAINING
-  9.  Referral Workflow + Manual Provider Selection
   10. Tasks + Basic Case Messaging + Unified Timeline
   11. Discharge Readiness Score + Operational Blockers
   12. Basic Reporting + Administrative Reports
@@ -192,9 +200,9 @@ REMAINING
   14. Full Core-System Audit + Production Hardening
 ```
 
-> Slice 8 (Website Form Submissions) is additive: the existing public-website
-> email delivery and document/report output must keep working; platform
-> persistence is added alongside so admin staff can view submissions internally.
+> Slice 8 (Website Form Submissions) is **complete and additive**: the public-website
+> email + PDF delivery is unchanged; each submission is now also persisted to the
+> platform for internal review. See `docs/WEBSITE_FORM_INGESTION.md`.
 
 There are **no** future slices for the Matching Engine, Automation Engine,
 Document/Compliance System, Advanced Analytics, or External Integration
@@ -204,8 +212,8 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Website Form Submissions -> Admin Panel + Existing Email Flow** (item 8):
-persist existing public-website form submissions into the platform so Nonnis staff
-can view them internally. **Additive only** — the current email delivery and any
-document/report output must keep working unchanged; platform persistence is added
-alongside, never replacing them. Do not alter existing public-website form behavior.
+**Referral Workflow + Manual Provider Selection** (item 9): let staff manually
+select a provider for a case's service request and send a referral, then capture the
+provider's response (accept / conditional accept / request information / decline) and
+service coordination — all manual, no matching/scoring engine. This is the workflow
+that connects the completed case and provider domains.

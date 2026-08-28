@@ -136,10 +136,12 @@ The **Provider Portal** (self-service for provider users) and the **Nonnis Admin
 Operations Control Center** (cross-org operational oversight) are now implemented
 (see below).
 
-Not yet built but **in scope** for later slices (next first): additive persistence of
-public-website form submissions into the platform (alongside the existing email
-flow), a manual-provider-selection referral workflow, tasks & basic case messaging,
-the Discharge Readiness Score, basic reporting/exports, and the public provider
+Public-website form submissions are now **additionally persisted** into the platform
+(alongside the unchanged email/PDF flow) — see **Website form submissions** below.
+
+Not yet built but **in scope** for later slices (next first): a
+manual-provider-selection referral workflow, tasks & basic case messaging, the
+Discharge Readiness Score, basic reporting/exports, and the public provider
 directory.
 
 ### Excluded advanced modules — DO NOT BUILD
@@ -391,15 +393,29 @@ A Nonnis-only, cross-organization operational surface at `/operations`, gated by
   `/operations/cases` (full filterable queue with reassign/block actions), and
   `/operations/providers`. No referral/matching/analytics/compliance widgets.
 
+## Website form submissions (Slice 8)
+
+The public website's six forms all POST to one handler (`src/app/api/forms/submit/route.ts`).
+After the existing email + branded-PDF delivery, that handler now **also** persists a
+normalized copy of the submission to the platform — additive, never replacing the
+email/PDF flow.
+
+- **Server-to-server ingest:** the website's `server-only` helper POSTs to
+  `POST /api/v1/form-submissions/ingest`, authenticated by a shared `X-Ingest-Token`
+  (backend-only secret, never in the browser). The endpoint is `@Public` (not user
+  auth) but token-guarded, and idempotent on the website's reference id.
+- **Safety:** only normalized text answers (`sections`) + processing metadata are
+  stored — **never** uploaded file bytes or secrets. Persistence failure is caught,
+  logged by reference id only, and never breaks the email/PDF response.
+- **Admin:** Nonnis staff review submissions at `/operations/form-submissions`
+  (`form_submissions.read/manage`; NONNIS_ADMIN + NONNIS_OPERATIONS only) — filterable
+  table + detail drawer with a manual NEW/IN_REVIEW/RESOLVED/ARCHIVED workflow, notes,
+  and optional case/provider links. No document-management system, automation, or
+  auto-creation of cases. Full detail in [`docs/WEBSITE_FORM_INGESTION.md`](./docs/WEBSITE_FORM_INGESTION.md).
+
 ## Relationship to the existing website
 
-The public marketing site at the repository root is untouched by this platform. The
-only repository-level changes are isolation guards so tooling never crosses the
-boundary: the root `tsconfig.json` and `eslint.config.mjs` exclude `nonnis-platform`,
-and `.gitignore` ignores its build artifacts.
-
-Existing public-website forms remain **reference-only** for now (styling, field
-structure, validation) and continue delivering by email. A future slice (see
-`SCOPE.md`) will **additionally** persist those submissions into the platform for
-internal viewing — additive to, never replacing, the current email/document flow.
-Do not connect the forms until that slice.
+The public marketing site at the repository root keeps its existing behavior; the only
+change is the additive persistence call above. Repository-level isolation guards keep
+tooling from crossing the boundary: the root `tsconfig.json` and `eslint.config.mjs`
+exclude `nonnis-platform`, and `.gitignore` ignores its build artifacts.
