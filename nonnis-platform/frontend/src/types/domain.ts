@@ -79,11 +79,40 @@ export interface CaseSummary {
   status: CaseStatus;
   patient: { id: string; displayName: string };
   originatingFacility: { id: string; name: string };
+  assignedProfessional: { id: string; displayName: string } | null;
   expectedDischargeDate: string | null;
   requirementsCount: number;
   serviceRequestsCount: number;
+  openBlockers: number;
+  completenessPercentage: number;
+  attention: { level: AttentionLevel; count: number };
+  lastActivityAt: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type RequirementStatus = "PENDING" | "IN_PROGRESS" | "BLOCKED" | "COMPLETE" | "NOT_REQUIRED";
+export type Severity = "INFO" | "WARNING" | "CRITICAL";
+export type AttentionLevel = Severity | "NONE";
+
+export interface AttentionReason {
+  code: string;
+  severity: Severity;
+  label: string;
+  entityType?: string;
+  entityId?: string;
+}
+
+export interface Completeness {
+  percentage: number;
+  checks: Array<{ code: string; label: string; passed: boolean; blocking: boolean }>;
+  missing: string[];
+  blockers: Array<{ code: string; label: string }>;
+}
+
+export interface CaseAssessment {
+  completeness: Completeness;
+  attention: { level: AttentionLevel; count: number; reasons: AttentionReason[] };
 }
 
 export interface ServiceRequestView {
@@ -101,16 +130,27 @@ export interface ServiceRequestView {
   fundingSource: string | null;
   insurancePlan: string | null;
   authorizationReference: string | null;
+  requiredQualifications: string | null;
+  mandatoryLanguage: string | null;
+  equipmentNeeds: string | null;
+  transportationRequired: boolean;
   notes: string | null;
 }
 
 export interface CaseRequirementView {
   id: string;
   category: RequirementCategory;
+  status: RequirementStatus;
   label: string;
   detail: string | null;
   mandatory: boolean;
+  dueDate: string | null;
+  notes: string | null;
+  completedAt: string | null;
+  completedBy: { id: string; displayName: string } | null;
   serviceRequestId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WorkflowEventView {
@@ -119,7 +159,8 @@ export interface WorkflowEventView {
   previousStatus: CaseStatus | null;
   newStatus: CaseStatus | null;
   source: WorkflowEventSource;
-  actorRef: string | null;
+  actor: { id: string; displayName: string } | null;
+  metadata: unknown;
   createdAt: string;
 }
 
@@ -138,7 +179,8 @@ export interface CaseDetail {
     externalRef: string | null;
   };
   originatingFacility: { id: string; name: string; city: string | null; state: string | null };
-  dischargeProfessionalRef: string | null;
+  editable: boolean;
+  assignedDischargeProfessional: { id: string; displayName: string } | null;
   expectedDischargeDate: string | null;
   actualDischargeDate: string | null;
   currentCareSetting: CareSetting | null;
@@ -147,11 +189,19 @@ export interface CaseDetail {
   interpreterRequired: boolean;
   communicationPreference: string | null;
   accessibilityNeeds: string[];
+  patientContactPhone: string | null;
+  representativeName: string | null;
+  representativeRelationship: string | null;
+  representativeContact: string | null;
+  blocked: boolean;
+  blockReason: string | null;
   requirementsCount: number;
   serviceRequestsCount: number;
   serviceRequests: ServiceRequestView[];
   requirements: CaseRequirementView[];
   workflowEvents: WorkflowEventView[];
+  assessment: CaseAssessment;
+  allowedTransitions: CaseStatus[];
   createdAt: string;
   updatedAt: string;
 }
