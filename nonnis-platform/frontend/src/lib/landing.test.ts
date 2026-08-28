@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { activeOrgIsProvider, landingPath } from "./landing";
-import { visibleProviderNav } from "./navigation";
+import { visibleNav, visibleProviderNav } from "./navigation";
 import { PERMISSIONS } from "./permissions";
 import type { MeResponse } from "@/types/auth";
 
-function me(orgType: string, activeOrganizationId = "org-1"): MeResponse {
+function me(orgType: string, activeOrganizationId = "org-1", permissions: string[] = []): MeResponse {
   return {
     authenticated: true,
     provisioned: true,
@@ -18,11 +18,11 @@ function me(orgType: string, activeOrganizationId = "org-1"): MeResponse {
         roleCode: "PROVIDER_ADMIN",
         roleName: "Provider Administrator",
         isPrimary: true,
-        permissions: [],
+        permissions,
       },
     ],
     organizations: [{ id: "org-1", name: "Org", type: orgType }],
-    permissions: [],
+    permissions,
   };
 }
 
@@ -39,6 +39,19 @@ describe("landing logic", () => {
 
   it("defaults unprovisioned/empty users to /cases", () => {
     expect(landingPath(null)).toBe("/cases");
+  });
+
+  it("sends Nonnis staff (cases.read_all) to the operations center", () => {
+    expect(landingPath(me("NONNIS", "org-1", [PERMISSIONS.CASES_READ_ALL]))).toBe("/operations");
+  });
+});
+
+describe("operations navigation", () => {
+  it("shows Operations only to users with cases.read_all", () => {
+    const nonnis = visibleNav([PERMISSIONS.CASES_READ_ALL, PERMISSIONS.CASES_READ]).flatMap((g) => g.items.map((i) => i.label));
+    expect(nonnis).toContain("Operations");
+    const discharge = visibleNav([PERMISSIONS.CASES_READ]).flatMap((g) => g.items.map((i) => i.label));
+    expect(discharge).not.toContain("Operations");
   });
 });
 

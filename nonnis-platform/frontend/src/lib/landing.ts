@@ -17,5 +17,8 @@ export function activeOrgIsProvider(me: MeResponse | null, activeOrganizationId:
  */
 export function landingPath(me: MeResponse | null): string {
   if (!me || !me.provisioned || me.memberships.length === 0) return "/cases";
-  return activeOrgIsProvider(me, me.activeOrganizationId) ? "/provider" : "/cases";
+  if (activeOrgIsProvider(me, me.activeOrganizationId)) return "/provider";
+  // Nonnis staff (platform-wide case access) land in the operations control center.
+  if (me.permissions.includes("cases.read_all")) return "/operations";
+  return "/cases";
 }

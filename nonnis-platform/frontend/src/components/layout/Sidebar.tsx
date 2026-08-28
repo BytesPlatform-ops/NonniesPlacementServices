@@ -14,6 +14,7 @@ import {
   Languages as LanguagesIcon,
   MapPin,
   ClipboardList,
+  Radar,
   Stethoscope,
   Tags,
   Users,
@@ -25,6 +26,7 @@ import { activeOrgIsProvider } from "@/lib/landing";
 import { useAuth } from "@/providers/auth-provider";
 
 const ICONS: Record<string, LucideIcon> = {
+  Operations: Radar,
   Cases: ClipboardList,
   Providers: Stethoscope,
   Organizations: Building2,
