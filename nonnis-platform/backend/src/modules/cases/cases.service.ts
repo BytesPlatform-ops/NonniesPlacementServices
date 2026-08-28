@@ -20,6 +20,7 @@ import type { UpdateCaseDto } from "./dto/update-case.dto";
 import type { TransitionCaseDto } from "./dto/transition-case.dto";
 import type { AssignCaseDto } from "./dto/assign-case.dto";
 import { computeCompleteness } from "./case-assessment";
+import { attentionWhere, incompleteWhere, overdueWhere } from "./case-query";
 import { checkTransition, isEditable, MANUAL_TRANSITIONS } from "./case-transition";
 import {
   caseDetailInclude,
@@ -32,14 +33,9 @@ import {
 } from "./cases.serializer";
 
 const SORTABLE = new Set(["expectedDischargeDate", "updatedAt", "createdAt", "status", "caseNumber"]);
-const NON_TERMINAL: CaseStatus[] = ["DRAFT", "READY_FOR_REVIEW", "MATCHING", "REFERRAL_SENT", "PROVIDER_REVIEWING", "ADDITIONAL_INFORMATION_REQUIRED", "ACCEPTED", "DECLINED", "SERVICES_BEING_COORDINATED", "READY_FOR_DISCHARGE", "SERVICE_STARTED", "FOLLOW_UP_REQUIRED"];
 
 function allowedTransitionsFor(status: CaseStatus): CaseStatus[] {
   return MANUAL_TRANSITIONS[status] ?? [];
-}
-
-function startOfTodayUtc(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 @Injectable()
@@ -109,38 +105,12 @@ export class CasesService {
     if (query.expectedFrom) and.push({ expectedDischargeDate: { gte: new Date(query.expectedFrom) } });
     if (query.expectedTo) and.push({ expectedDischargeDate: { lte: new Date(query.expectedTo) } });
 
-    if (query.overdue) {
-      and.push({ status: { in: NON_TERMINAL }, expectedDischargeDate: { lt: startOfTodayUtc(now) } });
-    }
+    if (query.overdue) and.push(overdueWhere(now));
 
-    if (query.attentionOnly) and.push({ OR: this.attentionOr(now) });
-    if (query.incompleteOnly) and.push({ OR: this.incompleteOr() });
+    if (query.attentionOnly) and.push({ OR: attentionWhere(now) });
+    if (query.incompleteOnly) and.push({ OR: incompleteWhere() });
 
     return { AND: and };
-  }
-
-  private attentionOr(now: Date): Prisma.CaseWhereInput[] {
-    const notTerminal: Prisma.CaseWhereInput = { status: { in: NON_TERMINAL } };
-    return [
-      { blocked: true },
-      { AND: [notTerminal, { expectedDischargeDate: { lt: startOfTodayUtc(now) } }] },
-      { AND: [notTerminal, { assignedDischargeProfessionalId: null }] },
-      { AND: [notTerminal, { preferredServiceLocation: null }] },
-      { requirements: { some: { status: "BLOCKED" } } },
-      { AND: [notTerminal, { requirements: { some: { mandatory: true, status: { notIn: ["COMPLETE", "NOT_REQUIRED"] } } } }] },
-    ];
-  }
-
-  private incompleteOr(): Prisma.CaseWhereInput[] {
-    return [
-      { expectedDischargeDate: null },
-      { currentCareSetting: null },
-      { preferredServiceLocation: null },
-      { assignedDischargeProfessionalId: null },
-      { serviceRequests: { none: {} } },
-      { requirements: { some: { mandatory: true, status: { notIn: ["COMPLETE", "NOT_REQUIRED"] } } } },
-      { blocked: true },
-    ];
   }
 
   async findOne(user: RequestUser, id: string): Promise<CaseDetail> {
