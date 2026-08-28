@@ -1,5 +1,6 @@
 import { Transform } from "class-transformer";
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
@@ -11,6 +12,9 @@ import {
 } from "class-validator";
 import { ProviderStatus, CapacityStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
+
+const toBool = () =>
+  Transform(({ value }) => (typeof value === "string" ? value === "true" : Boolean(value)), { toClassOnly: true });
 
 export class CreateProviderDto {
   /** Link to an existing PROVIDER organization. Mutually exclusive with organizationName. */
@@ -234,6 +238,16 @@ export class ListProvidersQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(CapacityStatus)
   availability?: CapacityStatus;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  noServices?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  noCoverage?: boolean;
 
   @IsOptional()
   @Transform(({ value }) => (typeof value === "string" ? value : "name"), { toClassOnly: true })

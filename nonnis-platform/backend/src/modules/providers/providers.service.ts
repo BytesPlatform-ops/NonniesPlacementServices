@@ -58,6 +58,8 @@ export class ProvidersService {
     if (languageId) and.push({ languages: { some: { languageId, active: true } } });
     if (paymentTypeId) and.push({ paymentTypes: { some: { paymentTypeId, active: true } } });
     if (availability) and.push({ capacity: { some: { status: availability } } });
+    if (query.noServices) and.push({ services: { none: { active: true } } });
+    if (query.noCoverage) and.push({ coverageAreas: { none: { active: true } } });
     if (state) and.push(this.geoFilter("state", state));
     if (city) and.push(this.geoFilter("city", city));
     if (postalCode) and.push(this.geoFilter("postalCode", postalCode));

@@ -8,6 +8,7 @@ import { CatalogModule } from "./modules/catalog/catalog.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { FacilitiesModule } from "./modules/facilities/facilities.module";
 import { HealthModule } from "./modules/health/health.module";
+import { OperationsModule } from "./modules/operations/operations.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { ProvidersModule } from "./modules/providers/providers.module";
 import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.module";
@@ -27,6 +28,7 @@ import { UsersModule } from "./modules/users/users.module";
     CatalogModule,
     ProvidersModule,
     ProviderPortalModule,
+    OperationsModule,
   ],
 })
 export class AppModule {}
