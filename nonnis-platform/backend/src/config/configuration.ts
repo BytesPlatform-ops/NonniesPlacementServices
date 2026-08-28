@@ -17,6 +17,13 @@ export interface AppConfig {
   supabaseServiceRoleKey: string | undefined;
   /** Shared secret for the server-to-server website form ingestion endpoint. */
   formIngestToken: string | undefined;
+  /** Transactional email (referral notifications). Optional — absent = no send. */
+  smtpHost: string | undefined;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string | undefined;
+  smtpPass: string | undefined;
+  mailFrom: string | undefined;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -31,5 +38,11 @@ export function loadConfiguration(): AppConfig {
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     formIngestToken: process.env.FORM_INGEST_TOKEN,
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: Number.parseInt(process.env.SMTP_PORT ?? "465", 10) || 465,
+    smtpSecure: String(process.env.SMTP_SECURE ?? "true").toLowerCase() === "true",
+    smtpUser: process.env.SMTP_USER,
+    smtpPass: process.env.SMTP_PASS,
+    mailFrom: process.env.MAIL_FROM ?? process.env.SMTP_USER,
   };
 }

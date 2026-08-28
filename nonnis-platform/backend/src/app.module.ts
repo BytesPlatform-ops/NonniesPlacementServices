@@ -13,6 +13,7 @@ import { OperationsModule } from "./modules/operations/operations.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { ProvidersModule } from "./modules/providers/providers.module";
 import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.module";
+import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { UsersModule } from "./modules/users/users.module";
 
 @Module({
@@ -31,6 +32,7 @@ import { UsersModule } from "./modules/users/users.module";
     ProviderPortalModule,
     OperationsModule,
     FormSubmissionsModule,
+    ReferralsModule,
   ],
 })
 export class AppModule {}
