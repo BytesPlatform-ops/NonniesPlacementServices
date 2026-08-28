@@ -20,12 +20,12 @@ export function Sidebar() {
   const groups = visibleNav(permissions);
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
-      <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-5">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-sage bg-ivory lg:flex">
+      <div className="flex h-14 items-center gap-2 border-b border-sage px-5">
         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-700 text-white">
           <Activity className="h-4 w-4" aria-hidden />
         </span>
-        <span className="text-sm font-semibold tracking-tight text-slate-900">Nonnis Platform</span>
+        <span className="text-sm font-semibold tracking-tight text-umber">Nonnis Platform</span>
       </div>
 
       <nav className="flex-1 space-y-6 px-3 py-4">
@@ -46,7 +46,7 @@ export function Sidebar() {
                       href={item.href}
                       className={cn(
                         "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
-                        active ? "bg-brand-50 text-brand-800" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                        active ? "bg-brand-50 text-brand-800" : "text-slate-ink hover:bg-brand-50 hover:text-umber",
                       )}
                     >
                       <Icon className="h-4 w-4" aria-hidden />

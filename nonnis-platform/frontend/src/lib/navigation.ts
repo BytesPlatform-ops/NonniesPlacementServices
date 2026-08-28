@@ -12,7 +12,13 @@ export interface NavGroup {
 }
 
 const NAV: NavGroup[] = [
-  { title: null, items: [{ label: "Cases", href: "/cases", permission: PERMISSIONS.CASES_READ }] },
+  {
+    title: null,
+    items: [
+      { label: "Dashboard", href: "/dashboard", permission: PERMISSIONS.CASES_READ },
+      { label: "Cases", href: "/cases", permission: PERMISSIONS.CASES_READ },
+    ],
+  },
   {
     title: "Administration",
     items: [

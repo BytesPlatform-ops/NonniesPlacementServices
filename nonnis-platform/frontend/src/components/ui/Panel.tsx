@@ -16,11 +16,11 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-lg border border-slate-200 bg-white shadow-card", className)}>
+    <section className={cn("rounded-lg border border-sage bg-ivory shadow-card", className)}>
       {title ? (
-        <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
+        <header className="flex items-center justify-between gap-3 border-b border-sage/70 px-5 py-3.5">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+            <h2 className="text-sm font-semibold text-umber">{title}</h2>
             {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
           </div>
           {actions}

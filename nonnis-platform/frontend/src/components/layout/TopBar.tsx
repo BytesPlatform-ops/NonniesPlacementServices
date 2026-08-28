@@ -17,7 +17,7 @@ export function TopBar() {
     "Account";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-sage bg-ivory px-5">
       <div className="flex items-center gap-3">
         {memberships.length > 1 ? (
           <label className="flex items-center gap-2 text-sm">
