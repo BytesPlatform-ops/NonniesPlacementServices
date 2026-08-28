@@ -115,6 +115,7 @@ export class ProvidersService {
     return toProviderDetailView(row, {
       editable: canManageProvider(user, ref),
       canManageCapacity: this.canManageCapacity(user, ref.organizationId),
+      canViewInternal: canManageAllProviders(user),
     });
   }
 

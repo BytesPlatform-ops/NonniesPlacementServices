@@ -24,9 +24,23 @@ export function canManageOwnProviders(user: RequestUser): boolean {
   return user.activePermissions.has(PERMISSIONS.PROVIDERS_MANAGE_OWN);
 }
 
+/**
+ * A provider-side user bounded to their own organization's provider — either a
+ * provider admin (providers.manage_own) or provider staff (whose only own-scope
+ * grant is provider_capacity.manage_own). Nonnis staff (providers.manage) are
+ * never provider-scoped.
+ */
+export function isProviderScoped(user: RequestUser): boolean {
+  if (canManageAllProviders(user)) return false;
+  return (
+    user.activePermissions.has(PERMISSIONS.PROVIDERS_MANAGE_OWN) ||
+    user.activePermissions.has(PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN)
+  );
+}
+
 /** Directory-only readers (e.g. discharge professionals): read all, manage none. */
 function isDirectoryOnlyReader(user: RequestUser): boolean {
-  return !canManageAllProviders(user) && !canManageOwnProviders(user);
+  return !canManageAllProviders(user) && !isProviderScoped(user);
 }
 
 /** Whether the user may see the full (internal) view of a specific provider. */
@@ -47,7 +61,7 @@ export class ProviderAccessService {
   /** Prisma `where` fragment scoping a provider list to what the user may read. */
   listScope(user: RequestUser): { organizationId?: { in: string[] } } {
     if (canManageAllProviders(user) || isDirectoryOnlyReader(user)) return {};
-    // Provider-scoped user: only their own organization's provider.
+    // Provider-scoped user (admin or staff): only their own organization's provider.
     return { organizationId: { in: memberOrgIds(user) } };
   }
 
@@ -64,7 +78,7 @@ export class ProviderAccessService {
   async loadForRead(user: RequestUser, providerId: string): Promise<ProviderRef> {
     const provider = await this.load(providerId);
     if (canManageAllProviders(user) || isDirectoryOnlyReader(user)) return provider;
-    if (canManageOwnProviders(user) && memberOrgIds(user).includes(provider.organizationId)) return provider;
+    if (isProviderScoped(user) && memberOrgIds(user).includes(provider.organizationId)) return provider;
     throw new NotFoundException(`Provider ${providerId} not found`);
   }
 

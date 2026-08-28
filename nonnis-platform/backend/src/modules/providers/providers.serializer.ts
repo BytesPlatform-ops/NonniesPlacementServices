@@ -269,7 +269,7 @@ export function toProviderCapacityView(row: ProviderDetailRow["capacity"][number
 
 export function toProviderDetailView(
   row: ProviderDetailRow,
-  opts: { editable: boolean; canManageCapacity: boolean },
+  opts: { editable: boolean; canManageCapacity: boolean; canViewInternal: boolean },
 ): ProviderDetailView {
   return {
     id: row.id,
@@ -294,7 +294,7 @@ export function toProviderDetailView(
     country: row.country,
     timezone: row.timezone,
     eligibilityNotes: row.eligibilityNotes,
-    internalNotes: opts.editable ? row.internalNotes : null,
+    internalNotes: opts.canViewInternal ? row.internalNotes : null,
     licenseNumber: row.licenseNumber,
     licenseType: row.licenseType,
     services: row.services.map(toProviderServiceView),

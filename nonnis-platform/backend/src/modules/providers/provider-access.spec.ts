@@ -126,3 +126,15 @@ describe("ProviderAccessService.loadForCapacityWrite", () => {
     await expect(other.loadForCapacityWrite(STAFF, "prov-2")).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe("ProviderAccessService staff read scoping", () => {
+  const STAFF = makeUser([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN], ["prov-org"]);
+
+  it("scopes provider staff to their own organization for reads", async () => {
+    const svc = new ProviderAccessService(prismaReturning(OWN));
+    await expect(svc.loadForRead(STAFF, "prov-1")).resolves.toEqual(OWN);
+    expect(svc.listScope(STAFF)).toEqual({ organizationId: { in: ["prov-org"] } });
+    const other = new ProviderAccessService(prismaReturning(OTHER));
+    await expect(other.loadForRead(STAFF, "prov-2")).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
