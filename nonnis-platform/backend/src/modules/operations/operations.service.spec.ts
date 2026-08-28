@@ -5,11 +5,24 @@ import { PERMISSIONS } from "../../common/rbac";
 import { PERMISSIONS_KEY } from "../auth/decorators";
 import { OperationsService } from "./operations.service";
 import { OperationsController } from "./operations.controller";
+import type { ReadinessService } from "../readiness/readiness.service";
 import type { ListOperationsCasesDto } from "./dto/operations.dto";
 
 const providersStub = {
   list: async () => ({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }),
 } as unknown as ProvidersService;
+
+const readinessStub = {
+  operationsSummary: async () => ({
+    readyForDischarge: 0,
+    nearTermNotReady: 0,
+    criticalBlockers: 0,
+    placementMissing: 0,
+    acceptedUnscheduled: 0,
+    dischargedServiceNotStarted: 0,
+    unsuccessfulServiceStarts: 0,
+  }),
+} as unknown as ReadinessService;
 
 function baseQuery(over: Partial<ListOperationsCasesDto> = {}): ListOperationsCasesDto {
   return { page: 1, pageSize: 20, ...over } as ListOperationsCasesDto;
@@ -23,7 +36,7 @@ describe("OperationsService.summary", () => {
       workflowEvent: { findMany: async () => [] },
       $transaction: (arr: Promise<unknown>[]) => Promise.all(arr),
     } as unknown as PrismaService;
-    const svc = new OperationsService(prisma, providersStub);
+    const svc = new OperationsService(prisma, providersStub, readinessStub);
     const r = await svc.summary();
     expect(r.cases.active).toBe(3);
     expect(r.cases.unassigned).toBe(3);
@@ -40,7 +53,7 @@ describe("OperationsService.cases", () => {
       case: { findMany, count },
       $transaction: (arr: Promise<unknown>[]) => Promise.all(arr),
     } as unknown as PrismaService;
-    return { svc: new OperationsService(prisma, providersStub), findMany };
+    return { svc: new OperationsService(prisma, providersStub, readinessStub), findMany };
   }
 
   it("is unfiltered (cross-organization) by default", async () => {
@@ -66,7 +79,7 @@ describe("OperationsService.cases", () => {
 describe("OperationsService.assignees", () => {
   it("404s an unknown case", async () => {
     const prisma = { case: { findUnique: async () => null } } as unknown as PrismaService;
-    const svc = new OperationsService(prisma, providersStub);
+    const svc = new OperationsService(prisma, providersStub, readinessStub);
     await expect(svc.assignees("missing")).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -79,7 +92,7 @@ describe("OperationsService.assignees", () => {
         ],
       },
     } as unknown as PrismaService;
-    const svc = new OperationsService(prisma, providersStub);
+    const svc = new OperationsService(prisma, providersStub, readinessStub);
     const r = await svc.assignees("case-1");
     expect(r).toEqual([{ userId: "u1", name: "A B", email: "u1@x.com", roleName: "Discharge Professional" }]);
   });

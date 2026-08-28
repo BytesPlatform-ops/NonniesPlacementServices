@@ -61,6 +61,42 @@ export class ListOperationsCasesDto extends PaginationQueryDto {
   @IsBoolean()
   unassignedOnly?: boolean;
 
+  // Readiness filters (server-side; approximate deterministic signals).
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  readyOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  notReadyOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  criticalBlockerOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  placementMissingOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  serviceUnscheduledOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  postDischargeNotStartedOnly?: boolean;
+
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  nearTermNotReadyOnly?: boolean;
+
   @IsOptional()
   @IsIn(["expectedDischargeDate", "updatedAt", "createdAt", "status", "caseNumber"])
   sort?: string;

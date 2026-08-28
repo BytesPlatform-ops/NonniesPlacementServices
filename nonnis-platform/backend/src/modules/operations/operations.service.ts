@@ -15,6 +15,14 @@ import {
 import { ProvidersService } from "../providers/providers.service";
 import type { ProviderSummaryView } from "../providers/providers.serializer";
 import type { ListProvidersQueryDto } from "../providers/dto/provider.dto";
+import { ReadinessService, type OperationsReadinessSummary } from "../readiness/readiness.service";
+import {
+  criticalBlockerWhere,
+  dischargedNotStartedWhere,
+  nearTermNotReadyWhere,
+  placementMissingWhere,
+  serviceUnscheduledWhere,
+} from "../readiness/readiness-query";
 import {
   operationsCaseInclude,
   recentActivityInclude,
@@ -44,6 +52,7 @@ export interface OperationsSummary {
     noCapacityReported: number;
     unavailable: number;
   };
+  readiness: OperationsReadinessSummary;
   recentActivity: RecentActivityView[];
 }
 
@@ -58,6 +67,7 @@ export class OperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providers: ProvidersService,
+    private readonly readiness: ReadinessService,
   ) {}
 
   async summary(): Promise<OperationsSummary> {
@@ -95,9 +105,12 @@ export class OperationsService {
       this.prisma.workflowEvent.findMany({ orderBy: { createdAt: "desc" }, take: 12, include: recentActivityInclude }),
     ]);
 
+    const readiness = await this.readiness.operationsSummary();
+
     return {
       cases: { active, requiringAttention, overdue, dueToday, dueThisWeek, unassigned, blocked, incomplete },
       providers: { active: providersActive, noCapacityReported: providersNoCapacity, unavailable: providersUnavailable },
+      readiness,
       recentActivity: recent.map(toRecentActivityView),
     };
   }
@@ -129,6 +142,15 @@ export class OperationsService {
     if (query.attentionOnly) and.push({ OR: attentionWhere(now) });
     if (query.blockedOnly) and.push({ blocked: true });
     if (query.incompleteOnly) and.push({ OR: incompleteWhere() });
+
+    // Readiness filters (deterministic WHERE fragments; no per-row computation).
+    if (query.readyOnly) and.push({ status: "READY_FOR_DISCHARGE" });
+    if (query.notReadyOnly) and.push({ status: { in: NON_TERMINAL_STATUSES.filter((s) => s !== "READY_FOR_DISCHARGE") } });
+    if (query.criticalBlockerOnly) and.push(criticalBlockerWhere());
+    if (query.placementMissingOnly) and.push(placementMissingWhere());
+    if (query.serviceUnscheduledOnly) and.push(serviceUnscheduledWhere());
+    if (query.postDischargeNotStartedOnly) and.push(dischargedNotStartedWhere());
+    if (query.nearTermNotReadyOnly) and.push(nearTermNotReadyWhere(now));
 
     const where: Prisma.CaseWhereInput = and.length > 0 ? { AND: and } : {};
     const sortField = query.sort && SORTABLE.has(query.sort) ? query.sort : "updatedAt";
