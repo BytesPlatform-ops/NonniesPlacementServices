@@ -140,11 +140,12 @@ Public-website form submissions are now **additionally persisted** into the plat
 (alongside the unchanged email/PDF flow) — see **Website form submissions** below.
 
 The **Referral Workflow** (manual provider selection → provider response →
-placement → service start) is now implemented (see **Referral workflow** below).
+placement → service start) and **Tasks + Case Messaging + Unified Timeline** are now
+implemented (see the corresponding sections below).
 
-Not yet built but **in scope** for later slices (next first): tasks & basic case
-messaging with a unified timeline, the Discharge Readiness Score, basic
-reporting/exports, and the public provider directory.
+Not yet built but **in scope** for later slices (next first): the Discharge Readiness
+Score + operational blockers, basic reporting/exports, and the public provider
+directory.
 
 ### Excluded advanced modules — DO NOT BUILD
 
@@ -449,6 +450,34 @@ matching, scoring, ranking, or recommendation anywhere.
   request), provider portal **Referrals** inbox + detail with Accept / Conditionally
   Accept / Request Information / Decline dialogs and service-start controls, and an
   Operations referral queue. All referral/placement events appear in the case timeline.
+
+## Tasks, messaging & unified timeline (Slice 10)
+
+Three distinct, entirely manual concepts on a case — no automation, reminders, or
+escalation anywhere.
+
+- **Tasks** (`Task`): OPEN/IN_PROGRESS/COMPLETED/CANCELLED, LOW/NORMAL/HIGH/URGENT.
+  Overdue is **derived** at read time (due & still open/in-progress), never a stored
+  status. Endpoints: `GET/POST /cases/:id/tasks`, `GET /cases/:id/task-assignees`,
+  `GET /tasks` (mine), `GET /operations/tasks`, `GET/PATCH /tasks/:id`,
+  `POST /tasks/:id/{start,complete,cancel}` (`tasks.read/manage/read_all`). Assignees
+  must be active members of the case org or Nonnis staff — validated, never trusted.
+- **Messages** (`Message`, append-only) with three visibility scopes decided by a
+  centralized `MessageAccessService`: **CASE_TEAM** (`/cases/:id/messages` — case org
+  + Nonnis; providers excluded), **NONNIS_INTERNAL** (`/cases/:id/internal-notes` —
+  `internal_notes.manage` only), **PROVIDER_REFERRAL** (`/referrals/:id/messages` —
+  the referral's provider **or** the case/Nonnis side; one provider never sees
+  another's thread). The formal referral clarification workflow (ReferralResponse) is
+  untouched; referral messages are for ordinary follow-up.
+- **Unified timeline** (`GET /cases/:id/timeline`, `cases.read`): one viewer-aware
+  history merging WorkflowEvents with the messages the viewer may see (internal notes
+  only for `internal_notes.manage`; providers cannot reach it), filterable
+  (all/case/tasks/messages/referrals), paginated — no duplicated entries.
+- **UI:** case workspace **Tasks**, **Communication** (case-team + clearly-labelled
+  Nonnis-only internal notes), and unified **Activity** tabs; a **My Tasks** page and
+  sidebar item; a discharge-dashboard task widget (overdue / due-today / high-urgent);
+  an **Operations** task queue; and referral-thread messaging in both the staff
+  referrals tab and the provider referral detail. No attachments or analytics.
 
 ## Relationship to the existing website
 

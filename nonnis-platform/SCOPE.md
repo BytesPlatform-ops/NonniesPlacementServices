@@ -189,6 +189,20 @@ and do not let an in-scope feature evolve into them.
   service request has an accepted placement). All referral/placement events flow into
   the existing case timeline. Operations gains a cross-org referral queue. No
   automation, escalation, matching, or document system.
+- **Slice 10 — Tasks + Basic Case Messaging + Unified Timeline:** three distinct
+  concepts. **Tasks** (`Task`, OPEN/IN_PROGRESS/COMPLETED/CANCELLED, LOW/NORMAL/HIGH/
+  URGENT; overdue is derived, never stored) are manually created/assigned per case
+  (`tasks.read/manage/read_all`) — no automation/reminders/escalation. **Messages**
+  (`Message`, append-only) carry one of three visibility scopes: CASE_TEAM (case org
+  + Nonnis), NONNIS_INTERNAL (Nonnis staff only), PROVIDER_REFERRAL (one referral's
+  provider + the case/Nonnis side — providers never see another's thread), decided by
+  a centralized MessageAccessService. The formal referral clarification workflow
+  (ReferralResponse) is unchanged; referral messages are for ordinary follow-up.
+  A **unified `GET /cases/:id/timeline`** merges WorkflowEvents with the messages the
+  viewer may see (internal notes only for `internal_notes.manage`; providers cannot
+  reach it) — one history, no duplicates. UI: case workspace Tasks + Communication +
+  unified Activity tabs, a My Tasks page, a discharge-dashboard task widget, and an
+  Operations task queue. No attachments, analytics, or automation.
 
 ---
 
@@ -204,13 +218,13 @@ COMPLETED
   6. Basic Provider Portal
   7. Nonnis Admin Operations Control Center
   8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
-  9. Referral Workflow + Manual Provider Selection   ← current slice
+  9. Referral Workflow + Manual Provider Selection
+  10. Tasks + Basic Case Messaging + Unified Timeline   ← current slice
 
 NEXT
-  10. Tasks + Basic Case Messaging + Unified Timeline
+  11. Discharge Readiness Score + Operational Blockers
 
 REMAINING
-  11. Discharge Readiness Score + Operational Blockers
   12. Basic Reporting + Administrative Reports
   13. Public Residential Provider Directory
   14. Full Core-System Audit + Production Hardening
@@ -228,7 +242,8 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Tasks + Basic Case Messaging + Unified Timeline** (item 10): a simple manual
-task-management feature (assignee, due date, priority, status, related case) and a
-basic case-linked messaging/notes surface, unified into the existing case activity
-timeline. Manual only — no automated task creation, reminders, or escalation.
+**Discharge Readiness Score + Operational Blockers** (item 11): a deterministic,
+transparent readiness summary for a case (built from existing facts — assessment
+completeness, requirements, referrals/placements, service start) plus explicit
+operational blockers, hardening completion rules. Deterministic and explainable —
+NOT an AI/predictive score, and NOT a matching or automation engine.
