@@ -19,10 +19,11 @@ import { OverviewTab } from "./OverviewTab";
 import { AssessmentTab } from "./AssessmentTab";
 import { RequirementsTab } from "./RequirementsTab";
 import { ServiceRequestsTab } from "./ServiceRequestsTab";
+import { ReferralsTab } from "./ReferralsTab";
 import { ActivityTab } from "./ActivityTab";
 import { CaseHeaderActions } from "./CaseHeaderActions";
 
-const TABS = ["Overview", "Assessment", "Service Requests", "Requirements", "Activity"] as const;
+const TABS = ["Overview", "Assessment", "Service Requests", "Referrals", "Requirements", "Activity"] as const;
 type Tab = (typeof TABS)[number];
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
@@ -103,6 +104,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           {tab === "Overview" ? <OverviewTab caseDetail={data} /> : null}
           {tab === "Assessment" ? <AssessmentTab caseDetail={data} /> : null}
           {tab === "Service Requests" ? <ServiceRequestsTab caseDetail={data} onChange={reload} /> : null}
+          {tab === "Referrals" ? <ReferralsTab caseDetail={data} onChange={reload} /> : null}
           {tab === "Requirements" ? <RequirementsTab caseDetail={data} onChange={reload} /> : null}
           {tab === "Activity" ? <ActivityTab caseDetail={data} /> : null}
         </div>
