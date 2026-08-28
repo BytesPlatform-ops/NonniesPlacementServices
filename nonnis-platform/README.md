@@ -8,9 +8,14 @@ The central business object is the **discharge case**. All architecture is
 designed around a case moving through its lifecycle:
 
 ```
-intake → requirements → provider matching → referrals → provider responses
-→ coordination → discharge → service commencement → follow-up → completion
+intake → requirements → manual provider search/selection → referrals →
+provider responses → coordination → discharge → service commencement →
+follow-up → completion
 ```
+
+Provider selection is **manual** throughout: a user searches and filters
+providers and chooses one by hand. There is no automated matching or
+recommendation engine (see **Current agreed scope** below).
 
 It is not a staffing / job platform. It will eventually serve three user groups —
 **Discharge Professionals**, **Service Providers**, and **Nonnis Operations Staff** —
@@ -112,24 +117,53 @@ nonnis-platform/
 
 ---
 
-## Intentionally NOT implemented yet
+## Current agreed scope
 
-These are deliberately deferred to later prompts. The architecture does not block
-them. Rather than stub ~20 empty modules (placeholder noise), the future backend
-module boundaries are documented here and will be added when built:
+The authoritative scope definition lives in [`SCOPE.md`](./SCOPE.md). In short, the
+platform covers **standard operational/admin functionality**: users, roles &
+permissions, organizations, facilities, providers & provider profiles/services/
+availability, service categories, discharge cases, intake, requirements, service
+requests, case assignment, manual workflows, referrals, provider responses, tasks,
+basic case communication, basic operational dashboards, basic reporting, general
+platform administration, and a public residential provider directory.
 
-identity · organizations · facilities · patients · case-requirements ·
-service-requests · providers · provider-services · provider-coverage ·
-provider-capacity · provider-credentials · matching · referrals · placements ·
-tasks · communications · documents · notifications · workflow-automation ·
-escalations · outcomes · analytics · integrations
+Not yet built but **in scope** for later slices: standard provider management &
+capacity, a basic provider portal, the Nonnis operations control center, a
+manual-provider-selection referral workflow, tasks & basic case messaging, the
+Discharge Readiness Score, basic reporting/exports, and the public provider
+directory.
 
-Also deferred: authentication, RBAC/MFA, provider matching engine, referral sending,
-provider portal, discharge-professional & operations dashboards, messaging/SMS/email,
-document uploads, analytics dashboards, EHR/FHIR/insurance integrations, billing, AI.
+### Excluded advanced modules — DO NOT BUILD
 
-`WorkflowEvent.actorRef` and `Case.dischargeProfessionalRef` are nullable string
-placeholders that will point at `User` ids once identity/auth is added.
+Five large systems are explicitly **out of scope**. Do not implement them, and do
+not grow existing features into them:
+
+1. **External API & Integration Architecture** — EHR/hospital/insurance
+   integrations, FHIR interoperability, reconciliation, data-mapping/retry engines,
+   integration monitoring. *(The app's own internal `/api/v1` REST API is required
+   and unaffected — this exclusion is only the dedicated external-integration
+   platform.)*
+2. **Workflow Automation Engine** — configurable event-condition-action rules, rule
+   builders, automated deadlines/escalations/reminders, background automation
+   orchestration. *(Manual workflows, case status transitions, `WorkflowEvent`
+   history, manual assignment, and deterministic attention indicators remain — they
+   are business history and operational UI, not an automation engine.)*
+3. **Provider Matching Engine** — eligibility filtering engines, weighted scoring,
+   ranking, match percentages, recommendation/ML matching, automated selection.
+   *(Provider selection is manual CRUD search/filter only.)*
+4. **Advanced Analytics & Reporting** — analytics event pipelines, scorecards,
+   trend/cohort analysis, predictive metrics, BI/warehouse architecture. *(Basic
+   operational counts, grouped summaries, simple filters, and administrative reports
+   remain in scope.)*
+5. **Document & Compliance Management System** — document management/versioning,
+   approval workflows, credential verification/expiration tracking, compliance
+   dashboards/rules engines, e-signature, virus scanning. *(Simple informational
+   provider-profile fields — e.g. license number as plain metadata — are allowed if
+   genuinely needed, but must not become tracking/verification workflows.)*
+
+`WorkflowEvent` and `AuditEvent` are **core** and remain: the former is business/
+activity history, the latter is administrative-security accountability. Neither is an
+excluded module.
 
 ---
 
