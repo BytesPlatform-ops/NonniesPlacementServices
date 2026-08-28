@@ -19,9 +19,14 @@ export function OperationsDashboard() {
         title="Operations control center"
         description="Where coordination needs attention across the network — and who needs to act."
         actions={
-          <Link href="/operations/providers" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Provider overview
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/operations/referrals" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Referrals
+            </Link>
+            <Link href="/operations/providers" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Provider overview
+            </Link>
+          </div>
         }
       />
 
