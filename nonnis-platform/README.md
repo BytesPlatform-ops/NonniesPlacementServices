@@ -236,6 +236,40 @@ npm run bootstrap:admin -- you@org.com # first NONNIS_ADMIN (email supplied by y
 `bootstrap:admin` is idempotent and requires `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 It never hardcodes an email or secret.
 
+## Discharge case workspace (this slice)
+
+- **Dashboard** (`GET /api/v1/dashboard/discharge-professional`) — aggregates for the
+  active organization: assigned-to-me, overdue, due-soon, needing-attention,
+  missing-info, blocked-requirement counts; expected-discharge buckets
+  (overdue/today/24h/3d/7d/later/none, timezone-safe UTC day math); and case +
+  activity shortlists. Frontend at `/dashboard`.
+- **Case attention** — a deterministic, non-AI `case-assessment` module returns
+  structured attention reasons (`code`, `severity` INFO/WARNING/CRITICAL, `label`)
+  and completeness (percentage, checks, missing, blockers) from current facts only.
+  Not the future Discharge Readiness Score.
+- **Case list** — server-side filtering (`search`, `status`, `facilityId`,
+  `assignedToMe`, `assignedUserId` (permission-gated), `expectedFrom/To`, `overdue`,
+  `attentionOnly`, `incompleteOnly`), whitelisted `sort`/`order`, pagination, and
+  per-row completeness/blockers/attention.
+- **Case create/edit** — `POST /cases`, `PATCH /cases/:id` (terminal cases are not
+  editable); sectioned intake at `/cases/new` with new-or-existing patient.
+- **Requirements** & **service requests** — `GET/POST/PATCH /cases/:id/requirements`
+  and `.../service-requests` (+ `DELETE` cancel). RequirementStatus enum
+  (PENDING/IN_PROGRESS/BLOCKED/COMPLETE/NOT_REQUIRED); blocked/incomplete required
+  items raise attention.
+- **Assignment** — `PATCH /cases/:id/assignment` (permission `cases.assign`),
+  validates the assignee has an active, case-capable membership in the case's org;
+  records CASE_ASSIGNED/REASSIGNED/UNASSIGNED workflow events (+ audit on reassign).
+- **Status transitions** — `POST /cases/:id/transition` via a centralized policy.
+  This slice permits only DRAFT ⇄ READY_FOR_REVIEW and → CANCELLED; DRAFT →
+  READY_FOR_REVIEW is gated on completeness and returns structured blockers (422).
+  Later statuses remain readable and are driven by future modules.
+- **Workspace UI** — `/cases/[id]` with Overview / Assessment / Service Requests /
+  Requirements / Activity tabs, attention header, completeness meter, and timeline.
+- **Theme** — the platform UI was aligned to the public site's "Warm Premium
+  Placement" brand (umber/bronze/antique-gold on warm ivory, Fraunces + Inter),
+  adapted for a calm, dense operations console.
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root is untouched by this platform. The
