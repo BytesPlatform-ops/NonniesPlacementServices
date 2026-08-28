@@ -15,6 +15,8 @@ export interface AppConfig {
   supabaseUrl: string | undefined;
   supabaseAnonKey: string | undefined;
   supabaseServiceRoleKey: string | undefined;
+  /** Shared secret for the server-to-server website form ingestion endpoint. */
+  formIngestToken: string | undefined;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -28,5 +30,6 @@ export function loadConfiguration(): AppConfig {
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    formIngestToken: process.env.FORM_INGEST_TOKEN,
   };
 }

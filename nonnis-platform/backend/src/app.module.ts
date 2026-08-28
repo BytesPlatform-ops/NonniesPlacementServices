@@ -7,6 +7,7 @@ import { CasesModule } from "./modules/cases/cases.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { FacilitiesModule } from "./modules/facilities/facilities.module";
+import { FormSubmissionsModule } from "./modules/form-submissions/form-submissions.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OperationsModule } from "./modules/operations/operations.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
@@ -29,6 +30,7 @@ import { UsersModule } from "./modules/users/users.module";
     ProvidersModule,
     ProviderPortalModule,
     OperationsModule,
+    FormSubmissionsModule,
   ],
 })
 export class AppModule {}
