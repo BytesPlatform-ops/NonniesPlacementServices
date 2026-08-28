@@ -10,6 +10,7 @@ import { FacilitiesModule } from "./modules/facilities/facilities.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { ProvidersModule } from "./modules/providers/providers.module";
+import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.module";
 import { UsersModule } from "./modules/users/users.module";
 
 @Module({
@@ -25,6 +26,7 @@ import { UsersModule } from "./modules/users/users.module";
     UsersModule,
     CatalogModule,
     ProvidersModule,
+    ProviderPortalModule,
   ],
 })
 export class AppModule {}
