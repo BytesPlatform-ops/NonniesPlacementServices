@@ -28,6 +28,10 @@ export const PERMISSIONS = {
   PROVIDER_CAPACITY_MANAGE_OWN: "provider_capacity.manage_own",
   FORM_SUBMISSIONS_READ: "form_submissions.read",
   FORM_SUBMISSIONS_MANAGE: "form_submissions.manage",
+  REFERRALS_READ: "referrals.read",
+  REFERRALS_MANAGE: "referrals.manage",
+  REFERRALS_READ_ALL: "referrals.read_all",
+  REFERRALS_RESPOND_OWN: "referrals.respond_own",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -56,6 +60,10 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN]: "Update capacity/availability for the actor's own provider",
   [PERMISSIONS.FORM_SUBMISSIONS_READ]: "Read website form submissions",
   [PERMISSIONS.FORM_SUBMISSIONS_MANAGE]: "Review, annotate and update website form submissions",
+  [PERMISSIONS.REFERRALS_READ]: "Read referrals for authorized cases/providers",
+  [PERMISSIONS.REFERRALS_MANAGE]: "Create, send and manage referrals for authorized cases",
+  [PERMISSIONS.REFERRALS_READ_ALL]: "Read referrals across all organizations (platform-wide)",
+  [PERMISSIONS.REFERRALS_RESPOND_OWN]: "Respond to referrals for the actor's own provider",
 };
 
 export const ROLES = {
@@ -99,6 +107,9 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE,
       PERMISSIONS.FORM_SUBMISSIONS_READ,
       PERMISSIONS.FORM_SUBMISSIONS_MANAGE,
+      PERMISSIONS.REFERRALS_READ,
+      PERMISSIONS.REFERRALS_MANAGE,
+      PERMISSIONS.REFERRALS_READ_ALL,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
@@ -112,6 +123,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.CASES_UPDATE,
       PERMISSIONS.PROVIDERS_READ,
       PERMISSIONS.SERVICE_CATEGORIES_READ,
+      PERMISSIONS.REFERRALS_READ,
+      PERMISSIONS.REFERRALS_MANAGE,
     ],
   },
   [ROLES.PROVIDER_ADMIN]: {
@@ -127,6 +140,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDERS_MANAGE_OWN,
       PERMISSIONS.SERVICE_CATEGORIES_READ,
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
+      PERMISSIONS.REFERRALS_READ,
+      PERMISSIONS.REFERRALS_RESPOND_OWN,
     ],
   },
   [ROLES.PROVIDER_STAFF]: {
@@ -138,6 +153,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDERS_READ,
       PERMISSIONS.SERVICE_CATEGORIES_READ,
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE_OWN,
+      PERMISSIONS.REFERRALS_READ,
+      PERMISSIONS.REFERRALS_RESPOND_OWN,
     ],
   },
 };
