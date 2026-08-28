@@ -191,6 +191,8 @@ export class ProvidersService {
 
   async update(user: RequestUser, id: string, dto: UpdateProviderDto): Promise<ProviderDetailView> {
     const ref = await this.access.loadForWrite(user, id);
+    // Internal notes are Nonnis-only: provider-org users can neither read nor write them.
+    const internalNotes = canManageAllProviders(user) ? dto.internalNotes : undefined;
     await this.prisma.provider.update({
       where: { id },
       data: {
@@ -207,7 +209,7 @@ export class ProvidersService {
         country: dto.country,
         timezone: dto.timezone,
         eligibilityNotes: dto.eligibilityNotes,
-        internalNotes: dto.internalNotes,
+        internalNotes,
         licenseNumber: dto.licenseNumber,
         licenseType: dto.licenseType,
       },

@@ -41,8 +41,10 @@ export class ProvidersController {
     return this.providers.update(user, id, dto);
   }
 
+  // Provider status is Nonnis-controlled only — provider-org users cannot
+  // (re)activate/pause their own provider.
   @Patch(":id/status")
-  @RequireAnyPermission(...WRITE)
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
   setStatus(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
