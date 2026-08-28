@@ -145,6 +145,16 @@ enum WorkflowEventType {
   SERVICE_START_SCHEDULED
   SERVICE_STARTED
   SERVICE_START_UNSUCCESSFUL
+  TASK_CREATED
+  TASK_ASSIGNED
+  TASK_REASSIGNED
+  TASK_STARTED
+  TASK_COMPLETED
+  TASK_CANCELLED
+  TASK_UPDATED
+  CASE_MESSAGE_SENT
+  PROVIDER_MESSAGE_SENT
+  INTERNAL_NOTE_ADDED
 }
 
 /// Lifecycle of a discrete case requirement.
@@ -329,6 +339,8 @@ model Case {
   serviceRequests               ServiceRequest[]
   workflowEvents                WorkflowEvent[]
   referrals                     Referral[]
+  tasks                         Task[]
+  messages                      Message[]
 
   @@index([organizationId])
   @@index([patientId])
@@ -1019,6 +1031,7 @@ model Referral {
   provider       Provider           @relation(fields: [providerId], references: [id], onDelete: Restrict)
   responses      ReferralResponse[]
   placement      Placement?
+  messages       Message[]
 
   @@index([caseId])
   @@index([serviceRequestId])
@@ -1068,4 +1081,80 @@ model Placement {
 
   @@index([status])
   @@map("placements")
+}
+
+// ---------------------------------------------------------------------------
+// Manual case tasks & case-linked messaging (all user-driven; no automation).
+// ---------------------------------------------------------------------------
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// Communication/note visibility. CASE_TEAM = case org + Nonnis; NONNIS_INTERNAL
+/// = Nonnis staff only; PROVIDER_REFERRAL = scoped to one referral's provider
+/// plus the case/Nonnis side.
+enum MessageScope {
+  CASE_TEAM
+  NONNIS_INTERNAL
+  PROVIDER_REFERRAL
+}
+
+/// A concrete, manually-created action tied to a case. Overdue is DERIVED at
+/// read time (dueAt < now and not completed/cancelled) — never a stored status.
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  caseId         String       @db.Uuid
+  title          String
+  description    String?
+  priority       TaskPriority @default(NORMAL)
+  status         TaskStatus   @default(OPEN)
+
+  assigneeUserId    String?   @db.Uuid
+  createdByUserId   String    @db.Uuid
+  dueAt             DateTime?
+  completedAt       DateTime?
+  completedByUserId String?   @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([assigneeUserId])
+  @@index([status])
+  @@index([organizationId])
+  @@map("case_tasks")
+}
+
+/// An append-only, case-linked message. PROVIDER_REFERRAL messages carry the
+/// referralId they belong to; other scopes leave it null.
+model Message {
+  id           String       @id @default(uuid()) @db.Uuid
+  caseId       String       @db.Uuid
+  scope        MessageScope
+  referralId   String?      @db.Uuid
+  senderUserId String       @db.Uuid
+  body         String
+  createdAt    DateTime     @default(now())
+
+  case     Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  referral Referral? @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, scope])
+  @@index([referralId])
+  @@index([createdAt])
+  @@map("case_messages")
 }
