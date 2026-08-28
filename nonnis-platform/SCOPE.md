@@ -114,9 +114,14 @@ and do not let an in-scope feature evolve into them.
   a referral emails the provider) are allowed as a normal product action later. They
   must not become configurable automated reminder/escalation workflows. (Not built in
   this realignment slice — architecture compatibility is preserved only.)
-- **Public website forms** remain reference-only (styling / field structure /
-  validation). Their submissions go to email and are not wired into the platform
-  unless explicitly requested later.
+- **Public website forms — future additive persistence (agreed).** Today the
+  existing public Nonnis website forms are used only as a UI reference (styling /
+  field structure / validation) and their submissions go to email. A future slice
+  will ALSO persist the same submissions into the platform so admin staff can view
+  them internally. This is **additive**: the existing email delivery and any
+  current document/report output MUST continue to work unchanged; platform
+  persistence is added alongside them. The forms are **not** wired into the
+  platform yet — do not connect them until that slice.
 
 ---
 
@@ -134,6 +139,15 @@ and do not let an in-scope feature evolve into them.
   assessment, requirements & service requests, case assignment, deterministic
   attention/completeness model, safe manual status transitions with structured
   blockers, workflow timeline, brand-aligned UI.
+- **Slice 4 — Scope Realignment & Architecture Cleanup:** documented the agreed
+  scope and the five excluded advanced modules; no functional regressions.
+- **Slice 5 — Provider Management + Service Categories + Capacity:** provider
+  directory (profiles, services, geographic coverage, accepted payment/insurance
+  types, languages, operating hours, eligibility, capacity/availability, status),
+  admin-managed ServiceCategory/PaymentType/Language catalogs, provider search &
+  filtering, strict provider-organization isolation, and provider RBAC — all manual
+  CRUD, no matching/scoring/compliance. Provider users reuse the existing
+  User + OrganizationMembership identity model.
 
 ---
 
@@ -144,21 +158,26 @@ COMPLETED
   1. Platform Foundation
   2. Identity / Authentication / Authorization / Organizations / RBAC
   3. Discharge Professional Dashboard & Case Workspace
+  4. Scope Realignment & Architecture Cleanup
+  5. Provider Management + Service Categories + Capacity   ← current slice
 
-CURRENT
-  4. Scope Realignment & Architecture Cleanup   ← this slice
+NEXT
+  6.  Basic Provider Portal
 
 REMAINING
-  5.  Provider Management + Service Categories + Capacity
-  6.  Basic Provider Portal
   7.  Nonnis Admin Operations Control Center
   8.  Referral Workflow with Manual Provider Selection
   9.  Tasks + Basic Case Messaging + Unified Timeline
   10. Discharge Readiness Score + Operational Blockers
   11. Basic Reporting + Administrative Reports
   12. Public Residential Provider Directory
-  13. Full Core-System Audit + Production Hardening
+  13. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
+  14. Full Core-System Audit + Production Hardening
 ```
+
+> Slice 13 (Website Form Submissions) is additive: the existing public-website
+> email delivery and document/report output must keep working; platform
+> persistence is added alongside so admin staff can view submissions internally.
 
 There are **no** future slices for the Matching Engine, Automation Engine,
 Document/Compliance System, Advanced Analytics, or External Integration
@@ -168,9 +187,9 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Provider Management + Service Categories + Capacity** (item 5): provider
-organizations/profiles, services offered, geographic coverage, accepted
-insurance/payment types, languages, hours of operation, eligibility information,
-current capacity/availability, basic provider status, provider users, provider
-administration, service categories, and provider search/filtering — **manual CRUD
-only**, with no matching, compliance workflows, or scorecards.
+**Basic Provider Portal** (item 6): a focused, permission-scoped surface for
+Provider Admin / Provider Staff users to view and maintain **their own** provider
+profile, services, coverage, payment types, languages, hours and capacity — reusing
+the Slice 5 provider APIs and the existing `providers.manage_own` /
+`provider_capacity.manage_own` boundaries. No matching, scoring, compliance, or
+cross-provider visibility.

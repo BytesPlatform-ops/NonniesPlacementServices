@@ -127,11 +127,16 @@ requests, case assignment, manual workflows, referrals, provider responses, task
 basic case communication, basic operational dashboards, basic reporting, general
 platform administration, and a public residential provider directory.
 
-Not yet built but **in scope** for later slices: standard provider management &
-capacity, a basic provider portal, the Nonnis operations control center, a
-manual-provider-selection referral workflow, tasks & basic case messaging, the
-Discharge Readiness Score, basic reporting/exports, and the public provider
-directory.
+Standard **provider management** (provider profiles, services, geographic coverage,
+payment/insurance types, languages, operating hours, eligibility, capacity, status,
+search/filter) and the admin-managed **service-category / payment-type / language**
+catalogs are now implemented (see **Provider directory** below).
+
+Not yet built but **in scope** for later slices: a basic provider portal, the Nonnis
+operations control center, a manual-provider-selection referral workflow, tasks &
+basic case messaging, the Discharge Readiness Score, basic reporting/exports, the
+public provider directory, and additive persistence of public-website form
+submissions into the platform (alongside the existing email flow).
 
 ### Excluded advanced modules — DO NOT BUILD
 
@@ -304,9 +309,45 @@ It never hardcodes an email or secret.
   Placement" brand (umber/bronze/antique-gold on warm ivory, Fraunces + Inter),
   adapted for a calm, dense operations console.
 
+## Provider directory (Slice 5)
+
+A Nonnis-managed provider directory for **manual** provider selection — no matching,
+scoring, ranking, or compliance workflows.
+
+- **Provider** is one-to-one with a `PROVIDER` `Organization` (the org owns the legal
+  identity; the provider owns operational/directory detail). Simple status
+  `ACTIVE / INACTIVE / PAUSED`.
+- **Endpoints:** `GET/POST /providers`, `GET/PATCH /providers/:id`,
+  `PATCH /providers/:id/status`, `GET /providers/:id/users`, and per-provider
+  sub-resources for `services`, `coverage`, `payment-types`, `languages`, `hours`
+  (`PUT`), and `capacity` (`PUT`). Admin catalogs: `GET/POST/PATCH
+  /service-categories` (+`/status`), `/payment-types`, `/languages`.
+- **Search/filter** (`GET /providers`): `q`, `status`, `serviceCategoryId`, `state`,
+  `city`, `postalCode`, `languageId`, `paymentTypeId`, `availability`, whitelisted
+  `sort`/`order`, pagination. Explicit filtering only — never suitability ranking.
+- **Isolation:** Nonnis staff manage all providers; Provider Admin/Staff are bounded
+  to their own organization's provider (cross-provider access → 404). Provider users
+  reuse the existing `User` + `OrganizationMembership` model. New permissions:
+  `providers.read/manage/manage_own`, `service_categories.read/manage`,
+  `provider_capacity.manage/manage_own`.
+- **Capacity** is a simple current-availability record (optionally per category);
+  history is captured via `AuditEvent`. No forecasting/scheduling/analytics.
+- **Service categories** are an admin-managed catalog (`ServiceCategory` model);
+  the legacy `ServiceCategoryCode` enum was preserved (renamed, non-destructive) and
+  `ServiceRequest` gained an additive nullable `serviceCategoryId` link.
+- **UI:** `/providers` (directory + management, permission-aware), `/providers/new`,
+  `/providers/[id]` (Overview / Services / Coverage / Payment / Languages / Hours /
+  Capacity / Users tabs), and `/admin/service-categories` (catalog admin).
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root is untouched by this platform. The
 only repository-level changes are isolation guards so tooling never crosses the
 boundary: the root `tsconfig.json` and `eslint.config.mjs` exclude `nonnis-platform`,
 and `.gitignore` ignores its build artifacts.
+
+Existing public-website forms remain **reference-only** for now (styling, field
+structure, validation) and continue delivering by email. A future slice (see
+`SCOPE.md`) will **additionally** persist those submissions into the platform for
+internal viewing — additive to, never replacing, the current email/document flow.
+Do not connect the forms until that slice.
