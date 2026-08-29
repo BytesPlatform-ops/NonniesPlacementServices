@@ -7,9 +7,11 @@ import { caseStatusMeta } from "@/lib/case-status";
 import { attentionLabel, attentionTone } from "@/lib/attention";
 import { formatDate, humanizeEnum } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
+import { formatReadinessPercentage, readinessLevelLabel, readinessLevelTone } from "@/lib/readiness";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { getCase } from "@/services/cases.service";
+import { getCaseReadiness } from "@/services/readiness.service";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -22,16 +24,22 @@ import { ServiceRequestsTab } from "./ServiceRequestsTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { TasksTab } from "./TasksTab";
 import { CommunicationTab } from "./CommunicationTab";
+import { ReadinessTab } from "./ReadinessTab";
 import { ActivityTab } from "./ActivityTab";
 import { CaseHeaderActions } from "./CaseHeaderActions";
 
-const TABS = ["Overview", "Assessment", "Service Requests", "Referrals", "Requirements", "Tasks", "Communication", "Activity"] as const;
+const TABS = ["Overview", "Assessment", "Service Requests", "Referrals", "Requirements", "Tasks", "Communication", "Readiness", "Activity"] as const;
 type Tab = (typeof TABS)[number];
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
   const { activeOrganizationId, hasPermission } = useAuth();
   const { data, loading, error, reload } = useAsync(() => getCase(caseId), [caseId, activeOrganizationId]);
+  const readinessAsync = useAsync(() => getCaseReadiness(caseId), [caseId, activeOrganizationId]);
   const [tab, setTab] = useState<Tab>("Overview");
+
+  const reloadAll = async () => {
+    await Promise.all([reload(), readinessAsync.reload()]);
+  };
 
   const back = (
     <Link href="/cases" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
@@ -61,6 +69,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
   const status = caseStatusMeta(data.status);
   const attention = data.assessment.attention;
+  const readiness = readinessAsync.data;
 
   return (
     <div className="space-y-6">
@@ -71,6 +80,12 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={status.label} tone={status.tone} />
+            {readiness ? (
+              <StatusBadge
+                label={`Readiness ${formatReadinessPercentage(readiness.percentage)} · ${readinessLevelLabel(readiness.level)}`}
+                tone={readinessLevelTone(readiness.level)}
+              />
+            ) : null}
             {attention.level !== "NONE" ? (
               <StatusBadge label={attentionLabel(attention.level, attention.count)} tone={attentionTone(attention.level)} />
             ) : (
@@ -110,6 +125,16 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           {tab === "Requirements" ? <RequirementsTab caseDetail={data} onChange={reload} /> : null}
           {tab === "Tasks" ? <TasksTab caseDetail={data} onChange={reload} /> : null}
           {tab === "Communication" ? <CommunicationTab caseDetail={data} /> : null}
+          {tab === "Readiness" ? (
+            <ReadinessTab
+              caseDetail={data}
+              readiness={readiness ?? null}
+              loading={readinessAsync.loading}
+              canUpdate={hasPermission(PERMISSIONS.CASES_UPDATE)}
+              onChange={reloadAll}
+              onNavigate={(t) => setTab(t as Tab)}
+            />
+          ) : null}
           {tab === "Activity" ? <ActivityTab caseDetail={data} /> : null}
         </div>
       </div>
