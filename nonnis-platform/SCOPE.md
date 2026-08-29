@@ -203,6 +203,29 @@ and do not let an in-scope feature evolve into them.
   reach it) — one history, no duplicates. UI: case workspace Tasks + Communication +
   unified Activity tabs, a My Tasks page, a discharge-dashboard task widget, and an
   Operations task queue. No attachments, analytics, or automation.
+- **Slice 11 — Discharge Readiness Score + Operational Blockers:** a deterministic,
+  explainable readiness evaluation computed **live** from source-of-truth records
+  (case info, requirements, service requests, accepted placements) — never a persisted
+  column, no schema change. The pure `readiness-domain` returns transparent
+  **components** (COMPLETE / INCOMPLETE / BLOCKED / NOT_APPLICABLE), a **percentage**
+  over applicable components, **mandatory gates**, and normalized **blockers**
+  (INFO / WARNING / CRITICAL). Two concepts are kept distinct: percentage never decides
+  readiness — `ready` is true only when **every** mandatory gate passes (manual block,
+  case information, assignment, service-request completeness, no blocked/incomplete
+  required requirement, accepted provider placement for every active service request,
+  scheduled service start, consistent dates). Placement reuses the referral slice's
+  `allServiceRequestsPlaced` rule; a conditional acceptance or cancelled/unsuccessful
+  placement never satisfies it. It is separate from — and shares helpers with — the
+  existing Case Attention model. `GET /cases/:id/readiness` (cases.read; providers
+  excluded). Explicit **manual** lifecycle actions harden the case lifecycle:
+  `mark-ready-for-discharge` (gates must pass), `mark-discharged` (requires
+  READY_FOR_DISCHARGE + an explicit actual discharge date), `mark-service-started`
+  (discharged + every required placement STARTED), and `mark-completed` (deterministic
+  completion eligibility). Readiness NEVER self-transitions status; regression is shown
+  (`statusMismatch`) but never auto-bounced. UI: a workspace **Readiness** tab (dial,
+  gates, component checklist, blockers with links, actions), a header readiness badge,
+  a discharge-dashboard readiness widget, and Operations readiness counts + queue
+  filters. No AI, prediction, scoring engine, matching, analytics, or automation.
 
 ---
 
@@ -219,13 +242,13 @@ COMPLETED
   7. Nonnis Admin Operations Control Center
   8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
   9. Referral Workflow + Manual Provider Selection
-  10. Tasks + Basic Case Messaging + Unified Timeline   ← current slice
+  10. Tasks + Basic Case Messaging + Unified Timeline
+  11. Discharge Readiness Score + Operational Blockers   ← current slice
 
 NEXT
-  11. Discharge Readiness Score + Operational Blockers
+  12. Basic Reporting + Administrative Reports
 
 REMAINING
-  12. Basic Reporting + Administrative Reports
   13. Public Residential Provider Directory
   14. Full Core-System Audit + Production Hardening
 ```
@@ -242,8 +265,9 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Discharge Readiness Score + Operational Blockers** (item 11): a deterministic,
-transparent readiness summary for a case (built from existing facts — assessment
-completeness, requirements, referrals/placements, service start) plus explicit
-operational blockers, hardening completion rules. Deterministic and explainable —
-NOT an AI/predictive score, and NOT a matching or automation engine.
+**Basic Reporting + Administrative Reports** (item 12): simple, deterministic
+counts and grouped summaries over existing data — total/open/completed cases, cases
+by status/facility/organization, referral response counts, provider directory
+summaries, readiness snapshots — with date-range filters and exportable admin
+reports. Basic reporting only — NOT analytics event pipelines, trend/cohort analysis,
+predictive metrics, BI dashboards, or a warehouse. No new automation.

@@ -140,12 +140,12 @@ Public-website form submissions are now **additionally persisted** into the plat
 (alongside the unchanged email/PDF flow) — see **Website form submissions** below.
 
 The **Referral Workflow** (manual provider selection → provider response →
-placement → service start) and **Tasks + Case Messaging + Unified Timeline** are now
-implemented (see the corresponding sections below).
+placement → service start), **Tasks + Case Messaging + Unified Timeline**, and
+**Discharge Readiness + Operational Blockers** are now implemented (see the
+corresponding sections below).
 
-Not yet built but **in scope** for later slices (next first): the Discharge Readiness
-Score + operational blockers, basic reporting/exports, and the public provider
-directory.
+Not yet built but **in scope** for later slices (next first): basic
+reporting/exports and the public provider directory.
 
 ### Excluded advanced modules — DO NOT BUILD
 
@@ -294,7 +294,8 @@ It never hardcodes an email or secret.
 - **Case attention** — a deterministic, non-AI `case-assessment` module returns
   structured attention reasons (`code`, `severity` INFO/WARNING/CRITICAL, `label`)
   and completeness (percentage, checks, missing, blockers) from current facts only.
-  Not the future Discharge Readiness Score.
+  Related to, but distinct from, the Discharge Readiness evaluation (Slice 11); they
+  share deterministic helpers.
 - **Case list** — server-side filtering (`search`, `status`, `facilityId`,
   `assignedToMe`, `assignedUserId` (permission-gated), `expectedFrom/To`, `overdue`,
   `attentionOnly`, `incompleteOnly`), whitelisted `sort`/`order`, pagination, and
@@ -478,6 +479,46 @@ escalation anywhere.
   sidebar item; a discharge-dashboard task widget (overdue / due-today / high-urgent);
   an **Operations** task queue; and referral-thread messaging in both the staff
   referrals tab and the provider referral detail. No attachments or analytics.
+
+## Discharge readiness & operational blockers (Slice 11)
+
+Deterministic, explainable readiness — **NOT** AI, prediction, scoring engines,
+matching, analytics, or automation. Readiness is always computed **live** from
+source-of-truth records; there is no persisted readiness column and no schema change.
+
+- **Domain** (`readiness-domain.ts`, pure/unit-tested): transparent **components**
+  (COMPLETE / INCOMPLETE / BLOCKED / NOT_APPLICABLE), a **percentage** over applicable
+  components (NOT_APPLICABLE excluded), **mandatory gates**, and normalized
+  **blockers** (INFO / WARNING / CRITICAL). Percentage and readiness are separate:
+  a high percentage **never** makes a case ready. `ready` is true only when **every**
+  gate passes — case active, not manually blocked, case information complete, discharge
+  professional assigned, service requests complete, no blocked/incomplete required
+  requirement, an accepted (non-cancelled, non-unsuccessful) placement for **every**
+  active service request, a scheduled service start for each accepted placement, and
+  consistent discharge dates. Conditional acceptance and cancelled/unsuccessful
+  placements never satisfy the placement gate. Transportation, equipment, and funding
+  are informational (they lower the percentage and raise WARN/INFO blockers, but do not
+  gate). Distinct from — and shares helpers with — the existing Case Attention model.
+- **Live derivation & efficiency:** a single case reads one composed query; list /
+  dashboard / operations surfaces use count/`where` fragments only (never a deep query
+  per row).
+- **API:** `GET /cases/:id/readiness` (`cases.read`; case-org or `cases.read_all`;
+  providers excluded). Manual, explicit lifecycle actions (`cases.update`):
+  `POST /cases/:id/mark-ready-for-discharge` (all gates must pass, else structured
+  blockers), `POST /cases/:id/mark-discharged` (requires READY_FOR_DISCHARGE + an
+  explicit `actualDischargeDate` — discharge is never inferred),
+  `POST /cases/:id/mark-service-started` (discharged + every required placement STARTED;
+  case-level SERVICE_STARTED is never set from a single placement), and
+  `POST /cases/:id/mark-completed` (deterministic completion eligibility). Readiness
+  **never** self-transitions status; regressions surface as `statusMismatch` and are
+  never auto-bounced. Each action writes a `STATUS_CHANGED` WorkflowEvent (+ AuditEvent)
+  with the real actor. `GET /operations/readiness/summary` (`cases.read_all`).
+- **UI:** a workspace **Readiness** tab (percentage dial, level, gates summary,
+  component checklist, blockers with links to the relevant tab, and the discharge
+  actions), a header readiness badge, a discharge-dashboard readiness widget, and
+  Operations readiness counts plus server-side queue filters (ready / not-ready /
+  critical blocker / placement missing / service unscheduled / near-term-not-ready /
+  discharged-not-started).
 
 ## Relationship to the existing website
 
