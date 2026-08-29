@@ -10,6 +10,13 @@ export interface DischargeDashboard {
     missingInfo: number;
     blockedRequirements: number;
   };
+  readiness: {
+    readyForDischarge: number;
+    criticalBlockers: number;
+    nearTermNotReady: number;
+    placementMissing: number;
+    readinessRegression: number;
+  };
   dischargesByBucket: Array<{ bucket: string; label: string; count: number }>;
   assignedToMe: CaseSummary[];
   requiringAttention: CaseSummary[];

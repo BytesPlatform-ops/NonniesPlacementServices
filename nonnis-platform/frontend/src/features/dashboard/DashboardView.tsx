@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import type { CaseSummary } from "@/types/domain";
 import type { DischargeDashboard } from "@/types/dashboard";
 import { DashboardTasksWidget } from "./DashboardTasksWidget";
+import { DashboardReadinessWidget } from "./DashboardReadinessWidget";
 
 export function DashboardView() {
   const { activeOrganizationId, me } = useAuth();
@@ -40,6 +41,8 @@ export function DashboardView() {
   return (
     <div className="space-y-6">
       <PageHeading title={`Welcome back, ${name}`} description="What must happen before your patients can be discharged safely." />
+
+      <DashboardReadinessWidget readiness={data.readiness} />
 
       <DashboardTasksWidget />
 
