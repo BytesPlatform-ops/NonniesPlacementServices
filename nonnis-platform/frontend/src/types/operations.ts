@@ -21,6 +21,15 @@ export interface OperationsSummary {
     noCapacityReported: number;
     unavailable: number;
   };
+  readiness: {
+    readyForDischarge: number;
+    nearTermNotReady: number;
+    criticalBlockers: number;
+    placementMissing: number;
+    acceptedUnscheduled: number;
+    dischargedServiceNotStarted: number;
+    unsuccessfulServiceStarts: number;
+  };
   recentActivity: RecentActivityView[];
 }
 

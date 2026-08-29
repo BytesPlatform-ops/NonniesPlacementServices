@@ -19,13 +19,32 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { Modal } from "./parts";
 
-type ToggleKey = "overdue" | "attentionOnly" | "unassignedOnly" | "blockedOnly" | "incompleteOnly";
+type ToggleKey =
+  | "overdue"
+  | "attentionOnly"
+  | "unassignedOnly"
+  | "blockedOnly"
+  | "incompleteOnly"
+  | "readyOnly"
+  | "notReadyOnly"
+  | "criticalBlockerOnly"
+  | "placementMissingOnly"
+  | "serviceUnscheduledOnly"
+  | "postDischargeNotStartedOnly"
+  | "nearTermNotReadyOnly";
 const TOGGLES: Array<{ key: ToggleKey; label: string }> = [
   { key: "attentionOnly", label: "Needs attention" },
   { key: "overdue", label: "Overdue" },
   { key: "unassignedOnly", label: "Unassigned" },
   { key: "blockedOnly", label: "Blocked" },
   { key: "incompleteOnly", label: "Incomplete" },
+  { key: "readyOnly", label: "Ready for discharge" },
+  { key: "notReadyOnly", label: "Not ready" },
+  { key: "criticalBlockerOnly", label: "Critical blocker" },
+  { key: "placementMissingOnly", label: "Placement missing" },
+  { key: "serviceUnscheduledOnly", label: "Service unscheduled" },
+  { key: "nearTermNotReadyOnly", label: "Near-term, not ready" },
+  { key: "postDischargeNotStartedOnly", label: "Discharged, not started" },
 ];
 
 export function CaseQueue({
@@ -33,12 +52,14 @@ export function CaseQueue({
   description,
   showFilters = true,
   fixedFilters = {},
+  initialToggles,
   pageSize = 20,
 }: {
   title?: string;
   description?: string;
   showFilters?: boolean;
   fixedFilters?: OperationsCaseFilters;
+  initialToggles?: Partial<Record<ToggleKey, boolean>>;
   pageSize?: number;
 }) {
   const { hasPermission } = useAuth();
@@ -54,6 +75,14 @@ export function CaseQueue({
     unassignedOnly: false,
     blockedOnly: false,
     incompleteOnly: false,
+    readyOnly: false,
+    notReadyOnly: false,
+    criticalBlockerOnly: false,
+    placementMissingOnly: false,
+    serviceUnscheduledOnly: false,
+    postDischargeNotStartedOnly: false,
+    nearTermNotReadyOnly: false,
+    ...initialToggles,
   });
   const [sort, setSort] = useState("updatedAt");
   const [page, setPage] = useState(1);

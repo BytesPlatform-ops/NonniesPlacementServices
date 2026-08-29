@@ -18,6 +18,13 @@ export interface OperationsCaseFilters {
   blockedOnly?: boolean;
   incompleteOnly?: boolean;
   unassignedOnly?: boolean;
+  readyOnly?: boolean;
+  notReadyOnly?: boolean;
+  criticalBlockerOnly?: boolean;
+  placementMissingOnly?: boolean;
+  serviceUnscheduledOnly?: boolean;
+  postDischargeNotStartedOnly?: boolean;
+  nearTermNotReadyOnly?: boolean;
   sort?: string;
   order?: string;
 }

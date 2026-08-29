@@ -50,6 +50,18 @@ export function OperationsDashboard() {
             <MetricCard label="Due this week" value={data.cases.dueThisWeek} />
           </div>
 
+          <Panel title="Discharge readiness" description="Current operational readiness across the network.">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+              <MetricCard label="Ready for discharge" value={data.readiness.readyForDischarge} tone="positive" href="/operations/cases?readyOnly=1" />
+              <MetricCard label="Near-term, not ready" value={data.readiness.nearTermNotReady} tone="warning" href="/operations/cases?nearTermNotReadyOnly=1" />
+              <MetricCard label="Critical blockers" value={data.readiness.criticalBlockers} tone="negative" href="/operations/cases?criticalBlockerOnly=1" />
+              <MetricCard label="Placement missing" value={data.readiness.placementMissing} tone="warning" href="/operations/cases?placementMissingOnly=1" />
+              <MetricCard label="Accepted, unscheduled" value={data.readiness.acceptedUnscheduled} tone="warning" href="/operations/cases?serviceUnscheduledOnly=1" />
+              <MetricCard label="Discharged, not started" value={data.readiness.dischargedServiceNotStarted} tone="warning" href="/operations/cases?postDischargeNotStartedOnly=1" />
+              <MetricCard label="Unsuccessful starts" value={data.readiness.unsuccessfulServiceStarts} tone="negative" href="/operations/cases?criticalBlockerOnly=1" />
+            </div>
+          </Panel>
+
           <div className="grid gap-4 sm:grid-cols-3">
             <MetricCard label="Active providers" value={data.providers.active} href="/operations/providers" />
             <MetricCard label="No capacity reported" value={data.providers.noCapacityReported} tone="warning" href="/operations/providers" />
