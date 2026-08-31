@@ -33,4 +33,6 @@ export const PERMISSIONS = {
   MESSAGES_READ: "messages.read",
   MESSAGES_SEND: "messages.send",
   INTERNAL_NOTES_MANAGE: "internal_notes.manage",
+  CONTENT_READ: "content.read",
+  CONTENT_MANAGE: "content.manage",
 } as const;

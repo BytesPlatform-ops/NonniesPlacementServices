@@ -24,6 +24,14 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    title: "Content",
+    items: [
+      { label: "Blog", href: "/content/blog", permission: PERMISSIONS.CONTENT_READ },
+      { label: "Short Videos", href: "/content/videos", permission: PERMISSIONS.CONTENT_READ },
+      { label: "Testimonials", href: "/content/testimonials", permission: PERMISSIONS.CONTENT_READ },
+    ],
+  },
+  {
     title: "Administration",
     items: [
       { label: "Organizations", href: "/admin/organizations", permission: PERMISSIONS.ORGANIZATIONS_MANAGE },
