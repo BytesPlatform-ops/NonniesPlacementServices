@@ -48,7 +48,7 @@ export function ShortVideoStrip({ videos }: { videos: ShortVideoItem[] }) {
     <>
       <div
         ref={trackRef}
-        className="flex cursor-grab snap-x snap-mandatory gap-4 overflow-x-auto pb-4 active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex cursor-grab snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pr-6 active:cursor-grabbing sm:gap-5 sm:pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -62,24 +62,24 @@ export function ShortVideoStrip({ videos }: { videos: ShortVideoItem[] }) {
             type="button"
             role="listitem"
             onClick={() => open(v)}
-            className="group relative aspect-[9/16] w-[220px] shrink-0 snap-start overflow-hidden rounded-[26px] border border-navy/10 bg-midnight text-left shadow-card outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-coral sm:w-[248px]"
+            className="group relative aspect-[9/16] max-h-[72vh] w-[82vw] max-w-[320px] shrink-0 snap-start overflow-hidden rounded-[28px] border border-white/10 bg-midnight text-left shadow-card outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-mint sm:w-[300px] lg:w-[340px] xl:w-[360px]"
             aria-label={`Play video: ${v.title}`}
           >
             {v.posterImageUrl ? (
-              <Image src={v.posterImageUrl} alt="" fill className="object-cover transition-transform duration-700 group-hover:scale-105" sizes="248px" draggable={false} />
+              <Image src={v.posterImageUrl} alt="" fill className="object-cover transition-transform duration-700 group-hover:scale-105" sizes="(max-width: 640px) 82vw, 360px" draggable={false} />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-midnight-700 to-midnight" aria-hidden />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-midnight/85 via-midnight/10 to-transparent" aria-hidden />
+            <div className="absolute inset-0 bg-gradient-to-t from-midnight/90 via-midnight/15 to-transparent" aria-hidden />
 
-            <span className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-navy shadow-glow transition-transform duration-300 group-hover:scale-110">
-              <Play className="h-6 w-6 translate-x-0.5 fill-current" aria-hidden />
+            <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-navy shadow-glow transition-transform duration-300 group-hover:scale-110">
+              <Play className="h-7 w-7 translate-x-0.5 fill-current" aria-hidden />
             </span>
 
-            <div className="absolute inset-x-0 bottom-0 p-4">
-              {v.sourceLabel ? <span className="mb-1 inline-block rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur-sm">{v.sourceLabel}</span> : null}
-              <p className="font-display text-base font-medium leading-snug text-white">{v.title}</p>
-              {v.caption ? <p className="mt-0.5 line-clamp-2 text-xs text-white/70">{v.caption}</p> : null}
+            <div className="absolute inset-x-0 bottom-0 p-5">
+              {v.sourceLabel ? <span className="mb-1.5 inline-block rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">{v.sourceLabel}</span> : null}
+              <p className="font-display text-lg font-medium leading-snug text-white">{v.title}</p>
+              {v.caption ? <p className="mt-1 line-clamp-2 text-xs text-white/75">{v.caption}</p> : null}
             </div>
           </button>
         ))}
