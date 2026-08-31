@@ -15,7 +15,8 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
-    "bootstrap:admin": "node --env-file=.env -r ts-node/register src/scripts/bootstrap-admin.ts"
+    "bootstrap:admin": "node --env-file=.env -r ts-node/register src/scripts/bootstrap-admin.ts",
+    "content:seed-media": "node --env-file=.env -r ts-node/register src/scripts/seed-content-media.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
