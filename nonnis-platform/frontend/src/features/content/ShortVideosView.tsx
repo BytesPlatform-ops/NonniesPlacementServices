@@ -1,0 +1,227 @@
+"use client";
+
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { formatDate } from "@/lib/format";
+import { ApiError } from "@/lib/api-client";
+import { activeLabel, activeTone } from "@/lib/content-status";
+import { useAsync } from "@/hooks/use-async";
+import { useAuth } from "@/providers/auth-provider";
+import { PERMISSIONS } from "@/lib/permissions";
+import {
+  createShortVideo,
+  deleteShortVideo,
+  listShortVideos,
+  setShortVideoActive,
+  updateShortVideo,
+  type VideoFilters,
+} from "@/services/content.service";
+import type { ShortVideoView } from "@/types/content";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Panel } from "@/components/ui/Panel";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Modal } from "@/components/ui/Modal";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
+
+const inputCls =
+  "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
+
+export function ShortVideosView() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission(PERMISSIONS.CONTENT_MANAGE);
+
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [page, setPage] = useState(1);
+  const [editing, setEditing] = useState<ShortVideoView | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  useEffect(() => setPage(1), [debounced]);
+
+  const filters: VideoFilters = useMemo(() => ({ page, pageSize: 20, q: debounced || undefined }), [page, debounced]);
+  const { data, loading, error: loadError, reload } = useAsync(() => listShortVideos(filters), [filters]);
+  const totalPages = data?.totalPages ?? 0;
+
+  const act = async (fn: () => Promise<unknown>, id: string) => {
+    setBusyId(id);
+    setError(null);
+    try {
+      await fn();
+      await reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "The action could not be completed.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const columns: Column<ShortVideoView>[] = [
+    {
+      key: "video",
+      header: "Video",
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-9 shrink-0 overflow-hidden rounded-md border border-sage bg-slate-100">
+            {row.posterImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={row.posterImageUrl} alt="" className="h-full w-full object-cover" />
+            ) : null}
+          </div>
+          <div className="min-w-0">
+            <button type="button" onClick={() => canManage && setEditing(row)} className="text-left font-medium text-brand-800 hover:underline">{row.title}</button>
+            {row.caption ? <p className="truncate text-xs text-slate-500">{row.caption}</p> : null}
+          </div>
+        </div>
+      ),
+    },
+    { key: "source", header: "Source", render: (row) => row.sourceLabel ?? <span className="text-slate-400">—</span> },
+    { key: "order", header: "Order", align: "right", render: (row) => row.sortOrder },
+    { key: "active", header: "Status", render: (row) => <StatusBadge label={activeLabel(row.active)} tone={activeTone(row.active)} /> },
+    { key: "updated", header: "Updated", render: (row) => formatDate(row.updatedAt) },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (row) =>
+        canManage ? (
+          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <button type="button" onClick={() => setEditing(row)} className="text-sm font-medium text-brand-700 hover:underline">Edit</button>
+            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => setShortVideoActive(row.id, !row.active), row.id)} className="text-sm text-slate-500 hover:text-umber disabled:opacity-50">{row.active ? "Deactivate" : "Activate"}</button>
+            <button type="button" disabled={busyId === row.id} onClick={() => { if (window.confirm("Delete this video?")) void act(() => deleteShortVideo(row.id), row.id); }} className="text-sm text-rose-600 hover:underline disabled:opacity-50">Delete</button>
+          </div>
+        ) : null,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <PageHeading
+        title="Short Videos"
+        description="Curate the short-form videos shown on the public blog."
+        actions={canManage ? <button type="button" onClick={() => setCreating(true)} className="rounded-md bg-brand-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-800">New video</button> : undefined}
+      />
+
+      <Panel>
+        <label className="block max-w-sm">
+          <span className="text-xs font-medium text-slate-600">Search</span>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Title…" className={inputCls} />
+        </label>
+      </Panel>
+
+      {error ? <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+
+      <Panel title="Videos" description="Ordered by sort order — lower numbers appear first.">
+        {loading ? (
+          <LoadingState label="Loading videos…" />
+        ) : loadError ? (
+          <ErrorState message={loadError.message} onRetry={reload} />
+        ) : !data || data.items.length === 0 ? (
+          <EmptyState title="No videos" message="Add a short video to feature on the blog." />
+        ) : (
+          <>
+            <DataTable columns={columns} rows={data.items} getRowKey={(r) => r.id} />
+            <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+              <span>{data.total} video{data.total === 1 ? "" : "s"}</span>
+              {totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 disabled:opacity-50">Previous</button>
+                  <span>Page {page} of {totalPages}</span>
+                  <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 disabled:opacity-50">Next</button>
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
+      </Panel>
+
+      {creating ? <VideoModal onClose={() => setCreating(false)} onDone={() => { setCreating(false); void reload(); }} /> : null}
+      {editing ? <VideoModal video={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); void reload(); }} /> : null}
+    </div>
+  );
+}
+
+function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClose: () => void; onDone: () => void }) {
+  const [title, setTitle] = useState(video?.title ?? "");
+  const [caption, setCaption] = useState(video?.caption ?? "");
+  const [videoUrl, setVideoUrl] = useState(video?.videoUrl ?? "");
+  const [posterImageUrl, setPosterImageUrl] = useState(video?.posterImageUrl ?? "");
+  const [sourceLabel, setSourceLabel] = useState(video?.sourceLabel ?? "");
+  const [sortOrder, setSortOrder] = useState(String(video?.sortOrder ?? 0));
+  const [active, setActive] = useState(video?.active ?? true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!title.trim() || !videoUrl.trim()) {
+      setError("Title and video URL are required.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const body = {
+      title: title.trim(),
+      caption: caption.trim() || undefined,
+      videoUrl: videoUrl.trim(),
+      posterImageUrl: posterImageUrl.trim() || undefined,
+      sourceLabel: sourceLabel.trim() || undefined,
+      sortOrder: Number(sortOrder) || 0,
+      active,
+    };
+    try {
+      if (video) await updateShortVideo(video.id, body);
+      else await createShortVideo(body);
+      onDone();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not save the video.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={video ? "Edit video" : "New video"} onClose={onClose} size="lg">
+      {error ? <p className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ModalField label="Title" required className="sm:col-span-2"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} /></ModalField>
+        <ModalField label="Video URL" required description="A site path (/assets/videos/…) or full https:// URL." className="sm:col-span-2"><input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="/assets/videos/example.mp4" className={inputCls} /></ModalField>
+        <ModalField label="Poster / thumbnail URL" className="sm:col-span-2"><input value={posterImageUrl} onChange={(e) => setPosterImageUrl(e.target.value)} placeholder="/assets/images/example.jpg" className={inputCls} /></ModalField>
+        <ModalField label="Caption" className="sm:col-span-2"><input value={caption} onChange={(e) => setCaption(e.target.value)} className={inputCls} /></ModalField>
+        <ModalField label="Source label"><input value={sourceLabel} onChange={(e) => setSourceLabel(e.target.value)} placeholder="Nonnis Stories" className={inputCls} /></ModalField>
+        <ModalField label="Sort order"><input type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className={inputCls} /></ModalField>
+      </div>
+
+      <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="rounded border-slate-300" />
+        Active (visible on the public blog)
+      </label>
+
+      {videoUrl.trim() ? (
+        <div className="mt-4">
+          <p className="mb-1 text-xs font-medium text-slate-500">Preview</p>
+          <video src={videoUrl} poster={posterImageUrl || undefined} controls preload="metadata" className="max-h-64 w-full rounded-md border border-sage bg-black object-contain" />
+          <p className="mt-1 text-xs text-slate-400">Site-relative paths preview on the public website, not here.</p>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
+        <button type="button" disabled={busy || !title.trim() || !videoUrl.trim()} onClick={() => void submit()} className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">{busy ? "Saving…" : "Save video"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ModalField({ label, required, description, className, children }: { label: string; required?: boolean; description?: string; className?: string; children: ReactNode }) {
+  return (
+    <label className={`block ${className ?? ""}`}>
+      <span className="text-sm font-medium text-slate-700">{label}{required ? <span className="ml-0.5 text-rose-600">*</span> : null}</span>
+      {description ? <span className="mt-0.5 block text-xs text-slate-400">{description}</span> : null}
+      {children}
+    </label>
+  );
+}
