@@ -1179,23 +1179,26 @@ enum ContentStatus {
 /// A written blog/article. `body` holds a safe Markdown subset (rendered without
 /// raw-HTML interpretation on the website). Slug is the stable public URL key.
 model BlogPost {
-  id               String        @id @default(uuid()) @db.Uuid
-  title            String
-  slug             String        @unique
-  excerpt          String?
+  id                       String        @id @default(uuid()) @db.Uuid
+  title                    String
+  slug                     String        @unique
+  excerpt                  String?
   /// Markdown-subset article body (headings, paragraphs, lists, emphasis, links).
-  body             String
-  featuredImageUrl String?
-  category         String?
-  displayAuthor    String?
-  metaTitle        String?
-  metaDescription  String?
-  status           ContentStatus @default(DRAFT)
-  publishedAt      DateTime?
-  createdByUserId  String?       @db.Uuid
-  updatedByUserId  String?       @db.Uuid
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  body                     String
+  featuredImageUrl         String?
+  /// Object path within the managed content bucket, when the image is Nonnis-owned
+  /// (enables safe replace/delete). Null for external URLs — never storage-deleted.
+  featuredImageStoragePath String?
+  category                 String?
+  displayAuthor            String?
+  metaTitle                String?
+  metaDescription          String?
+  status                   ContentStatus @default(DRAFT)
+  publishedAt              DateTime?
+  createdByUserId          String?       @db.Uuid
+  updatedByUserId          String?       @db.Uuid
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   shortVideos ShortVideo[]
 
@@ -1209,20 +1212,24 @@ model BlogPost {
 /// URL (local `/assets/...` or an external host); this stores metadata only — no
 /// transcoding or upload pipeline. Optionally associated to a BlogPost.
 model ShortVideo {
-  id              String    @id @default(uuid()) @db.Uuid
-  title           String
-  caption         String?
-  videoUrl        String
-  posterImageUrl  String?
-  sourceLabel     String?
-  blogPostId      String?   @db.Uuid
-  active          Boolean   @default(true)
-  sortOrder       Int       @default(0)
-  publishedAt     DateTime?
-  createdByUserId String?   @db.Uuid
-  updatedByUserId String?   @db.Uuid
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                     String    @id @default(uuid()) @db.Uuid
+  title                  String
+  caption                String?
+  videoUrl               String
+  /// Managed-bucket object path for the video, when Nonnis-owned (else null).
+  videoStoragePath       String?
+  posterImageUrl         String?
+  /// Managed-bucket object path for the poster, when Nonnis-owned (else null).
+  posterImageStoragePath String?
+  sourceLabel            String?
+  blogPostId             String?   @db.Uuid
+  active                 Boolean   @default(true)
+  sortOrder              Int       @default(0)
+  publishedAt            DateTime?
+  createdByUserId        String?   @db.Uuid
+  updatedByUserId        String?   @db.Uuid
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   blogPost BlogPost? @relation(fields: [blogPostId], references: [id], onDelete: SetNull)
 
