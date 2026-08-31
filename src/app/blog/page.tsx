@@ -68,17 +68,17 @@ export default async function BlogIndexPage() {
       </Section>
 
       {videos.length > 0 ? (
-        <Section tone="dark" density="spacious" contained={false} className="overflow-hidden">
+        <Section id="short-videos" tone="dark" density="spacious" contained={false} className="overflow-hidden scroll-mt-24">
           <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12">
             <SectionHeading
               tone="dark"
               eyebrow="Watch"
               title="Short stories from the Nonni's network"
-              description="A closer look at coordinated care — drag, swipe, or tap to watch."
+              description="A closer look at coordinated care — muted previews play as you browse; tap any panel to watch with sound."
             />
           </div>
-          {/* Full-bleed immersive rail: aligns to the container on the left, runs to the edge on the right. */}
-          <div className="mt-10 pl-5 sm:mt-14 sm:pl-8 lg:pl-[max(3rem,calc((100vw-80rem)/2+3rem))]">
+          {/* True full-bleed media wall: edge-to-edge with only a small breathing gutter. */}
+          <div className="mt-10 px-3 sm:mt-14 sm:px-4">
             <ShortVideoStrip videos={videos} />
           </div>
         </Section>
