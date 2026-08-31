@@ -5,6 +5,7 @@ import { PrismaModule } from "./database/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CasesModule } from "./modules/cases/cases.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
+import { ContentModule } from "./modules/content/content.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { FacilitiesModule } from "./modules/facilities/facilities.module";
 import { FormSubmissionsModule } from "./modules/form-submissions/form-submissions.module";
@@ -41,6 +42,7 @@ import { UsersModule } from "./modules/users/users.module";
     TasksModule,
     MessagesModule,
     TimelineModule,
+    ContentModule,
   ],
 })
 export class AppModule {}
