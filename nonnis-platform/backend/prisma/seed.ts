@@ -261,7 +261,9 @@ async function seedContent(): Promise<void> {
   for (const p of blogPosts) {
     await prisma.blogPost.upsert({
       where: { slug: p.slug },
-      update: { title: p.title, category: p.category, excerpt: p.excerpt, body: p.body, displayAuthor: p.displayAuthor, featuredImageUrl: p.featuredImageUrl, metaDescription: p.metaDescription, status: "PUBLISHED", publishedAt: publishedAt(p.daysAgo) },
+      // NOTE: `update` deliberately omits featuredImageUrl so re-running this seed
+      // never clobbers the Supabase URLs set by `npm run content:seed-media`.
+      update: { title: p.title, category: p.category, excerpt: p.excerpt, body: p.body, displayAuthor: p.displayAuthor, metaDescription: p.metaDescription, status: "PUBLISHED", publishedAt: publishedAt(p.daysAgo) },
       create: { slug: p.slug, title: p.title, category: p.category, excerpt: p.excerpt, body: p.body, displayAuthor: p.displayAuthor, featuredImageUrl: p.featuredImageUrl, metaDescription: p.metaDescription, status: "PUBLISHED", publishedAt: publishedAt(p.daysAgo) },
     });
   }
@@ -277,7 +279,9 @@ async function seedContent(): Promise<void> {
   for (const v of videos) {
     await prisma.shortVideo.upsert({
       where: { id: v.id },
-      update: { title: v.title, caption: v.caption, videoUrl: v.videoUrl, posterImageUrl: v.posterImageUrl, sourceLabel: v.sourceLabel, sortOrder: v.sortOrder, active: true },
+      // `update` omits videoUrl/posterImageUrl so re-seeding never clobbers the
+      // Supabase URLs set by `npm run content:seed-media`.
+      update: { title: v.title, caption: v.caption, sourceLabel: v.sourceLabel, sortOrder: v.sortOrder, active: true },
       create: { id: v.id, title: v.title, caption: v.caption, videoUrl: v.videoUrl, posterImageUrl: v.posterImageUrl, sourceLabel: v.sourceLabel, sortOrder: v.sortOrder, active: true, publishedAt: new Date() },
     });
   }
