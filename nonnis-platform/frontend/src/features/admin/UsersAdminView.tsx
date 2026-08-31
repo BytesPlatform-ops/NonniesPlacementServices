@@ -12,7 +12,9 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
+import { useAction } from "@/hooks/use-action";
 
 export function UsersAdminView() {
   const { activeOrganizationId, hasPermission } = useAuth();
@@ -54,14 +56,16 @@ export function UsersAdminView() {
     }
   };
 
-  const onRoleChange = async (row: UserListItem, roleCode: string) => {
-    await changeMembershipRole(row.id, row.membership.membershipId, roleCode);
-    await users.reload();
-  };
+  const runAction = useAction();
 
-  const onToggleStatus = async (row: UserListItem) => {
-    await setUserStatus(row.id, row.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED");
-    await users.reload();
+  const onRoleChange = async (row: UserListItem, roleCode: string) => {
+    if (roleCode === row.membership.roleCode) return;
+    await runAction({
+      confirm: { title: "Change this user's role?", description: `Their access will change to match the new role.`, confirmLabel: "Change role" },
+      run: () => changeMembershipRole(row.id, row.membership.membershipId, roleCode),
+      success: "Role updated",
+    });
+    await users.reload(); // reflect the change, or reset the select if cancelled
   };
 
   const columns: Column<UserListItem>[] = [
@@ -104,13 +108,30 @@ export function UsersAdminView() {
             align: "right" as const,
             render: (row: UserListItem) =>
               assignableCodes.has(row.membership.roleCode) ? (
-                <button
-                  type="button"
-                  onClick={() => void onToggleStatus(row)}
-                  className="text-sm font-medium text-brand-700 hover:underline"
-                >
-                  {row.status === "SUSPENDED" ? "Reactivate" : "Suspend"}
-                </button>
+                row.status === "SUSPENDED" ? (
+                  <MutationButton
+                    variant="link"
+                    className="text-brand-700 hover:text-brand-800"
+                    pendingLabel="Reactivating…"
+                    confirm={{ title: "Reactivate this user?", description: "The user will regain normal access to their organization.", confirmLabel: "Reactivate" }}
+                    action={() => setUserStatus(row.id, "ACTIVE")}
+                    successToast="User reactivated"
+                    onSuccess={() => users.reload()}
+                  >
+                    Reactivate
+                  </MutationButton>
+                ) : (
+                  <MutationButton
+                    variant="danger-link"
+                    pendingLabel="Suspending…"
+                    confirm={{ title: "Suspend this user?", description: "The user will lose normal access until their account is reactivated.", confirmLabel: "Suspend user", variant: "danger" }}
+                    action={() => setUserStatus(row.id, "SUSPENDED")}
+                    successToast="User suspended"
+                    onSuccess={() => users.reload()}
+                  >
+                    Suspend
+                  </MutationButton>
+                )
               ) : null,
           },
         ]

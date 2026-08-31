@@ -10,14 +10,17 @@ import { getOrganization, setOrganizationStatus, updateOrganization } from "@/se
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { DescriptionList } from "@/components/ui/DescriptionList";
 import { ErrorState, LoadingState } from "@/components/ui/states";
+import { useToast } from "@/providers/toast-provider";
 
 export function OrganizationDetailView({ organizationId }: { organizationId: string }) {
   const { data, loading, error, reload } = useAsync(() => getOrganization(organizationId), [organizationId]);
   const [name, setName] = useState("");
   const [legalName, setLegalName] = useState("");
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (data) {
@@ -54,17 +57,10 @@ export function OrganizationDetailView({ organizationId }: { organizationId: str
     setBusy(true);
     try {
       await updateOrganization(organizationId, { name, legalName: legalName || undefined });
+      toast.success("Organization updated");
       await reload();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onToggleStatus = async () => {
-    setBusy(true);
-    try {
-      await setOrganizationStatus(organizationId, data.status === "ACTIVE" ? "INACTIVE" : "ACTIVE");
-      await reload();
+    } catch {
+      toast.error("Could not save the organization.");
     } finally {
       setBusy(false);
     }
@@ -122,14 +118,21 @@ export function OrganizationDetailView({ organizationId }: { organizationId: str
             />
           </Panel>
           <Panel title="Status">
-            <button
-              type="button"
-              onClick={() => void onToggleStatus()}
-              disabled={busy}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            <MutationButton
+              variant="secondary"
+              className="w-full"
+              pendingLabel={data.status === "ACTIVE" ? "Deactivating…" : "Activating…"}
+              confirm={
+                data.status === "ACTIVE"
+                  ? { title: "Deactivate this organization?", description: "Members may lose access and it will be excluded from active workflows. You can reactivate it later.", confirmLabel: "Deactivate", variant: "warning" }
+                  : { title: "Activate this organization?", description: "The organization will be active again.", confirmLabel: "Activate" }
+              }
+              action={() => setOrganizationStatus(organizationId, data.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}
+              successToast={data.status === "ACTIVE" ? "Organization deactivated" : "Organization activated"}
+              onSuccess={reload}
             >
               {data.status === "ACTIVE" ? "Deactivate organization" : "Activate organization"}
-            </button>
+            </MutationButton>
           </Panel>
         </div>
       </div>

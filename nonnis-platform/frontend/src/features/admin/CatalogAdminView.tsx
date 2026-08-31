@@ -21,6 +21,7 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 
 type Tab = "categories" | "payment" | "languages";
@@ -99,11 +100,6 @@ function ServiceCategorySection() {
       setBusy(false);
     }
   };
-  const toggle = async (row: ServiceCategoryView) => {
-    await setServiceCategoryStatus(row.id, !row.active);
-    await reload();
-  };
-
   const columns: Column<ServiceCategoryView>[] = [
     { key: "name", header: "Name", render: (r) => <span className="font-medium text-slate-800">{r.name}</span> },
     { key: "code", header: "Code", render: (r) => <span className="font-mono text-xs text-slate-500">{r.code}</span> },
@@ -114,9 +110,19 @@ function ServiceCategorySection() {
       header: "",
       align: "right",
       render: (r) => (
-        <button type="button" onClick={() => void toggle(r)} className="text-sm font-medium text-brand-700 hover:underline">
+        <MutationButton
+          variant="link"
+          className={r.active ? "text-amber-700 hover:text-amber-800" : "text-brand-700 hover:text-brand-800"}
+          pendingLabel={r.active ? "Deactivating…" : "Activating…"}
+          confirm={r.active
+            ? { title: "Deactivate this service category?", description: "It will be hidden from new provider services and requests. You can reactivate it later.", confirmLabel: "Deactivate", variant: "warning" }
+            : { title: "Activate this service category?", confirmLabel: "Activate" }}
+          action={() => setServiceCategoryStatus(r.id, !r.active)}
+          successToast={r.active ? "Category deactivated" : "Category activated"}
+          onSuccess={reload}
+        >
           {r.active ? "Deactivate" : "Activate"}
-        </button>
+        </MutationButton>
       ),
     },
   ];
@@ -190,11 +196,6 @@ function ReferenceSection({
       setBusy(false);
     }
   };
-  const toggle = async (row: ReferenceItemView) => {
-    await setStatus(row.id, !row.active);
-    await reload();
-  };
-
   const columns: Column<ReferenceItemView>[] = [
     { key: "name", header: "Name", render: (r) => <span className="font-medium text-slate-800">{r.name}</span> },
     { key: "code", header: "Code", render: (r) => <span className="font-mono text-xs text-slate-500">{r.code}</span> },
@@ -204,9 +205,19 @@ function ReferenceSection({
       header: "",
       align: "right",
       render: (r) => (
-        <button type="button" onClick={() => void toggle(r)} className="text-sm font-medium text-brand-700 hover:underline">
+        <MutationButton
+          variant="link"
+          className={r.active ? "text-amber-700 hover:text-amber-800" : "text-brand-700 hover:text-brand-800"}
+          pendingLabel={r.active ? "Deactivating…" : "Activating…"}
+          confirm={r.active
+            ? { title: `Deactivate this ${noun}?`, description: "It will be hidden from provider selection. You can reactivate it later.", confirmLabel: "Deactivate", variant: "warning" }
+            : { title: `Activate this ${noun}?`, confirmLabel: "Activate" }}
+          action={() => setStatus(r.id, !r.active)}
+          successToast={r.active ? "Deactivated" : "Activated"}
+          onSuccess={reload}
+        >
           {r.active ? "Deactivate" : "Activate"}
-        </button>
+        </MutationButton>
       ),
     },
   ];

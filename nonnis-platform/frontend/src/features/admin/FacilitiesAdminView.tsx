@@ -12,6 +12,7 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 
 export function FacilitiesAdminView() {
@@ -36,11 +37,6 @@ export function FacilitiesAdminView() {
     }
   };
 
-  const onToggle = async (facility: FacilityView) => {
-    await setFacilityStatus(facility.id, facility.status === "ACTIVE" ? "INACTIVE" : "ACTIVE");
-    await reload();
-  };
-
   const columns: Column<FacilityView>[] = [
     { key: "name", header: "Facility", render: (row) => <span className="font-medium text-slate-800">{row.name}</span> },
     { key: "location", header: "Location", render: (row) => [row.city, row.state].filter(Boolean).join(", ") || "—" },
@@ -53,13 +49,21 @@ export function FacilitiesAdminView() {
             header: "",
             align: "right" as const,
             render: (row: FacilityView) => (
-              <button
-                type="button"
-                onClick={() => void onToggle(row)}
-                className="text-sm font-medium text-brand-700 hover:underline"
+              <MutationButton
+                variant="link"
+                className={row.status === "ACTIVE" ? "text-amber-700 hover:text-amber-800" : "text-brand-700 hover:text-brand-800"}
+                pendingLabel={row.status === "ACTIVE" ? "Deactivating…" : "Activating…"}
+                confirm={
+                  row.status === "ACTIVE"
+                    ? { title: "Deactivate this facility?", description: "It will no longer be available for new cases. You can reactivate it later.", confirmLabel: "Deactivate", variant: "warning" }
+                    : { title: "Activate this facility?", description: "It will be available for new cases again.", confirmLabel: "Activate" }
+                }
+                action={() => setFacilityStatus(row.id, row.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}
+                successToast={row.status === "ACTIVE" ? "Facility deactivated" : "Facility activated"}
+                onSuccess={reload}
               >
                 {row.status === "ACTIVE" ? "Deactivate" : "Activate"}
-              </button>
+              </MutationButton>
             ),
           },
         ]
