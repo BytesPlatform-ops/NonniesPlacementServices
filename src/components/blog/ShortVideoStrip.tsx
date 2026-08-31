@@ -26,6 +26,7 @@ export function ShortVideoStrip({ videos }: { videos: ShortVideoItem[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const pausedUntilRef = useRef(0);
+  const animatingRef = useRef(false);
   const drag = useRef({ down: false, startX: 0, scroll: 0, moved: false });
 
   useEffect(() => {
@@ -56,16 +57,30 @@ export function ShortVideoStrip({ videos }: { videos: ShortVideoItem[] }) {
 
   const advance = useCallback(() => {
     const el = trackRef.current;
-    if (!el) return;
+    if (!el || animatingRef.current) return;
     const step = stepPx();
+    if (step <= 0) return;
     const half = el.scrollWidth / 2;
-    const target = el.scrollLeft + step;
-    if (videos.length > 1 && target >= half) {
-      // Wrap: reposition to the identical spot in the first set (invisible), then continue.
-      el.scrollTo({ left: target - half, behavior: "auto" });
-    } else {
-      el.scrollTo({ left: target, behavior: "smooth" });
-    }
+    // Wrap first (instant, identical pixels) so the tween never needs to cross the seam.
+    if (videos.length > 1 && el.scrollLeft + step >= half) el.scrollLeft -= half;
+    const from = el.scrollLeft;
+    const to = from + step;
+    // Manual rAF tween instead of native smooth scroll — reliable across browsers
+    // (Safari/WebKit does not animate scrollTo with scroll-snap mandatory).
+    const duration = 600;
+    const start = performance.now();
+    animatingRef.current = true;
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - k, 3); // easeOutCubic
+      el.scrollLeft = from + (to - from) * eased;
+      if (k < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        animatingRef.current = false;
+      }
+    };
+    requestAnimationFrame(tick);
   }, [videos.length]);
 
   // Auto-advance loop.
@@ -135,7 +150,7 @@ export function ShortVideoStrip({ videos }: { videos: ShortVideoItem[] }) {
         onPointerUp={endDrag}
         onPointerLeave={endDrag}
         onWheel={() => { pausedUntilRef.current = manualPauseUntil(Date.now()); }}
-        className="flex cursor-grab snap-x snap-mandatory gap-2 overflow-x-auto pb-3 active:cursor-grabbing sm:gap-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex cursor-grab snap-x snap-proximity gap-2 overflow-x-auto pb-3 active:cursor-grabbing sm:gap-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="list"
         aria-label="Short videos"
       >
