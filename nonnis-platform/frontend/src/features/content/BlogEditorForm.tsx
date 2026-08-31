@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -12,6 +12,9 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/states";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { MediaUpload } from "./MediaUpload";
+import { IMAGE_ACCEPT, MAX_IMAGE_BYTES } from "@/services/media.service";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
@@ -23,12 +26,13 @@ interface FormState {
   category: string;
   displayAuthor: string;
   featuredImageUrl: string;
+  featuredImageStoragePath: string;
   body: string;
   metaTitle: string;
   metaDescription: string;
 }
 
-const EMPTY: FormState = { title: "", slug: "", excerpt: "", category: "", displayAuthor: "", featuredImageUrl: "", body: "", metaTitle: "", metaDescription: "" };
+const EMPTY: FormState = { title: "", slug: "", excerpt: "", category: "", displayAuthor: "", featuredImageUrl: "", featuredImageStoragePath: "", body: "", metaTitle: "", metaDescription: "" };
 
 function fromDetail(d: BlogPostDetail): FormState {
   return {
@@ -38,6 +42,7 @@ function fromDetail(d: BlogPostDetail): FormState {
     category: d.category ?? "",
     displayAuthor: d.displayAuthor ?? "",
     featuredImageUrl: d.featuredImageUrl ?? "",
+    featuredImageStoragePath: d.featuredImageStoragePath ?? "",
     body: d.body,
     metaTitle: d.metaTitle ?? "",
     metaDescription: d.metaDescription ?? "",
@@ -52,6 +57,7 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
   const [loading, setLoading] = useState(editing);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialFeaturedPath = useRef<string | null>(null);
 
   useEffect(() => {
     if (!postId) return;
@@ -61,6 +67,7 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
         if (!active) return;
         setForm(fromDetail(d));
         setStatus(d.status);
+        initialFeaturedPath.current = d.featuredImageStoragePath;
       })
       .catch((e) => active && setError(e instanceof ApiError ? e.message : "Could not load the post."))
       .finally(() => active && setLoading(false));
@@ -77,7 +84,9 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
     excerpt: form.excerpt.trim() || undefined,
     category: form.category.trim() || undefined,
     displayAuthor: form.displayAuthor.trim() || undefined,
-    featuredImageUrl: form.featuredImageUrl.trim() || undefined,
+    // Send null (not undefined) so clearing an image persists and triggers cleanup.
+    featuredImageUrl: form.featuredImageUrl || null,
+    featuredImageStoragePath: form.featuredImageStoragePath || null,
     body: form.body,
     metaTitle: form.metaTitle.trim() || undefined,
     metaDescription: form.metaDescription.trim() || undefined,
@@ -97,6 +106,7 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
         const fresh = await getBlogPost(postId);
         setForm(fromDetail(fresh));
         setStatus(fresh.status);
+        initialFeaturedPath.current = fresh.featuredImageStoragePath;
       } else {
         const created = await createBlogPost({ ...body(), ...(publish ? { status: "PUBLISHED" } : {}) });
         router.replace(`/content/blog/${created.id}`);
@@ -163,15 +173,23 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
             <Field label="Author (display)">
               <input value={form.displayAuthor} onChange={(e) => set("displayAuthor", e.target.value)} placeholder="Nonnis Care Team" className={inputCls} />
             </Field>
-            <Field label="Featured image URL" description="A site path (/assets/…) or full https:// URL.">
-              <input value={form.featuredImageUrl} onChange={(e) => set("featuredImageUrl", e.target.value)} placeholder="/assets/images/example.jpg" className={inputCls} />
-            </Field>
+            <div className="sm:col-span-2">
+              <MediaUpload
+                label="Featured image"
+                kind="blog-featured"
+                variant="image"
+                accept={IMAGE_ACCEPT}
+                maxBytes={MAX_IMAGE_BYTES}
+                value={{ url: form.featuredImageUrl || null, storagePath: form.featuredImageStoragePath || null }}
+                initialStoragePath={initialFeaturedPath.current}
+                onChange={(v) => setForm((f) => ({ ...f, featuredImageUrl: v.url ?? "", featuredImageStoragePath: v.storagePath ?? "" }))}
+              />
+            </div>
             <Field label="Excerpt" description="Short summary shown on cards and search results." className="sm:col-span-2">
               <textarea value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} rows={2} className={inputCls} />
             </Field>
-            <Field label="Body" required description="Markdown: # headings, - lists, **bold**, *italic*, [links](https://…). No raw HTML." className="sm:col-span-2">
-              <textarea value={form.body} onChange={(e) => set("body", e.target.value)} rows={16} required className={`${inputCls} font-mono text-[13px] leading-relaxed`} />
-              <p className="mt-1 text-xs text-slate-400">{form.body.length} characters</p>
+            <Field label="Body" required description="Rich Markdown editor — headings, lists, links, quotes. No raw HTML." className="sm:col-span-2">
+              <MarkdownEditor value={form.body} onChange={(v) => set("body", v)} />
             </Field>
           </div>
         </Panel>
