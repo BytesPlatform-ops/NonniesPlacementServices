@@ -16,6 +16,7 @@ import { Panel } from "@/components/ui/Panel";
 import { DescriptionList } from "@/components/ui/DescriptionList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/ui/states";
+import { useAction } from "@/hooks/use-action";
 import { CapacityTab, CoverageTab, HoursTab, LanguagesTab, PaymentTab, ServicesTab, UsersTab } from "./provider-tabs";
 
 type TabKey = "overview" | "services" | "coverage" | "payment" | "languages" | "hours" | "capacity" | "users";
@@ -93,15 +94,17 @@ export function ProviderWorkspace({ providerId }: { providerId: string }) {
 
 function StatusControl({ provider, reload }: { provider: ProviderDetailView; reload: () => void }) {
   const [busy, setBusy] = useState(false);
+  const runAction = useAction();
   const change = async (status: string) => {
     if (status === provider.status) return;
     setBusy(true);
-    try {
-      await setProviderStatus(provider.id, status);
-      await reload();
-    } finally {
-      setBusy(false);
-    }
+    await runAction({
+      confirm: { title: "Change provider status?", description: `The provider's operational status will change to “${humanizeEnum(status)}”.`, confirmLabel: "Change status" },
+      run: () => setProviderStatus(provider.id, status),
+      success: "Provider status updated",
+    });
+    await reload();
+    setBusy(false);
   };
   return (
     <div className="flex items-center gap-2 text-sm">

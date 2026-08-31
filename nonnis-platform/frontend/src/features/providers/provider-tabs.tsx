@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { formatDate, formatDateTime, humanizeEnum } from "@/lib/format";
 import { capacityLabel, capacityTone } from "@/lib/provider-status";
 import { statusTone } from "@/lib/admin-status";
@@ -78,15 +79,6 @@ export function ServicesTab({ provider, reload }: TabProps) {
     }
   };
 
-  const toggle = async (id: string, active: boolean) => {
-    await updateProviderService(provider.id, id, { active: !active });
-    await reload();
-  };
-  const remove = async (id: string) => {
-    await removeProviderService(provider.id, id);
-    await reload();
-  };
-
   return (
     <Panel title="Services offered" description="Service categories this provider offers.">
       <ErrorLine message={error} />
@@ -107,12 +99,26 @@ export function ServicesTab({ provider, reload }: TabProps) {
                 <ActiveBadge active={s.active} />
                 {editable ? (
                   <>
-                    <button type="button" onClick={() => void toggle(s.id, s.active)} className="text-sm text-brand-700 hover:underline">
+                    <MutationButton
+                      variant="link"
+                      className="text-brand-700 hover:text-brand-800"
+                      action={() => updateProviderService(provider.id, s.id, { active: !s.active })}
+                      successToast={s.active ? "Service deactivated" : "Service activated"}
+                      onSuccess={reload}
+                    >
                       {s.active ? "Deactivate" : "Activate"}
-                    </button>
-                    <button type="button" onClick={() => void remove(s.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove">
+                    </MutationButton>
+                    <MutationButton
+                      variant="danger-link"
+                      className="text-slate-400 hover:text-rose-600"
+                      aria-label={`Remove ${s.categoryName}`}
+                      confirm={{ title: "Remove this service?", description: `${s.categoryName} will be removed from this provider. This cannot be undone.`, confirmLabel: "Remove", variant: "danger" }}
+                      action={() => removeProviderService(provider.id, s.id)}
+                      successToast="Service removed"
+                      onSuccess={reload}
+                    >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </MutationButton>
                   </>
                 ) : null}
               </div>
@@ -186,11 +192,6 @@ export function CoverageTab({ provider, reload }: TabProps) {
       setBusy(false);
     }
   };
-  const remove = async (id: string) => {
-    await removeCoverage(provider.id, id);
-    await reload();
-  };
-
   return (
     <Panel title="Geographic coverage" description="Areas this provider serves.">
       <ErrorLine message={error} />
@@ -208,9 +209,9 @@ export function CoverageTab({ provider, reload }: TabProps) {
                 <p className="text-xs text-slate-500">{humanizeEnum(c.coverageType)}{c.notes ? ` · ${c.notes}` : ""}</p>
               </div>
               {editable ? (
-                <button type="button" onClick={() => void remove(c.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove">
+                <MutationButton variant="danger-link" className="text-slate-400 hover:text-rose-600" aria-label="Remove coverage area" confirm={{ title: "Remove this coverage area?", description: "This coverage area will be removed from the provider.", confirmLabel: "Remove", variant: "danger" }} action={() => removeCoverage(provider.id, c.id)} successToast="Coverage removed" onSuccess={reload}>
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </MutationButton>
               ) : null}
             </li>
           ))}
@@ -271,10 +272,6 @@ export function PaymentTab({ provider, reload }: TabProps) {
       setBusy(false);
     }
   };
-  const remove = async (id: string) => {
-    await removeProviderPaymentType(provider.id, id);
-    await reload();
-  };
 
   return (
     <Panel title="Accepted payment & insurance" description="Payment types this provider accepts.">
@@ -290,9 +287,9 @@ export function PaymentTab({ provider, reload }: TabProps) {
                 {p.notes ? <p className="text-xs text-slate-500">{p.notes}</p> : null}
               </div>
               {editable ? (
-                <button type="button" onClick={() => void remove(p.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove">
+                <MutationButton variant="danger-link" className="text-slate-400 hover:text-rose-600" aria-label="Remove payment type" confirm={{ title: "Remove this payment type?", description: "This payment/insurance type will be removed from the provider.", confirmLabel: "Remove", variant: "danger" }} action={() => removeProviderPaymentType(provider.id, p.id)} successToast="Payment type removed" onSuccess={reload}>
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </MutationButton>
               ) : null}
             </li>
           ))}
@@ -351,10 +348,6 @@ export function LanguagesTab({ provider, reload }: TabProps) {
       setBusy(false);
     }
   };
-  const remove = async (id: string) => {
-    await removeProviderLanguage(provider.id, id);
-    await reload();
-  };
 
   return (
     <Panel title="Languages" description="Languages this provider supports.">
@@ -367,9 +360,9 @@ export function LanguagesTab({ provider, reload }: TabProps) {
             <li key={l.id} className="inline-flex items-center gap-2 rounded-full border border-sage bg-cream px-3 py-1 text-sm text-umber">
               {l.name}
               {editable ? (
-                <button type="button" onClick={() => void remove(l.id)} className="text-slate-400 hover:text-rose-600" aria-label={`Remove ${l.name}`}>
+                <MutationButton variant="danger-link" className="text-slate-400 hover:text-rose-600" aria-label={`Remove ${l.name}`} confirm={{ title: `Remove ${l.name}?`, description: "This language will be removed from the provider.", confirmLabel: "Remove", variant: "danger" }} action={() => removeProviderLanguage(provider.id, l.id)} successToast="Language removed" onSuccess={reload}>
                   <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                </MutationButton>
               ) : null}
             </li>
           ))}
