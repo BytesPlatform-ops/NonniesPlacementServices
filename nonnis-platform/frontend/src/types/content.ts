@@ -19,6 +19,7 @@ export interface BlogPostDetail extends BlogPostSummary {
   body: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  featuredImageStoragePath: string | null;
 }
 
 export interface ShortVideoView {
@@ -26,7 +27,9 @@ export interface ShortVideoView {
   title: string;
   caption: string | null;
   videoUrl: string;
+  videoStoragePath: string | null;
   posterImageUrl: string | null;
+  posterImageStoragePath: string | null;
   sourceLabel: string | null;
   blogPostId: string | null;
   active: boolean;

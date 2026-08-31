@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Post } from "@nestjs/common";
 import { PERMISSIONS } from "../../common/rbac";
 import { CurrentUser, RequirePermissions } from "../auth/decorators";
 import type { RequestUser } from "../auth/request-user";
@@ -22,8 +22,8 @@ export class MediaController {
 
   @Delete()
   @RequirePermissions(PERMISSIONS.CONTENT_MANAGE)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@CurrentUser() _user: RequestUser, @Body() dto: DeleteMediaDto): Promise<void> {
+  async remove(@CurrentUser() _user: RequestUser, @Body() dto: DeleteMediaDto): Promise<{ deleted: boolean }> {
     await this.media.deleteObject(dto.storagePath);
+    return { deleted: true };
   }
 }

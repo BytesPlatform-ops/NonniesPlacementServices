@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDate } from "@/lib/format";
 import { ApiError } from "@/lib/api-client";
 import { activeLabel, activeTone } from "@/lib/content-status";
+import { MediaUpload } from "./MediaUpload";
+import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_ACCEPT } from "@/services/media.service";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -150,12 +152,16 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
   const [title, setTitle] = useState(video?.title ?? "");
   const [caption, setCaption] = useState(video?.caption ?? "");
   const [videoUrl, setVideoUrl] = useState(video?.videoUrl ?? "");
+  const [videoStoragePath, setVideoStoragePath] = useState(video?.videoStoragePath ?? "");
   const [posterImageUrl, setPosterImageUrl] = useState(video?.posterImageUrl ?? "");
+  const [posterImageStoragePath, setPosterImageStoragePath] = useState(video?.posterImageStoragePath ?? "");
   const [sourceLabel, setSourceLabel] = useState(video?.sourceLabel ?? "");
   const [sortOrder, setSortOrder] = useState(String(video?.sortOrder ?? 0));
   const [active, setActive] = useState(video?.active ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialVideoPath = useRef<string | null>(video?.videoStoragePath ?? null);
+  const initialPosterPath = useRef<string | null>(video?.posterImageStoragePath ?? null);
 
   const submit = async () => {
     if (!title.trim() || !videoUrl.trim()) {
@@ -168,7 +174,9 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
       title: title.trim(),
       caption: caption.trim() || undefined,
       videoUrl: videoUrl.trim(),
-      posterImageUrl: posterImageUrl.trim() || undefined,
+      videoStoragePath: videoStoragePath || null,
+      posterImageUrl: posterImageUrl || null,
+      posterImageStoragePath: posterImageStoragePath || null,
       sourceLabel: sourceLabel.trim() || undefined,
       sortOrder: Number(sortOrder) || 0,
       active,
@@ -188,8 +196,30 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
       {error ? <p className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <ModalField label="Title" required className="sm:col-span-2"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} /></ModalField>
-        <ModalField label="Video URL" required description="A site path (/assets/videos/…) or full https:// URL." className="sm:col-span-2"><input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="/assets/videos/example.mp4" className={inputCls} /></ModalField>
-        <ModalField label="Poster / thumbnail URL" className="sm:col-span-2"><input value={posterImageUrl} onChange={(e) => setPosterImageUrl(e.target.value)} placeholder="/assets/images/example.jpg" className={inputCls} /></ModalField>
+        <div className="sm:col-span-2">
+          <MediaUpload
+            label="Video *"
+            kind="video"
+            variant="video"
+            accept={VIDEO_ACCEPT}
+            maxBytes={MAX_VIDEO_BYTES}
+            value={{ url: videoUrl || null, storagePath: videoStoragePath || null }}
+            initialStoragePath={initialVideoPath.current}
+            onChange={(v) => { setVideoUrl(v.url ?? ""); setVideoStoragePath(v.storagePath ?? ""); }}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <MediaUpload
+            label="Poster / thumbnail"
+            kind="poster"
+            variant="image"
+            accept={IMAGE_ACCEPT}
+            maxBytes={MAX_IMAGE_BYTES}
+            value={{ url: posterImageUrl || null, storagePath: posterImageStoragePath || null }}
+            initialStoragePath={initialPosterPath.current}
+            onChange={(v) => { setPosterImageUrl(v.url ?? ""); setPosterImageStoragePath(v.storagePath ?? ""); }}
+          />
+        </div>
         <ModalField label="Caption" className="sm:col-span-2"><input value={caption} onChange={(e) => setCaption(e.target.value)} className={inputCls} /></ModalField>
         <ModalField label="Source label"><input value={sourceLabel} onChange={(e) => setSourceLabel(e.target.value)} placeholder="Nonnis Stories" className={inputCls} /></ModalField>
         <ModalField label="Sort order"><input type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className={inputCls} /></ModalField>
@@ -199,14 +229,6 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
         <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="rounded border-slate-300" />
         Active (visible on the public blog)
       </label>
-
-      {videoUrl.trim() ? (
-        <div className="mt-4">
-          <p className="mb-1 text-xs font-medium text-slate-500">Preview</p>
-          <video src={videoUrl} poster={posterImageUrl || undefined} controls preload="metadata" className="max-h-64 w-full rounded-md border border-sage bg-black object-contain" />
-          <p className="mt-1 text-xs text-slate-400">Site-relative paths preview on the public website, not here.</p>
-        </div>
-      ) : null}
 
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
