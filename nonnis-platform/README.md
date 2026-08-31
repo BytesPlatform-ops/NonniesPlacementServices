@@ -520,9 +520,46 @@ source-of-truth records; there is no persisted readiness column and no schema ch
   critical blocker / placement missing / service unscheduled / near-term-not-ready /
   discharged-not-started).
 
+## Public website content CMS (blog / short videos / testimonials)
+
+A focused `content` module lets Nonnis staff manage what the **public marketing
+website** shows — with a strict split between admin management and public reads.
+
+- **Models:** `BlogPost` (Markdown-subset `body`, unique SEO `slug`,
+  DRAFT/PUBLISHED/ARCHIVED `status`, `publishedAt`, optional category/author/meta),
+  `ShortVideo` (`videoUrl` + `posterImageUrl` + `sourceLabel`, `active`, `sortOrder`,
+  optional `blogPostId`), and `Testimonial` (`quote` + optional attribution,
+  `active`/`featured`/`sortOrder`, plus **Nonnis-only `internalNotes`**). Additive
+  migration `20260901000000_content_cms`; no existing table changed.
+- **Permissions:** `content.read` / `content.manage` — held by NONNIS_ADMIN and
+  NONNIS_OPERATIONS only. Provider users and discharge professionals have neither, so
+  the CMS is invisible and inaccessible to them.
+- **Public API** (`@Public()`, no login, read-only): `GET /public/blog` (published
+  cards, **no body**), `GET /public/blog/:slug` (published detail; 404 for
+  drafts/archived/unknown), `GET /public/blog-videos` (active), `GET /public/testimonials`
+  (active, featured first). Serializers expose only public-safe fields — never drafts,
+  `internalNotes`, `status`, or user/admin metadata.
+- **Admin API** (permission-gated + audited): `blog-posts` (list/get/create/update +
+  `publish`/`unpublish`/`archive`/delete), `short-videos` and `testimonials`
+  (list/get/create/update/`:id/active`/delete). Actor is server-derived; every mutation
+  writes an `AuditEvent`. Body/URL/slug/length validated; blog bodies are a safe Markdown
+  subset rendered without raw HTML (no stored XSS).
+- **Public website:** a `/blog` index (featured + grid), a `/blog/[slug]` detail with a
+  dependency-free Markdown renderer + `generateMetadata` (canonical + OG) + `sitemap.ts`
+  / `robots.ts`, a premium horizontal **short-video strip** (drag/swipe, centered play,
+  single-video lightbox — never autoplays multiple, audio only after an explicit click),
+  and a flowing **homepage testimonials marquee** (pauses on hover, respects
+  `prefers-reduced-motion`). Content is fetched server-side via `NONNIS_PLATFORM_API_URL`;
+  if it is unset or the API is down, sections degrade gracefully (empty/hidden) rather
+  than crashing. A **Content** nav group (Blog / Short Videos / Testimonials) appears in
+  the CRM sidebar. No page-builder, media transcoding, content analytics, AI generation,
+  or scheduled publishing.
+
 ## Relationship to the existing website
 
-The public marketing site at the repository root keeps its existing behavior; the only
-change is the additive persistence call above. Repository-level isolation guards keep
-tooling from crossing the boundary: the root `tsconfig.json` and `eslint.config.mjs`
-exclude `nonnis-platform`, and `.gitignore` ignores its build artifacts.
+The public marketing site at the repository root keeps its existing behavior; the
+changes are additive — the form-submission persistence call, plus a new `/blog` area,
+a homepage testimonials band, and a "Blog" nav link, all reading published content from
+the platform's public API. Repository-level isolation guards keep tooling from crossing
+the boundary: the root `tsconfig.json` and `eslint.config.mjs` exclude `nonnis-platform`,
+and `.gitignore` ignores its build artifacts.

@@ -44,6 +44,7 @@ engine between a service request and provider selection.
 - Basic operational dashboards
 - Basic reporting (counts, grouped summaries, simple filters, admin reports/exports)
 - General platform administration
+- Public website content management (blog articles, short videos, testimonials)
 - Public residential provider listings/directory
 
 ---
@@ -226,6 +227,24 @@ and do not let an in-scope feature evolve into them.
   gates, component checklist, blockers with links, actions), a header readiness badge,
   a discharge-dashboard readiness widget, and Operations readiness counts + queue
   filters. No AI, prediction, scoring engine, matching, analytics, or automation.
+- **Client insertion — Public Website Blog + Short Videos + Testimonials CMS:** a
+  focused `content` module manages three record types — **BlogPost** (Markdown-subset
+  body, unique SEO slug, DRAFT/PUBLISHED/ARCHIVED), **ShortVideo** (curated video
+  metadata, active/order, optional post association), and **Testimonial** (quote +
+  optional attribution, active/featured/order, Nonnis-only `internalNotes`). New
+  `content.read`/`content.manage` permissions (Nonnis Admin + Operations only;
+  providers/discharge pros excluded). **Public read-only** `@Public()` endpoints
+  (`/public/blog`, `/public/blog/:slug`, `/public/blog-videos`, `/public/testimonials`)
+  expose ONLY published/active, public-safe fields — no drafts, no internal notes, no
+  user metadata; list responses omit article bodies. **Admin CRUD** endpoints
+  (`/blog-posts`, `/short-videos`, `/testimonials`) are permission-gated and audited.
+  The public website gained a `/blog` index, `/blog/[slug]` detail (safe Markdown
+  renderer, `generateMetadata`, sitemap/robots), a premium horizontal short-video strip
+  with a single-video lightbox, and a flowing homepage testimonials marquee — all in the
+  existing Warm Premium design language, fetched server-side via `NONNIS_PLATFORM_API_URL`
+  with graceful degradation. The CRM gained a **Content** nav group (Blog / Short Videos
+  / Testimonials). Additive only — no page-builder, transcoding, analytics, AI, or
+  scheduled publishing; the six public forms + email/PDF/ingestion are untouched.
 
 ---
 
@@ -243,7 +262,9 @@ COMPLETED
   8. Website Form Submissions -> Admin Panel + Existing Email Flow (additive)
   9. Referral Workflow + Manual Provider Selection
   10. Tasks + Basic Case Messaging + Unified Timeline
-  11. Discharge Readiness Score + Operational Blockers   ← current slice
+  11. Discharge Readiness Score + Operational Blockers
+  ★  Public Website Blog + Short Videos + Testimonials CMS   ← current slice
+       (client-requested insertion; Basic Reporting was paused for it)
 
 NEXT
   12. Basic Reporting + Administrative Reports
