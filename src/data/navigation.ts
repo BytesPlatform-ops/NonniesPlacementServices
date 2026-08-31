@@ -7,6 +7,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "For Families", href: "/families" },
   { label: "For Providers", href: "/providers" },
   { label: "Home Health Care", href: "/home-health-care" },
+  { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -56,6 +57,7 @@ export const FOOTER_SECTIONS = [
     title: "Company",
     links: [
       { label: "About us", href: "/about" },
+      { label: "Blog", href: "/blog" },
       { label: "Contact", href: "/contact" },
       { label: "List Your Community", href: "/providers#list-your-beds" },
       { label: "Privacy", href: "/privacy" },
