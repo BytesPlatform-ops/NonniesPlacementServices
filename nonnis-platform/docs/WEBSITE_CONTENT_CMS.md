@@ -145,3 +145,23 @@ npm run test:smoke          # from the repo root
 pages and asserts seeded blog titles, the Short Videos heading, Supabase-hosted
 media, and seeded testimonials are present — catching the "public page renders
 but is empty" class of regression that a build check cannot.
+
+## 14. Short-video rail interaction
+
+The public `/blog` short-video section (`src/components/blog/ShortVideoStrip.tsx`,
+timing logic in `src/components/blog/carousel.ts`) is a **full-bleed** horizontal
+wall of large 9:16 portrait panels (≈22–28vw desktop; one dominant ≈86vw card with
+a peek on mobile).
+
+- **Inline autoplay:** each visible/near-visible panel autoplays its video
+  **muted + looped + `playsInline`**, gated by an IntersectionObserver so offscreen
+  panels only fetch poster + metadata (`preload="metadata"`) — never a full download.
+  Audio only plays after an explicit click opens the lightbox.
+- **Auto-scroll:** the rail advances ~every 2.5s and loops seamlessly (duplicated
+  set + forward wrap). It pauses on hover, drag/swipe, an open lightbox, a hidden
+  tab, and `prefers-reduced-motion`; it resumes ~5s after manual interaction.
+  Reduced-motion also pauses inline autoplay and disables auto-advance (manual
+  scroll/swipe still works). Scroll-snap gives polished manual settling.
+- **Lightbox:** clicking a panel opens the controlled player (full controls, audio
+  allowed, one video at a time, Escape/backdrop close, focus managed, body scroll
+  paused). The pure timing rules are unit-tested in `carousel.test.ts`.

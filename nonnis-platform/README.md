@@ -565,6 +565,34 @@ website** shows — with a strict split between admin management and public read
   env, MIME/size rules, the `content:seed-media` command, and the `test:smoke` runtime
   check are in [`docs/WEBSITE_CONTENT_CMS.md`](docs/WEBSITE_CONTENT_CMS.md).
 
+## Platform action UX (confirm + toast + pending)
+
+Consequential and destructive mutations across the whole CRM follow one reusable
+flow — **click → branded confirmation dialog → pending state → API → success/error
+toast → targeted UI update** (never a full-page reload, never `window.confirm`).
+
+- **`ConfirmProvider` / `useConfirm`** (`src/providers/confirm-provider.tsx`): an
+  accessible dialog (`role="dialog"`, focus trap, Escape/backdrop cancel, focus
+  returned to the trigger) with `default` / `warning` / `danger` variants and
+  contextual copy — it explains the real consequence, not "Are you sure?".
+- **`ToastProvider` / `useToast`** (`src/providers/toast-provider.tsx`):
+  success/error/info/warning toasts, auto-dismiss, manual dismiss, capped stack,
+  `role="status"`/`"alert"`.
+- **`MutationButton`** (`src/components/ui/MutationButton.tsx`) + **`useAction`**
+  (`src/hooks/use-action.ts`, pure core in `src/lib/perform-action.ts`): wire the
+  above together — a button disables itself while pending (duplicate-click safe),
+  shows a pending label, toasts the outcome, and calls `onSuccess` (targeted
+  `reload()` / local update). Both providers mount in `app/(app)/layout.tsx`.
+
+Converted domains: content (blog/videos/testimonials), users (suspend/reactivate,
+role), organizations/facilities/service-categories (activate/deactivate), cases
+(cancel/transition/assign, service-request cancel, requirement status), tasks
+(start/complete/cancel), referrals (send/resend/withdraw) and provider-portal
+referral responses, providers (status, service/coverage/payment/language
+remove & activate), operations (block/unblock/assign) and form-submission review.
+Destructive actions (delete, cancel, withdraw, suspend, archive, remove) use the
+`danger` variant; routine form saves are deliberately *not* gated by confirmation.
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root keeps its existing behavior; the

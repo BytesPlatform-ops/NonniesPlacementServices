@@ -257,6 +257,15 @@ and do not let an in-scope feature evolve into them.
     runtime smoke test, and media/editor/connectivity tests. Still no transcoding,
     streaming, analytics, AI, or scheduled publishing. See
     `docs/WEBSITE_CONTENT_CMS.md`.
+  - **UX hardening pass:** the public short-video rail became a full-bleed, muted
+    auto-playing + auto-scrolling media wall (IntersectionObserver-gated playback,
+    pause on hover/drag/lightbox/hidden-tab/reduced-motion, seamless loop). And a
+    platform-wide **action UX system** was added — one reusable
+    confirm-dialog + toast + pending-button flow (`ConfirmProvider`/`useConfirm`,
+    `ToastProvider`/`useToast`, `MutationButton`/`useAction`) replacing every
+    `window.confirm` and silent mutation across content, users, orgs, facilities,
+    catalogs, cases, tasks, referrals, providers, provider-portal, operations, and
+    form submissions. Frontend-only; no backend/schema change.
 
 ---
 
