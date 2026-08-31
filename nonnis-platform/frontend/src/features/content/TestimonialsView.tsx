@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Star } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
+import { MutationButton } from "@/components/ui/MutationButton";
+import { useToast } from "@/providers/toast-provider";
 import { activeLabel, activeTone } from "@/lib/content-status";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
@@ -39,8 +41,6 @@ export function TestimonialsView() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<TestimonialView | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -51,19 +51,6 @@ export function TestimonialsView() {
   const filters: TestimonialFilters = useMemo(() => ({ page, pageSize: 20, q: debounced || undefined }), [page, debounced]);
   const { data, loading, error: loadError, reload } = useAsync(() => listTestimonials(filters), [filters]);
   const totalPages = data?.totalPages ?? 0;
-
-  const act = async (fn: () => Promise<unknown>, id: string) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      await fn();
-      await reload();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The action could not be completed.");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const columns: Column<TestimonialView>[] = [
     {
@@ -85,10 +72,32 @@ export function TestimonialsView() {
       align: "right",
       render: (row) =>
         canManage ? (
-          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          <div className="flex items-center justify-end gap-3 whitespace-nowrap">
             <button type="button" onClick={() => setEditing(row)} className="text-sm font-medium text-brand-700 hover:underline">Edit</button>
-            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => setTestimonialActive(row.id, !row.active), row.id)} className="text-sm text-slate-500 hover:text-umber disabled:opacity-50">{row.active ? "Deactivate" : "Activate"}</button>
-            <button type="button" disabled={busyId === row.id} onClick={() => { if (window.confirm("Delete this testimonial?")) void act(() => deleteTestimonial(row.id), row.id); }} className="text-sm text-rose-600 hover:underline disabled:opacity-50">Delete</button>
+            <MutationButton
+              variant="link"
+              pendingLabel={row.active ? "Deactivating…" : "Activating…"}
+              confirm={
+                row.active
+                  ? { title: "Deactivate testimonial?", description: "It will no longer appear on the public homepage. You can activate it again later.", confirmLabel: "Deactivate", variant: "warning" }
+                  : { title: "Activate testimonial?", description: "It will appear on the public homepage.", confirmLabel: "Activate" }
+              }
+              action={() => setTestimonialActive(row.id, !row.active)}
+              successToast={row.active ? "Testimonial deactivated" : "Testimonial activated"}
+              onSuccess={reload}
+            >
+              {row.active ? "Deactivate" : "Activate"}
+            </MutationButton>
+            <MutationButton
+              variant="danger-link"
+              pendingLabel="Deleting…"
+              confirm={{ title: "Delete testimonial?", description: "This permanently removes the testimonial. This action cannot be undone.", confirmLabel: "Delete", variant: "danger" }}
+              action={() => deleteTestimonial(row.id)}
+              successToast="Testimonial deleted"
+              onSuccess={reload}
+            >
+              Delete
+            </MutationButton>
           </div>
         ) : null,
     },
@@ -108,8 +117,6 @@ export function TestimonialsView() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Quote, name, or organization…" className={inputCls} />
         </label>
       </Panel>
-
-      {error ? <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
       <Panel title="Testimonials" description="Featured items appear first; then by sort order.">
         {loading ? (
@@ -153,6 +160,7 @@ function TestimonialModal({ testimonial, onClose, onDone }: { testimonial?: Test
   const [featured, setFeatured] = useState(testimonial?.featured ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   const submit = async () => {
     if (!quote.trim()) {
@@ -175,6 +183,7 @@ function TestimonialModal({ testimonial, onClose, onDone }: { testimonial?: Test
     try {
       if (testimonial) await updateTestimonial(testimonial.id, body);
       else await createTestimonial(body);
+      toast.success(testimonial ? "Testimonial updated" : "Testimonial added");
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the testimonial.");

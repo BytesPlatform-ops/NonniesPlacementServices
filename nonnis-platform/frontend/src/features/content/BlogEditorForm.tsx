@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
+import { useConfirm, type ConfirmOptions } from "@/providers/confirm-provider";
+import { useToast } from "@/providers/toast-provider";
 import { blogStatusLabel, blogStatusTone } from "@/lib/content-status";
 import { archiveBlogPost, createBlogPost, getBlogPost, publishBlogPost, unpublishBlogPost, updateBlogPost } from "@/services/content.service";
 import type { BlogPostDetail } from "@/types/content";
@@ -58,6 +60,8 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialFeaturedPath = useRef<string | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   useEffect(() => {
     if (!postId) return;
@@ -97,6 +101,10 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
       setError("Title and body are required.");
       return;
     }
+    if (publish) {
+      const ok = await confirm({ title: "Publish this post?", description: "The post will immediately appear on the public website.", confirmLabel: "Publish" });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -107,8 +115,10 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
         setForm(fromDetail(fresh));
         setStatus(fresh.status);
         initialFeaturedPath.current = fresh.featuredImageStoragePath;
+        toast.success(publish ? "Post published" : "Changes saved");
       } else {
         const created = await createBlogPost({ ...body(), ...(publish ? { status: "PUBLISHED" } : {}) });
+        toast.success(publish ? "Post published" : "Draft saved");
         router.replace(`/content/blog/${created.id}`);
       }
     } catch (e) {
@@ -118,13 +128,16 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
     }
   };
 
-  const statusAction = async (fn: () => Promise<BlogPostDetail>) => {
+  const statusAction = async (fn: () => Promise<BlogPostDetail>, opts: { confirm: ConfirmOptions; success: string }) => {
     if (!postId) return;
+    const ok = await confirm(opts.confirm);
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {
       const updated = await fn();
       setStatus(updated.status);
+      toast.success(opts.success);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not change the status.");
     } finally {
@@ -215,10 +228,10 @@ export function BlogEditorForm({ postId }: { postId?: string }) {
             </button>
           ) : null}
           {editing && status === "PUBLISHED" ? (
-            <button type="button" disabled={busy} onClick={() => void statusAction(() => unpublishBlogPost(postId!))} className="rounded-md border border-sage bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-cream disabled:opacity-60">Unpublish</button>
+            <button type="button" disabled={busy} onClick={() => void statusAction(() => unpublishBlogPost(postId!), { confirm: { title: "Unpublish this post?", description: "The post will immediately stop appearing on the public website, but the draft content remains in the CRM.", confirmLabel: "Unpublish", variant: "warning" }, success: "Post unpublished" })} className="rounded-md border border-sage bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-cream disabled:opacity-60">Unpublish</button>
           ) : null}
           {editing && status !== "ARCHIVED" ? (
-            <button type="button" disabled={busy} onClick={() => void statusAction(() => archiveBlogPost(postId!))} className="rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60">Archive</button>
+            <button type="button" disabled={busy} onClick={() => void statusAction(() => archiveBlogPost(postId!), { confirm: { title: "Archive this post?", description: "The post will be removed from the public website. You can restore it by editing and publishing again.", confirmLabel: "Archive", variant: "danger" }, success: "Post archived" })} className="rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60">Archive</button>
           ) : null}
           <Link href="/content/blog" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</Link>
         </div>

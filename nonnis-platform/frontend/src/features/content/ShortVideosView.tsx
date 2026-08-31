@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatDate } from "@/lib/format";
 import { ApiError } from "@/lib/api-client";
 import { activeLabel, activeTone } from "@/lib/content-status";
+import { MutationButton } from "@/components/ui/MutationButton";
+import { useToast } from "@/providers/toast-provider";
 import { MediaUpload } from "./MediaUpload";
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, VIDEO_ACCEPT } from "@/services/media.service";
 import { useAsync } from "@/hooks/use-async";
@@ -37,8 +39,6 @@ export function ShortVideosView() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<ShortVideoView | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -49,19 +49,6 @@ export function ShortVideosView() {
   const filters: VideoFilters = useMemo(() => ({ page, pageSize: 20, q: debounced || undefined }), [page, debounced]);
   const { data, loading, error: loadError, reload } = useAsync(() => listShortVideos(filters), [filters]);
   const totalPages = data?.totalPages ?? 0;
-
-  const act = async (fn: () => Promise<unknown>, id: string) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      await fn();
-      await reload();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The action could not be completed.");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const columns: Column<ShortVideoView>[] = [
     {
@@ -92,10 +79,32 @@ export function ShortVideosView() {
       align: "right",
       render: (row) =>
         canManage ? (
-          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          <div className="flex items-center justify-end gap-3 whitespace-nowrap">
             <button type="button" onClick={() => setEditing(row)} className="text-sm font-medium text-brand-700 hover:underline">Edit</button>
-            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => setShortVideoActive(row.id, !row.active), row.id)} className="text-sm text-slate-500 hover:text-umber disabled:opacity-50">{row.active ? "Deactivate" : "Activate"}</button>
-            <button type="button" disabled={busyId === row.id} onClick={() => { if (window.confirm("Delete this video?")) void act(() => deleteShortVideo(row.id), row.id); }} className="text-sm text-rose-600 hover:underline disabled:opacity-50">Delete</button>
+            <MutationButton
+              variant="link"
+              pendingLabel={row.active ? "Deactivating…" : "Activating…"}
+              confirm={
+                row.active
+                  ? { title: "Deactivate video?", description: "This video will no longer appear on the public website. You can activate it again later.", confirmLabel: "Deactivate", variant: "warning" }
+                  : { title: "Activate video?", description: "This video will appear on the public website.", confirmLabel: "Activate" }
+              }
+              action={() => setShortVideoActive(row.id, !row.active)}
+              successToast={row.active ? "Video deactivated" : "Video activated"}
+              onSuccess={reload}
+            >
+              {row.active ? "Deactivate" : "Activate"}
+            </MutationButton>
+            <MutationButton
+              variant="danger-link"
+              pendingLabel="Deleting…"
+              confirm={{ title: "Delete video?", description: "This permanently removes the video record. Managed media may also be removed from storage. This action cannot be undone.", confirmLabel: "Delete video", variant: "danger" }}
+              action={() => deleteShortVideo(row.id)}
+              successToast="Video deleted"
+              onSuccess={reload}
+            >
+              Delete
+            </MutationButton>
           </div>
         ) : null,
     },
@@ -115,8 +124,6 @@ export function ShortVideosView() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Title…" className={inputCls} />
         </label>
       </Panel>
-
-      {error ? <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
       <Panel title="Videos" description="Ordered by sort order — lower numbers appear first.">
         {loading ? (
@@ -162,6 +169,7 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
   const [error, setError] = useState<string | null>(null);
   const initialVideoPath = useRef<string | null>(video?.videoStoragePath ?? null);
   const initialPosterPath = useRef<string | null>(video?.posterImageStoragePath ?? null);
+  const toast = useToast();
 
   const submit = async () => {
     if (!title.trim() || !videoUrl.trim()) {
@@ -184,6 +192,7 @@ function VideoModal({ video, onClose, onDone }: { video?: ShortVideoView; onClos
     try {
       if (video) await updateShortVideo(video.id, body);
       else await createShortVideo(body);
+      toast.success(video ? "Video updated" : "Video added");
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the video.");

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDate } from "@/lib/format";
-import { ApiError } from "@/lib/api-client";
 import { blogStatusLabel, blogStatusTone } from "@/lib/content-status";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -27,8 +27,6 @@ export function BlogListView() {
   const [debounced, setDebounced] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -42,19 +40,6 @@ export function BlogListView() {
   );
   const { data, loading, error: loadError, reload } = useAsync(() => listBlogPosts(filters), [filters]);
   const totalPages = data?.totalPages ?? 0;
-
-  const act = async (fn: () => Promise<unknown>, id: string) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      await fn();
-      await reload();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The action could not be completed.");
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const columns: Column<BlogPostSummary>[] = [
     {
@@ -81,16 +66,45 @@ export function BlogListView() {
       header: "",
       align: "right",
       render: (row) => (
-        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+        <div className="flex items-center justify-end gap-3 whitespace-nowrap">
           {canManage ? <Link href={`/content/blog/${row.id}`} className="text-sm font-medium text-brand-700 hover:underline">Edit</Link> : null}
           {canManage && row.status !== "PUBLISHED" ? (
-            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => publishBlogPost(row.id), row.id)} className="text-sm text-emerald-700 hover:underline disabled:opacity-50">Publish</button>
+            <MutationButton
+              variant="link"
+              className="text-emerald-700 hover:text-emerald-800"
+              pendingLabel="Publishing…"
+              confirm={{ title: "Publish this post?", description: "The post will immediately appear on the public website.", confirmLabel: "Publish" }}
+              action={() => publishBlogPost(row.id)}
+              successToast="Post published"
+              onSuccess={reload}
+            >
+              Publish
+            </MutationButton>
           ) : null}
           {canManage && row.status === "PUBLISHED" ? (
-            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => unpublishBlogPost(row.id), row.id)} className="text-sm text-slate-500 hover:text-umber disabled:opacity-50">Unpublish</button>
+            <MutationButton
+              variant="link"
+              pendingLabel="Unpublishing…"
+              confirm={{ title: "Unpublish this post?", description: "The post will immediately stop appearing on the public website, but the draft content remains in the CRM.", confirmLabel: "Unpublish", variant: "warning" }}
+              action={() => unpublishBlogPost(row.id)}
+              successToast="Post unpublished"
+              onSuccess={reload}
+            >
+              Unpublish
+            </MutationButton>
           ) : null}
           {canManage && row.status !== "ARCHIVED" ? (
-            <button type="button" disabled={busyId === row.id} onClick={() => void act(() => archiveBlogPost(row.id), row.id)} className="text-sm text-amber-700 hover:underline disabled:opacity-50">Archive</button>
+            <MutationButton
+              variant="link"
+              className="text-amber-700 hover:text-amber-800"
+              pendingLabel="Archiving…"
+              confirm={{ title: "Archive this post?", description: "The post will be removed from the public website. You can restore it by editing and publishing again.", confirmLabel: "Archive", variant: "danger" }}
+              action={() => archiveBlogPost(row.id)}
+              successToast="Post archived"
+              onSuccess={reload}
+            >
+              Archive
+            </MutationButton>
           ) : null}
         </div>
       ),
@@ -121,7 +135,6 @@ export function BlogListView() {
         </div>
       </Panel>
 
-      {error ? <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
       <Panel title="Posts">
         {loading ? (
