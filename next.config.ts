@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   // Keep pdfkit external so its bundled .afm font-metric files resolve from
   // node_modules at runtime instead of being (incorrectly) bundled.
   serverExternalPackages: ["pdfkit"],
+  images: {
+    // Narrowly allow only Supabase Storage public objects (CMS blog/video media).
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+    ],
+  },
 };
 
 export default nextConfig;
