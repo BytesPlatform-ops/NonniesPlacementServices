@@ -5,6 +5,7 @@ import { BlogController } from "./blog.controller";
 import { ShortVideoController } from "./short-video.controller";
 import { TestimonialController } from "./testimonial.controller";
 import { PublicContentController } from "./public-content.controller";
+import { MediaController } from "./media.controller";
 
 describe("PublicContentController", () => {
   it("marks every route @Public (no auth required)", () => {
@@ -33,6 +34,13 @@ describe("Admin content controllers require content permissions", () => {
       for (const m of [...write, "setActive"] as const) {
         expect(Reflect.getMetadata(PERMISSIONS_KEY, proto[m])).toContain(PERMISSIONS.CONTENT_MANAGE);
       }
+    }
+  });
+
+  it("media upload + delete require content.manage", () => {
+    const proto = MediaController.prototype;
+    for (const m of ["createUploadUrl", "remove"] as const) {
+      expect(Reflect.getMetadata(PERMISSIONS_KEY, proto[m])).toContain(PERMISSIONS.CONTENT_MANAGE);
     }
   });
 });
