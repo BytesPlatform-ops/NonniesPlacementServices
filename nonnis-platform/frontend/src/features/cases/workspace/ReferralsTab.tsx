@@ -25,6 +25,7 @@ import type { StaffReferralSummary } from "@/types/referrals";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Modal } from "@/components/ui/Modal";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 
 const inputCls =
@@ -52,11 +53,6 @@ export function ReferralsTab({ caseDetail, onChange }: { caseDetail: CaseDetail;
   const refresh = () => {
     reload();
     onChange();
-  };
-
-  const act = async (fn: () => Promise<unknown>) => {
-    await fn();
-    refresh();
   };
 
   if (loading) return <LoadingState label="Loading referrals…" />;
@@ -104,11 +100,17 @@ export function ReferralsTab({ caseDetail, onChange }: { caseDetail: CaseDetail;
                         {r.notificationStatus !== "NOT_SENT" ? ` · Email ${r.notificationStatus.toLowerCase()}` : ""}
                       </p>
                       {canManage ? (
-                        <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                          {r.status === "DRAFT" ? <button type="button" onClick={() => void act(() => sendReferral(r.id))} className="font-medium text-brand-700 hover:underline">Send</button> : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                          {r.status === "DRAFT" ? (
+                            <MutationButton variant="link" className="text-brand-700 hover:text-brand-800" pendingLabel="Sending…" confirm={{ title: "Send this referral?", description: `The referral will be sent to ${r.provider.name} and a notification email dispatched.`, confirmLabel: "Send referral" }} action={() => sendReferral(r.id)} successToast="Referral sent" onSuccess={refresh}>Send</MutationButton>
+                          ) : null}
                           {r.status === "INFORMATION_REQUESTED" ? <button type="button" onClick={() => setInfoFor(r)} className="font-medium text-brand-700 hover:underline">Provide information</button> : null}
-                          {r.notificationStatus === "FAILED" ? <button type="button" onClick={() => void act(() => resendReferralNotification(r.id))} className="text-slate-500 hover:text-umber">Resend email</button> : null}
-                          {!["DECLINED", "WITHDRAWN", "CANCELLED", "ACCEPTED"].includes(r.status) ? <button type="button" onClick={() => void act(() => withdrawReferral(r.id))} className="text-rose-600 hover:underline">Withdraw</button> : null}
+                          {r.notificationStatus === "FAILED" ? (
+                            <MutationButton variant="link" pendingLabel="Resending…" action={() => resendReferralNotification(r.id)} successToast="Notification resent" onSuccess={refresh}>Resend email</MutationButton>
+                          ) : null}
+                          {!["DECLINED", "WITHDRAWN", "CANCELLED", "ACCEPTED"].includes(r.status) ? (
+                            <MutationButton variant="danger-link" pendingLabel="Withdrawing…" confirm={{ title: "Withdraw this referral?", description: `The referral to ${r.provider.name} will be withdrawn. This cannot be undone.`, confirmLabel: "Withdraw referral", cancelLabel: "Keep referral", variant: "danger" }} action={() => withdrawReferral(r.id)} successToast="Referral withdrawn" onSuccess={refresh}>Withdraw</MutationButton>
+                          ) : null}
                           {r.status !== "DRAFT" ? <button type="button" onClick={() => setMsgFor(r)} className="text-slate-500 hover:text-umber">Messages</button> : null}
                         </div>
                       ) : null}

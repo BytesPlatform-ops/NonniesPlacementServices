@@ -5,6 +5,8 @@ import { AlertTriangle } from "lucide-react";
 import { caseStatusMeta } from "@/lib/case-status";
 import { ApiError } from "@/lib/api-client";
 import { useAsync } from "@/hooks/use-async";
+import { useConfirm } from "@/providers/confirm-provider";
+import { useToast } from "@/providers/toast-provider";
 import { assignCase, transitionCase } from "@/services/cases.service";
 import { listUsers } from "@/services/admin.service";
 import { Panel } from "@/components/ui/Panel";
@@ -22,6 +24,8 @@ export function CaseHeaderActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blockers, setBlockers] = useState<Array<{ code: string; label: string }>>([]);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const users = useAsync(() => (canAssign ? listUsers({ page: 1 }) : Promise.resolve(null)), [canAssign]);
 
@@ -30,12 +34,17 @@ export function CaseHeaderActions({
   }
 
   const runTransition = async (toStatus: (typeof caseDetail.allowedTransitions)[number]) => {
-    if (toStatus === "CANCELLED" && !window.confirm("Cancel this case? This cannot be undone here.")) return;
+    const meta = caseStatusMeta(toStatus);
+    if (toStatus === "CANCELLED") {
+      const ok = await confirm({ title: "Cancel this case?", description: "The case will be moved to Cancelled. This cannot be undone here.", confirmLabel: "Cancel case", cancelLabel: "Keep case", variant: "danger" });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     setBlockers([]);
     try {
       await transitionCase(caseDetail.id, toStatus);
+      toast.success(`Moved to ${meta.label}`);
       await onChange();
     } catch (e) {
       if (e instanceof ApiError) {
@@ -55,6 +64,7 @@ export function CaseHeaderActions({
     setError(null);
     try {
       await assignCase(caseDetail.id, userId);
+      toast.success(userId ? "Case assigned" : "Case unassigned");
       await onChange();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not update the assignment.");

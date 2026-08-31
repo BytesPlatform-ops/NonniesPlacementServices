@@ -4,6 +4,7 @@ import { useState } from "react";
 import { humanizeEnum, formatDate } from "@/lib/format";
 import { LEVELS_OF_CARE, SERVICE_CATEGORIES } from "@/lib/case-options";
 import { cancelServiceRequest, createServiceRequest } from "@/services/cases.service";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { Panel } from "@/components/ui/Panel";
 import { DescriptionList, type DescriptionItem } from "@/components/ui/DescriptionList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -48,12 +49,6 @@ export function ServiceRequestsTab({ caseDetail: c, onChange }: { caseDetail: Ca
     } finally {
       setBusy(false);
     }
-  };
-
-  const cancel = async (id: string) => {
-    if (!window.confirm("Cancel this service request?")) return;
-    await cancelServiceRequest(c.id, id);
-    await onChange();
   };
 
   return (
@@ -114,9 +109,16 @@ export function ServiceRequestsTab({ caseDetail: c, onChange }: { caseDetail: Ca
                 <div className="flex items-center gap-2">
                   <StatusBadge label={humanizeEnum(sr.status)} tone={sr.status === "CANCELLED" ? "negative" : "neutral"} />
                   {editable && sr.status !== "CANCELLED" ? (
-                    <button type="button" onClick={() => void cancel(sr.id)} className="text-sm font-medium text-rose-700 hover:underline">
+                    <MutationButton
+                      variant="danger-link"
+                      pendingLabel="Cancelling…"
+                      confirm={{ title: "Cancel this service request?", description: "The service request will be marked cancelled and excluded from placement.", confirmLabel: "Cancel request", cancelLabel: "Keep request", variant: "danger" }}
+                      action={() => cancelServiceRequest(c.id, sr.id)}
+                      successToast="Service request cancelled"
+                      onSuccess={onChange}
+                    >
                       Cancel
-                    </button>
+                    </MutationButton>
                   ) : null}
                 </div>
               </div>

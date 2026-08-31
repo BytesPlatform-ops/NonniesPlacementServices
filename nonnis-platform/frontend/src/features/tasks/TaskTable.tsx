@@ -7,6 +7,7 @@ import { cancelTask, completeTask, startTask } from "@/services/tasks.service";
 import type { TaskView } from "@/types/tasks";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 
 export function TaskTable({
   tasks,
@@ -21,11 +22,6 @@ export function TaskTable({
   onReassign?: (task: TaskView) => void;
   showCase?: boolean;
 }) {
-  const act = async (fn: () => Promise<unknown>) => {
-    await fn();
-    onChanged();
-  };
-
   const columns: Column<TaskView>[] = [
     {
       key: "title",
@@ -62,13 +58,34 @@ export function TaskTable({
             header: "",
             align: "right" as const,
             render: (t: TaskView) => (
-              <div className="flex items-center justify-end gap-2 whitespace-nowrap text-sm">
-                {t.status === "OPEN" ? <button type="button" onClick={() => void act(() => startTask(t.id))} className="font-medium text-brand-700 hover:underline">Start</button> : null}
+              <div className="flex items-center justify-end gap-3 whitespace-nowrap text-sm">
+                {t.status === "OPEN" ? (
+                  <MutationButton variant="link" className="text-brand-700 hover:text-brand-800" pendingLabel="Starting…" action={() => startTask(t.id)} successToast="Task started" onSuccess={onChanged}>Start</MutationButton>
+                ) : null}
                 {t.status === "OPEN" || t.status === "IN_PROGRESS" ? (
                   <>
-                    <button type="button" onClick={() => void act(() => completeTask(t.id))} className="font-medium text-emerald-700 hover:underline">Complete</button>
+                    <MutationButton
+                      variant="link"
+                      className="text-emerald-700 hover:text-emerald-800"
+                      pendingLabel="Completing…"
+                      confirm={{ title: "Complete this task?", description: "Mark this task as completed.", confirmLabel: "Complete" }}
+                      action={() => completeTask(t.id)}
+                      successToast="Task completed"
+                      onSuccess={onChanged}
+                    >
+                      Complete
+                    </MutationButton>
                     {onReassign ? <button type="button" onClick={() => onReassign(t)} className="text-slate-500 hover:text-umber">Reassign</button> : null}
-                    <button type="button" onClick={() => void act(() => cancelTask(t.id))} className="text-rose-600 hover:underline">Cancel</button>
+                    <MutationButton
+                      variant="danger-link"
+                      pendingLabel="Cancelling…"
+                      confirm={{ title: "Cancel this task?", description: "The task will be marked cancelled. This cannot be undone.", confirmLabel: "Cancel task", cancelLabel: "Keep task", variant: "danger" }}
+                      action={() => cancelTask(t.id)}
+                      successToast="Task cancelled"
+                      onSuccess={onChanged}
+                    >
+                      Cancel
+                    </MutationButton>
                   </>
                 ) : null}
               </div>
