@@ -7,6 +7,7 @@ import { PlacementGallery } from "@/components/sections/PlacementGallery";
 import { AudiencePreview } from "@/components/sections/AudiencePreview";
 import { ResidentJourney } from "@/components/sections/ResidentJourney";
 import { CareStoryCarousel } from "@/components/sections/CareStoryCarousel";
+import { Testimonials } from "@/components/sections/Testimonials";
 import { ServiceAreaBand } from "@/components/sections/ServiceAreaBand";
 import { PricingSection } from "@/components/sections/PricingSection";
 import { Section } from "@/components/ui/Section";
@@ -32,6 +33,7 @@ export default function Home() {
       <AudiencePreview />
       <ResidentJourney />
       <CareStoryCarousel tone="ice" />
+      <Testimonials />
       <ServiceAreaBand />
       <PricingSection />
       <Section id="care-profile" tone="ice" density="normal">
