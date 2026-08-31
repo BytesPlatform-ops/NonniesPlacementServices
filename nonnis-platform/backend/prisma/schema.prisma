@@ -1158,3 +1158,99 @@ model Message {
   @@index([createdAt])
   @@map("case_messages")
 }
+
+// ---------------------------------------------------------------------------
+// Public website content (CMS)
+//
+// Nonnis-managed content published to the PUBLIC marketing website: blog
+// articles, curated short-form videos, and homepage testimonials. Only
+// PUBLISHED/active records are ever exposed by the public read-only API; drafts,
+// archived rows, and internal notes are never public. This is a focused CMS for
+// Nonnis's current needs — not a generic page-builder or DAM.
+// ---------------------------------------------------------------------------
+
+/// Publishing lifecycle for a blog article. Only PUBLISHED is public.
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// A written blog/article. `body` holds a safe Markdown subset (rendered without
+/// raw-HTML interpretation on the website). Slug is the stable public URL key.
+model BlogPost {
+  id               String        @id @default(uuid()) @db.Uuid
+  title            String
+  slug             String        @unique
+  excerpt          String?
+  /// Markdown-subset article body (headings, paragraphs, lists, emphasis, links).
+  body             String
+  featuredImageUrl String?
+  category         String?
+  displayAuthor    String?
+  metaTitle        String?
+  metaDescription  String?
+  status           ContentStatus @default(DRAFT)
+  publishedAt      DateTime?
+  createdByUserId  String?       @db.Uuid
+  updatedByUserId  String?       @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  shortVideos ShortVideo[]
+
+  @@index([status])
+  @@index([publishedAt])
+  @@index([category])
+  @@map("blog_posts")
+}
+
+/// A curated short-form video for the public blog's video strip. Media lives at a
+/// URL (local `/assets/...` or an external host); this stores metadata only — no
+/// transcoding or upload pipeline. Optionally associated to a BlogPost.
+model ShortVideo {
+  id              String    @id @default(uuid()) @db.Uuid
+  title           String
+  caption         String?
+  videoUrl        String
+  posterImageUrl  String?
+  sourceLabel     String?
+  blogPostId      String?   @db.Uuid
+  active          Boolean   @default(true)
+  sortOrder       Int       @default(0)
+  publishedAt     DateTime?
+  createdByUserId String?   @db.Uuid
+  updatedByUserId String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  blogPost BlogPost? @relation(fields: [blogPostId], references: [id], onDelete: SetNull)
+
+  @@index([active, sortOrder])
+  @@index([blogPostId])
+  @@map("short_videos")
+}
+
+/// A homepage testimonial. `internalNotes` is Nonnis-only and NEVER exposed by
+/// the public API. Attribution fields are optional — an approved testimonial may
+/// be intentionally anonymous (quote only).
+model Testimonial {
+  id              String   @id @default(uuid()) @db.Uuid
+  quote           String
+  clientName      String?
+  clientTitle     String?
+  organization    String?
+  location        String?
+  /// Nonnis-internal only. Never returned by the public API.
+  internalNotes   String?
+  active          Boolean  @default(true)
+  featured        Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("testimonials")
+}
