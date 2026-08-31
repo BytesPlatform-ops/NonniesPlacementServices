@@ -1,5 +1,6 @@
 import "server-only";
 import { isPlatformApiConfigured, platformApiUrl } from "./platform-api";
+import { extractEnvelope } from "./platform-url";
 
 /**
  * Server-only fetch helpers for PUBLIC website content served by the Nonni's
@@ -18,7 +19,6 @@ const isDev = process.env.NODE_ENV !== "production";
 
 function diagnose(path: string, category: string, detail: string): void {
   if (isDev) {
-    // eslint-disable-next-line no-console
     console.warn(`[content] ${category} for GET /api/v1${path.startsWith("/") ? path : `/${path}`} — ${detail}`);
   }
 }
@@ -89,12 +89,9 @@ async function getJson<T>(path: string): Promise<T | null> {
     return null;
   }
   try {
-    const body = (await res.json()) as { data?: T };
-    if (body == null || typeof body !== "object" || !("data" in body)) {
-      diagnose(path, "MALFORMED RESPONSE", "missing { data } envelope");
-      return null;
-    }
-    return (body.data ?? null) as T | null;
+    const parsed = extractEnvelope<T>(await res.json());
+    if (parsed === null) diagnose(path, "MALFORMED RESPONSE", "missing { data } envelope");
+    return parsed;
   } catch (err) {
     diagnose(path, "PARSE ERROR", err instanceof Error ? err.message : "invalid JSON");
     return null;
