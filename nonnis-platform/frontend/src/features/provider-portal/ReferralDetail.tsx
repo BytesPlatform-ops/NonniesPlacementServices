@@ -25,6 +25,8 @@ import { Panel } from "@/components/ui/Panel";
 import { DescriptionList } from "@/components/ui/DescriptionList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Modal } from "@/components/ui/Modal";
+import { MutationButton } from "@/components/ui/MutationButton";
+import { useToast } from "@/providers/toast-provider";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 
 const inputCls =
@@ -148,7 +150,17 @@ export function ReferralDetail({ referralId }: { referralId: string }) {
             ) : null}
             {placement.status === "SCHEDULED" ? (
               <>
-                <button type="button" onClick={() => void confirmReferralStart(referralId).then(() => reload())} className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">Confirm service started</button>
+                <MutationButton
+                  variant="primary"
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  pendingLabel="Confirming…"
+                  confirm={{ title: "Confirm service started?", description: "Record that this service has begun for the patient.", confirmLabel: "Confirm started" }}
+                  action={() => confirmReferralStart(referralId)}
+                  successToast="Service start confirmed"
+                  onSuccess={reload}
+                >
+                  Confirm service started
+                </MutationButton>
                 <button type="button" onClick={() => setPlacementModal("unsuccessful")} className="rounded-md border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50">Report unsuccessful start</button>
               </>
             ) : null}
@@ -203,6 +215,7 @@ function ResponseModal({ referralId, action, onClose, onDone }: { referralId: st
   const [form, setForm] = useState<RespondBody>({ action });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const set = (patch: Partial<RespondBody>) => setForm((f) => ({ ...f, ...patch }));
 
   const submit = async () => {
@@ -210,6 +223,7 @@ function ResponseModal({ referralId, action, onClose, onDone }: { referralId: st
     setError(null);
     try {
       await respondReferral(referralId, form);
+      toast.success("Response submitted");
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not submit response.");
@@ -294,6 +308,7 @@ function Confirmations({ form, set }: { form: RespondBody; set: (p: Partial<Resp
 }
 
 function PlacementModal({ referralId, mode, onClose, onDone }: { referralId: string; mode: "schedule" | "unsuccessful"; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [scheduledStartAt, setScheduledStartAt] = useState("");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
@@ -306,6 +321,7 @@ function PlacementModal({ referralId, mode, onClose, onDone }: { referralId: str
     try {
       if (mode === "schedule") await scheduleProviderPlacement(referralId, new Date(scheduledStartAt).toISOString());
       else await reportUnsuccessfulStart(referralId, { reason, note: note || undefined });
+      toast.success(mode === "schedule" ? "Service start scheduled" : "Reported as unsuccessful");
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save.");
