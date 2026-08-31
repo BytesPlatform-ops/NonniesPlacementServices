@@ -39,6 +39,8 @@ export const PERMISSIONS = {
   MESSAGES_SEND: "messages.send",
   MESSAGES_READ_ALL: "messages.read_all",
   INTERNAL_NOTES_MANAGE: "internal_notes.manage",
+  CONTENT_READ: "content.read",
+  CONTENT_MANAGE: "content.manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -78,6 +80,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.MESSAGES_SEND]: "Send case-linked messages the actor is authorized for",
   [PERMISSIONS.MESSAGES_READ_ALL]: "Read case messages across all organizations (platform-wide)",
   [PERMISSIONS.INTERNAL_NOTES_MANAGE]: "Read and add Nonnis-internal case notes",
+  [PERMISSIONS.CONTENT_READ]: "Read public-website CMS content (blog, videos, testimonials)",
+  [PERMISSIONS.CONTENT_MANAGE]: "Create, update and (un)publish public-website CMS content",
 };
 
 export const ROLES = {
@@ -131,6 +135,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.MESSAGES_SEND,
       PERMISSIONS.MESSAGES_READ_ALL,
       PERMISSIONS.INTERNAL_NOTES_MANAGE,
+      PERMISSIONS.CONTENT_READ,
+      PERMISSIONS.CONTENT_MANAGE,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
