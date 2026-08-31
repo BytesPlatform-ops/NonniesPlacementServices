@@ -7,6 +7,7 @@ import { caseStatusMeta, CASE_STATUS_ORDER } from "@/lib/case-status";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
+import { useToast } from "@/providers/toast-provider";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -260,6 +261,7 @@ function ReassignModal({ caseRow, onClose, onDone }: { caseRow: OperationsCaseSu
   const [selected, setSelected] = useState(caseRow.assignedProfessional?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -276,6 +278,7 @@ function ReassignModal({ caseRow, onClose, onDone }: { caseRow: OperationsCaseSu
     setError(null);
     try {
       await assignCase(caseRow.id, assignedUserId);
+      toast.success(assignedUserId ? "Case assigned" : "Case unassigned");
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update the assignment.");
@@ -318,6 +321,7 @@ function BlockModal({ caseRow, onClose, onDone }: { caseRow: OperationsCaseSumma
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   const apply = async () => {
     setBusy(true);
@@ -325,6 +329,7 @@ function BlockModal({ caseRow, onClose, onDone }: { caseRow: OperationsCaseSumma
     try {
       if (caseRow.blocked) await updateCase(caseRow.id, { blocked: false, blockReason: null });
       else await updateCase(caseRow.id, { blocked: true, blockReason: reason || undefined });
+      toast.success(caseRow.blocked ? "Case unblocked" : "Case blocked");
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update the case.");

@@ -5,12 +5,14 @@ import { humanizeEnum } from "@/lib/format";
 import { requirementStatusTone } from "@/lib/attention";
 import { REQUIREMENT_CATEGORIES, REQUIREMENT_STATUSES } from "@/lib/case-options";
 import { createRequirement, updateRequirement } from "@/services/cases.service";
+import { useToast } from "@/providers/toast-provider";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/states";
 import type { CaseDetail, RequirementStatus } from "@/types/domain";
 
 export function RequirementsTab({ caseDetail: c, onChange }: { caseDetail: CaseDetail; onChange: () => Promise<void> | void }) {
+  const toast = useToast();
   const editable = c.editable;
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ category: REQUIREMENT_CATEGORIES[0] as string, label: "", mandatory: true });
@@ -30,7 +32,12 @@ export function RequirementsTab({ caseDetail: c, onChange }: { caseDetail: CaseD
   };
 
   const changeStatus = async (id: string, status: RequirementStatus) => {
-    await updateRequirement(c.id, id, { status });
+    try {
+      await updateRequirement(c.id, id, { status });
+      toast.success("Requirement updated");
+    } catch {
+      toast.error("Could not update the requirement.");
+    }
     await onChange();
   };
 

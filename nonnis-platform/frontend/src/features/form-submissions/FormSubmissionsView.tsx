@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { submissionStatusLabel, submissionStatusTone } from "@/lib/form-submission-status";
 import { ApiError } from "@/lib/api-client";
+import { useToast } from "@/providers/toast-provider";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -253,6 +254,7 @@ function ReviewPanel({ detail, canManage, onSaved }: { detail: FormSubmissionDet
   const [relatedProviderId, setRelatedProviderId] = useState(detail.relatedProviderId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   const save = async () => {
     setBusy(true);
@@ -264,6 +266,7 @@ function ReviewPanel({ detail, canManage, onSaved }: { detail: FormSubmissionDet
         relatedCaseId: relatedCaseId || null,
         relatedProviderId: relatedProviderId || null,
       });
+      toast.success("Review saved");
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save review.");
