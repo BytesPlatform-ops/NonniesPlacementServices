@@ -2,7 +2,10 @@ import { NotFoundException } from "@nestjs/common";
 import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
+import type { MediaService } from "./media.service";
 import { BlogService } from "./blog.service";
+
+const mediaStub = { isManagedPath: () => false, deleteObject: async () => {} } as unknown as MediaService;
 
 const user = { id: "u1" } as unknown as RequestUser;
 const NOW = new Date("2026-01-01T00:00:00.000Z");
@@ -46,7 +49,7 @@ function build() {
     $transaction: async (arr: Promise<unknown>[]) => Promise.all(arr),
   } as unknown as PrismaService;
   const audit = { record: jest.fn(async () => ({})) } as unknown as AuditService;
-  return { svc: new BlogService(prisma, audit), blogPost, audit };
+  return { svc: new BlogService(prisma, audit, mediaStub), blogPost, audit };
 }
 
 describe("BlogService.create", () => {

@@ -22,6 +22,7 @@ export interface BlogAdminDetail extends BlogAdminSummary {
   body: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  featuredImageStoragePath: string | null;
 }
 
 /** List row — deliberately omits the (large) article body. */
@@ -47,6 +48,7 @@ export function toBlogAdminDetail(p: BlogPost): BlogAdminDetail {
     body: p.body,
     metaTitle: p.metaTitle,
     metaDescription: p.metaDescription,
+    featuredImageStoragePath: p.featuredImageStoragePath,
   };
 }
 
@@ -96,7 +98,9 @@ export interface VideoAdminView {
   title: string;
   caption: string | null;
   videoUrl: string;
+  videoStoragePath: string | null;
   posterImageUrl: string | null;
+  posterImageStoragePath: string | null;
   sourceLabel: string | null;
   blogPostId: string | null;
   active: boolean;
@@ -121,7 +125,9 @@ export function toVideoAdminView(v: ShortVideo): VideoAdminView {
     title: v.title,
     caption: v.caption,
     videoUrl: v.videoUrl,
+    videoStoragePath: v.videoStoragePath,
     posterImageUrl: v.posterImageUrl,
+    posterImageStoragePath: v.posterImageStoragePath,
     sourceLabel: v.sourceLabel,
     blogPostId: v.blogPostId,
     active: v.active,

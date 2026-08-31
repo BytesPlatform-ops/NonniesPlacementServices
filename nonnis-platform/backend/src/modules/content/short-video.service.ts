@@ -4,6 +4,7 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
+import { MediaService } from "./media.service";
 import { toVideoAdminView, toVideoPublicView, type VideoAdminView, type VideoPublicView } from "./content.serializer";
 import type { CreateShortVideoDto, ListShortVideosDto, UpdateShortVideoDto } from "./dto/short-video.dto";
 
@@ -12,6 +13,7 @@ export class ShortVideoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly media: MediaService,
   ) {}
 
   async adminList(query: ListShortVideosDto): Promise<PaginatedResult<VideoAdminView>> {
@@ -47,7 +49,9 @@ export class ShortVideoService {
         title: dto.title,
         caption: dto.caption,
         videoUrl: dto.videoUrl,
+        videoStoragePath: dto.videoStoragePath,
         posterImageUrl: dto.posterImageUrl,
+        posterImageStoragePath: dto.posterImageStoragePath,
         sourceLabel: dto.sourceLabel,
         blogPostId: dto.blogPostId,
         active,
@@ -73,7 +77,9 @@ export class ShortVideoService {
         title: dto.title,
         caption: dto.caption,
         videoUrl: dto.videoUrl,
+        videoStoragePath: dto.videoStoragePath,
         posterImageUrl: dto.posterImageUrl,
+        posterImageStoragePath: dto.posterImageStoragePath,
         sourceLabel: dto.sourceLabel,
         blogPostId: dto.blogPostId === null ? null : dto.blogPostId,
         active: dto.active,
@@ -84,6 +90,14 @@ export class ShortVideoService {
       },
     });
     await this.audit.record({ action: "short_video.updated", entityType: "ShortVideo", entityId: id, actorUserId: user.id, metadata: { fields: Object.keys(dto) } });
+
+    // Clean up replaced media objects (managed + no longer referenced) after success.
+    if (existing.videoStoragePath && updated.videoStoragePath !== existing.videoStoragePath) {
+      await this.media.deleteObject(existing.videoStoragePath);
+    }
+    if (existing.posterImageStoragePath && updated.posterImageStoragePath !== existing.posterImageStoragePath) {
+      await this.media.deleteObject(existing.posterImageStoragePath);
+    }
     return toVideoAdminView(updated);
   }
 
@@ -99,10 +113,12 @@ export class ShortVideoService {
   }
 
   async remove(user: RequestUser, id: string): Promise<{ id: string }> {
-    const existing = await this.prisma.shortVideo.findUnique({ where: { id }, select: { id: true } });
+    const existing = await this.prisma.shortVideo.findUnique({ where: { id }, select: { id: true, videoStoragePath: true, posterImageStoragePath: true } });
     if (!existing) throw new NotFoundException(`Short video ${id} not found`);
     await this.prisma.shortVideo.delete({ where: { id } });
     await this.audit.record({ action: "short_video.deleted", entityType: "ShortVideo", entityId: id, actorUserId: user.id });
+    await this.media.deleteObject(existing.videoStoragePath);
+    await this.media.deleteObject(existing.posterImageStoragePath);
     return { id };
   }
 

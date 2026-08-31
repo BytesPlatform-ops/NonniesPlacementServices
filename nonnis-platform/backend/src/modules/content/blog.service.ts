@@ -4,6 +4,7 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
+import { MediaService } from "./media.service";
 import { isValidSlug, slugify } from "./content-slug";
 import {
   toBlogAdminDetail,
@@ -24,6 +25,7 @@ export class BlogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly media: MediaService,
   ) {}
 
   // ---- admin ----
@@ -73,6 +75,7 @@ export class BlogService {
         excerpt: dto.excerpt,
         body: dto.body,
         featuredImageUrl: dto.featuredImageUrl,
+        featuredImageStoragePath: dto.featuredImageStoragePath,
         category: dto.category,
         displayAuthor: dto.displayAuthor,
         metaTitle: dto.metaTitle,
@@ -105,6 +108,7 @@ export class BlogService {
         excerpt: dto.excerpt,
         body: dto.body,
         featuredImageUrl: dto.featuredImageUrl,
+        featuredImageStoragePath: dto.featuredImageStoragePath,
         category: dto.category,
         displayAuthor: dto.displayAuthor,
         metaTitle: dto.metaTitle,
@@ -113,6 +117,16 @@ export class BlogService {
       },
     });
     await this.audit.record({ action: "blog_post.updated", entityType: "BlogPost", entityId: id, actorUserId: user.id, metadata: { fields: Object.keys(dto) } });
+
+    // Best-effort cleanup of the replaced featured image — only after the DB
+    // update succeeded, and only for a managed object that is no longer referenced.
+    if (
+      existing.featuredImageStoragePath &&
+      updated.featuredImageStoragePath !== existing.featuredImageStoragePath &&
+      this.media.isManagedPath(existing.featuredImageStoragePath)
+    ) {
+      await this.media.deleteObject(existing.featuredImageStoragePath);
+    }
     return toBlogAdminDetail(updated);
   }
 
@@ -132,10 +146,11 @@ export class BlogService {
   }
 
   async remove(user: RequestUser, id: string): Promise<{ id: string }> {
-    const existing = await this.prisma.blogPost.findUnique({ where: { id }, select: { id: true, slug: true } });
+    const existing = await this.prisma.blogPost.findUnique({ where: { id }, select: { id: true, slug: true, featuredImageStoragePath: true } });
     if (!existing) throw new NotFoundException(`Blog post ${id} not found`);
     await this.prisma.blogPost.delete({ where: { id } });
     await this.audit.record({ action: "blog_post.deleted", entityType: "BlogPost", entityId: id, actorUserId: user.id, metadata: { slug: existing.slug } });
+    await this.media.deleteObject(existing.featuredImageStoragePath);
     return { id };
   }
 

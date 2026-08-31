@@ -24,9 +24,19 @@ export class CreateShortVideoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(400)
+  videoStoragePath?: string;
+
+  @IsOptional()
+  @IsString()
   @Matches(URL_OR_PATH, { message: "posterImageUrl must be an http(s) URL or a site path" })
   @MaxLength(1000)
   posterImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  posterImageStoragePath?: string;
 
   @IsOptional()
   @IsString()
@@ -67,9 +77,19 @@ export class UpdateShortVideoDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(400)
+  videoStoragePath?: string;
+
+  @IsOptional()
+  @IsString()
   @Matches(URL_OR_PATH, { message: "posterImageUrl must be an http(s) URL or a site path" })
   @MaxLength(1000)
   posterImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  posterImageStoragePath?: string;
 
   @IsOptional()
   @IsString()

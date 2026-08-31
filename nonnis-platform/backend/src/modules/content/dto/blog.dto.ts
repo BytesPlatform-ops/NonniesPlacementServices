@@ -39,6 +39,11 @@ export class CreateBlogPostDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(400)
+  featuredImageStoragePath?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(80)
   category?: string;
 
@@ -93,6 +98,11 @@ export class UpdateBlogPostDto {
   @Matches(URL_OR_PATH, { message: "featuredImageUrl must be an http(s) URL or a site path" })
   @MaxLength(1000)
   featuredImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  featuredImageStoragePath?: string;
 
   @IsOptional()
   @IsString()

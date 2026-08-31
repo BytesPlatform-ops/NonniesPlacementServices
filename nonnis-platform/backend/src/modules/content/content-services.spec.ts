@@ -7,6 +7,7 @@ import { TestimonialService } from "./testimonial.service";
 const user = { id: "u1" } as unknown as RequestUser;
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 const audit = { record: jest.fn(async () => ({})) } as unknown as AuditService;
+const mediaStub = { isManagedPath: () => false, deleteObject: async () => {} } as unknown as import("./media.service").MediaService;
 
 type A = { where?: unknown; orderBy?: unknown; skip?: number; take?: number; data?: Record<string, unknown> };
 
@@ -14,7 +15,7 @@ describe("ShortVideoService.publicList", () => {
   it("returns only active videos ordered by sortOrder", async () => {
     const findMany = jest.fn((_a: A): Promise<unknown> => Promise.resolve([]));
     const prisma = { shortVideo: { findMany } } as unknown as PrismaService;
-    const svc = new ShortVideoService(prisma, audit);
+    const svc = new ShortVideoService(prisma, audit, mediaStub);
     await svc.publicList();
     expect(findMany.mock.calls[0]![0].where).toEqual({ active: true });
     expect(findMany.mock.calls[0]![0].orderBy).toEqual([{ sortOrder: "asc" }, { createdAt: "desc" }]);
@@ -30,7 +31,7 @@ describe("ShortVideoService.create", () => {
       }),
     );
     const prisma = { shortVideo: { create }, blogPost: { findUnique: jest.fn() } } as unknown as PrismaService;
-    const svc = new ShortVideoService(prisma, audit);
+    const svc = new ShortVideoService(prisma, audit, mediaStub);
     await svc.create(user, { title: "Vid", videoUrl: "/assets/videos/x.mp4" } as never);
     const data = create.mock.calls[0]![0].data!;
     expect(data.active).toBe(true);
