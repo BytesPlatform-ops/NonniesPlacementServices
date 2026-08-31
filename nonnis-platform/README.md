@@ -554,6 +554,16 @@ website** shows — with a strict split between admin management and public read
   than crashing. A **Content** nav group (Blog / Short Videos / Testimonials) appears in
   the CRM sidebar. No page-builder, media transcoding, content analytics, AI generation,
   or scheduled publishing.
+- **Media & connectivity (repair):** CMS media lives in the public-read Supabase
+  Storage bucket **`nonnis-content`** (`blog/featured/`, `videos/`, `videos/posters/`).
+  Uploads go direct browser→Supabase via a backend-minted signed URL
+  (`POST /content/media/upload-url`, `content.manage`); each record stores both the
+  public URL and a managed storage path for safe replace/delete. The website builds all
+  platform URLs through one shared helper (`NONNIS_PLATFORM_API_URL`, with a dev-only
+  localhost fallback; 30s ISR). The blog body uses a selection-aware **rich Markdown
+  editor** (toolbar, H1–H6, ⌘/Ctrl+B/I/K, ⌘/Ctrl+Alt+1–6, Write/Split/Preview). Full
+  env, MIME/size rules, the `content:seed-media` command, and the `test:smoke` runtime
+  check are in [`docs/WEBSITE_CONTENT_CMS.md`](docs/WEBSITE_CONTENT_CMS.md).
 
 ## Relationship to the existing website
 

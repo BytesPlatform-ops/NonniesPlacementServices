@@ -245,6 +245,18 @@ and do not let an in-scope feature evolve into them.
   with graceful degradation. The CRM gained a **Content** nav group (Blog / Short Videos
   / Testimonials). Additive only — no page-builder, transcoding, analytics, AI, or
   scheduled publishing; the six public forms + email/PDF/ingestion are untouched.
+  - **Repair pass:** fixed the public site showing nothing (missing
+    `NONNIS_PLATFORM_API_URL` → added a shared `platform-api` helper with a
+    dev-only localhost fallback, visible dev diagnostics, and 30s revalidation)
+    and the fragile root-relative media (→ **Supabase Storage** bucket
+    `nonnis-content` with backend-minted signed direct uploads, storage-path
+    columns for safe replace/delete, an idempotent `content:seed-media` migration
+    of the demo media, and `images.remotePatterns` for both apps). Added a proper
+    **rich Markdown editor** (toolbar, H1–H6, keyboard shortcuts, Write/Split/Preview)
+    and CRM media upload UI, an upgraded immersive short-video rail, a website
+    runtime smoke test, and media/editor/connectivity tests. Still no transcoding,
+    streaming, analytics, AI, or scheduled publishing. See
+    `docs/WEBSITE_CONTENT_CMS.md`.
 
 ---
 
