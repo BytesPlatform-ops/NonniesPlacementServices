@@ -1,6 +1,7 @@
 import "server-only";
 import { isPlatformApiConfigured, platformApiUrl } from "./platform-api";
 import { extractEnvelope } from "./platform-url";
+import { buildDirectoryQuery } from "./directory-query";
 
 /**
  * Server-only fetch helpers for PUBLIC website content served by the Nonni's
@@ -185,17 +186,7 @@ const EMPTY_DIRECTORY: ResidentialDirectoryPage = { items: [], total: 0, page: 1
 
 /** Published residential providers matching the public filters. Degrades to empty on failure. */
 export async function fetchResidentialProviders(params: ResidentialProviderQuery = {}): Promise<ResidentialDirectoryPage> {
-  const q = new URLSearchParams();
-  if (params.q) q.set("q", params.q);
-  if (params.state) q.set("state", params.state);
-  if (params.city) q.set("city", params.city);
-  if (params.serviceCategory) q.set("serviceCategory", params.serviceCategory);
-  if (params.language) q.set("language", params.language);
-  if (params.paymentType) q.set("paymentType", params.paymentType);
-  if (params.sort) q.set("sort", params.sort);
-  if (params.page && params.page > 1) q.set("page", String(params.page));
-  q.set("limit", String(params.limit ?? 12));
-  const data = await getJson<ResidentialDirectoryPage>(`/public/residential-providers?${q.toString()}`);
+  const data = await getJson<ResidentialDirectoryPage>(`/public/residential-providers?${buildDirectoryQuery(params)}`);
   return data ?? EMPTY_DIRECTORY;
 }
 
