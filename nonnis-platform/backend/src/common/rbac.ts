@@ -43,6 +43,9 @@ export const PERMISSIONS = {
   CONTENT_MANAGE: "content.manage",
   REPORTS_READ: "reports.read",
   REPORTS_EXPORT: "reports.export",
+  COMMUNICATIONS_READ: "communications.read",
+  COMMUNICATIONS_MANAGE: "communications.manage",
+  COMMUNICATIONS_IMPORT: "communications.import",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -86,6 +89,9 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.CONTENT_MANAGE]: "Create, update and (un)publish public-website CMS content",
   [PERMISSIONS.REPORTS_READ]: "Read administrative reports (counts, grouped summaries, filtered lists)",
   [PERMISSIONS.REPORTS_EXPORT]: "Export administrative reports as CSV",
+  [PERMISSIONS.COMMUNICATIONS_READ]: "Read communications contacts, lists, tags and consent",
+  [PERMISSIONS.COMMUNICATIONS_MANAGE]: "Create, edit, archive communications contacts, lists, tags, consent and suppressions",
+  [PERMISSIONS.COMMUNICATIONS_IMPORT]: "Import communications contacts (paste/CSV/TXT)",
 };
 
 export const ROLES = {
@@ -143,6 +149,9 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.CONTENT_MANAGE,
       PERMISSIONS.REPORTS_READ,
       PERMISSIONS.REPORTS_EXPORT,
+      PERMISSIONS.COMMUNICATIONS_READ,
+      PERMISSIONS.COMMUNICATIONS_MANAGE,
+      PERMISSIONS.COMMUNICATIONS_IMPORT,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
