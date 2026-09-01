@@ -41,6 +41,8 @@ export const PERMISSIONS = {
   INTERNAL_NOTES_MANAGE: "internal_notes.manage",
   CONTENT_READ: "content.read",
   CONTENT_MANAGE: "content.manage",
+  REPORTS_READ: "reports.read",
+  REPORTS_EXPORT: "reports.export",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -82,6 +84,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.INTERNAL_NOTES_MANAGE]: "Read and add Nonnis-internal case notes",
   [PERMISSIONS.CONTENT_READ]: "Read public-website CMS content (blog, videos, testimonials)",
   [PERMISSIONS.CONTENT_MANAGE]: "Create, update and (un)publish public-website CMS content",
+  [PERMISSIONS.REPORTS_READ]: "Read administrative reports (counts, grouped summaries, filtered lists)",
+  [PERMISSIONS.REPORTS_EXPORT]: "Export administrative reports as CSV",
 };
 
 export const ROLES = {
@@ -137,6 +141,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.INTERNAL_NOTES_MANAGE,
       PERMISSIONS.CONTENT_READ,
       PERMISSIONS.CONTENT_MANAGE,
+      PERMISSIONS.REPORTS_READ,
+      PERMISSIONS.REPORTS_EXPORT,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
