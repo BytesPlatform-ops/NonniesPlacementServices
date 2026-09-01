@@ -1,26 +1,112 @@
 /**
- * Idempotent DEMO seed for Communications (Phase 15A).
+ * Idempotent DEMO seed for Communications (Phases 15A + 15B).
  *
- *   npm run seed:communications-demo            # (re)create demo contacts
+ *   npm run seed:communications-demo            # (re)create demo contacts + email templates
  *   npm run seed:communications-demo -- --clean # remove them
  *
- * All contacts are clearly FICTIONAL (no real people, no patient/PHI data). Demo
- * records are grouped under lists named "Demo — …" so they are easy to remove.
+ * All records are clearly FICTIONAL (no real people, no patient/PHI data). Demo
+ * records are grouped under names starting "Demo — …" so they are easy to remove.
+ * The seeded email campaign is a DRAFT only — nothing is ever queued or sent.
  */
-import { PrismaClient, type CommunicationConsentStatus } from "@prisma/client";
+import { PrismaClient, type CommunicationConsentStatus, type Prisma } from "@prisma/client";
 import { toEmailValue, toPhoneValue } from "../modules/communications/normalization";
+import { compileDesign } from "../modules/communications/email/email-compiler";
+import { validateDesign, type Block, type EmailDesign } from "../modules/communications/email/template-design";
 
 const prisma = new PrismaClient();
 const LIST_PREFIX = "Demo — ";
 
 async function clean(): Promise<void> {
+  // Campaigns first (recipients cascade), then templates, then contacts/lists/tags.
+  await prisma.communicationEmailCampaign.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
+  await prisma.communicationEmailTemplate.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
   const demoLists = await prisma.communicationList.findMany({ where: { name: { startsWith: LIST_PREFIX } }, select: { id: true } });
   const memberIds = (await prisma.communicationListMember.findMany({ where: { listId: { in: demoLists.map((l) => l.id) } }, select: { contactId: true } })).map((m) => m.contactId);
   const c = await prisma.communicationContact.deleteMany({ where: { id: { in: memberIds } } });
   await prisma.communicationList.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
   await prisma.communicationTag.deleteMany({ where: { name: { startsWith: "demo-" } } });
   await prisma.communicationSuppression.deleteMany({ where: { source: "Demo seed" } });
-  console.log(`Removed ${c.count} demo contact(s) and demo lists/tags/suppressions.`);
+  console.log(`Removed ${c.count} demo contact(s) and demo lists/tags/suppressions/templates/campaigns.`);
+}
+
+const DESIGN_SETTINGS: EmailDesign["settings"] = {
+  backgroundColor: "#f5f1ea",
+  contentBackgroundColor: "#ffffff",
+  contentWidth: 600,
+  textColor: "#3b352f",
+  linkColor: "#8a5a2b",
+  fontFamily: "Georgia, 'Times New Roman', serif",
+};
+
+function buildDesign(blocks: Block[]): EmailDesign {
+  return { version: 1, settings: DESIGN_SETTINGS, blocks };
+}
+
+interface TemplateSpec {
+  name: string;
+  description: string;
+  subject: string;
+  preheader: string;
+  blocks: Block[];
+}
+
+const TEMPLATE_SPECS: TemplateSpec[] = [
+  {
+    name: "Demo — Welcome",
+    description: "Friendly welcome note for new partner contacts.",
+    subject: "Welcome to Nonni's, {{firstName}}",
+    preheader: "We're glad to partner with you.",
+    blocks: [
+      { id: "t1-h", type: "heading", content: "Welcome, {{firstName}}!", level: 1, align: "left" },
+      { id: "t1-p1", type: "text", content: "Thank you for connecting with Nonni's. We help families find the right residential placement with care and clarity.", align: "left" },
+      { id: "t1-p2", type: "text", content: "Reach out any time — we're here to help {{organizationName}} however we can.", align: "left" },
+      { id: "t1-btn", type: "button", label: "Visit our site", href: "https://www.example.com", align: "left", backgroundColor: "#8a5a2b", textColor: "#ffffff", radius: 6 },
+    ],
+  },
+  {
+    name: "Demo — Newsletter",
+    description: "Simple monthly update layout.",
+    subject: "Nonni's monthly update",
+    preheader: "A few things worth sharing this month.",
+    blocks: [
+      { id: "t2-h", type: "heading", content: "This month at Nonni's", level: 2, align: "left" },
+      { id: "t2-p1", type: "text", content: "Hello {{firstName}}, here's a short update on our placement work and community partners.", align: "left" },
+      { id: "t2-d", type: "divider" },
+      { id: "t2-p2", type: "text", content: "As always, thank you for being part of what we do. Warm regards, the Nonni's team.", align: "left" },
+    ],
+  },
+];
+
+async function seedEmailTemplates(newsletterListId: string): Promise<void> {
+  let firstTemplateId: string | null = null;
+  for (const spec of TEMPLATE_SPECS) {
+    const design = validateDesign(buildDesign(spec.blocks), false);
+    const { html, text } = compileDesign(design, { preheader: spec.preheader });
+    const template = await prisma.communicationEmailTemplate.create({
+      data: {
+        name: spec.name,
+        description: spec.description,
+        subjectDefault: spec.subject,
+        preheaderDefault: spec.preheader,
+        designJson: buildDesign(spec.blocks) as unknown as Prisma.InputJsonValue,
+        compiledHtml: html,
+        compiledText: text,
+        status: "ACTIVE",
+      },
+    });
+    firstTemplateId ??= template.id;
+  }
+
+  // One DRAFT campaign only — never queued or sent by the seed.
+  await prisma.communicationEmailCampaign.create({
+    data: {
+      name: "Demo — Newsletter draft",
+      status: "DRAFT",
+      templateId: firstTemplateId,
+      audienceConfig: { listIds: [newsletterListId], contactIds: [] } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  console.log(`Seeded ${TEMPLATE_SPECS.length} email template(s) and 1 draft campaign.`);
 }
 
 interface Spec {
@@ -110,6 +196,8 @@ async function main(): Promise<void> {
     void contact;
   }
   console.log(`Seeded ${created} demo contact(s), ${lists.length} lists, tags, and 2 suppressions.`);
+
+  await seedEmailTemplates(lists[1].id);
 }
 
 main()
