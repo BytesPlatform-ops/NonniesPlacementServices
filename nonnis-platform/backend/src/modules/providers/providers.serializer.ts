@@ -1,4 +1,5 @@
 import { Prisma, type CapacityStatus, type CoverageType, type DayOfWeek, type LevelOfCare, type ProviderStatus } from "@prisma/client";
+import { publicListingMissing } from "./public-listing";
 
 // ---- Includes ----
 
@@ -122,6 +123,21 @@ export interface ProviderCapacityView {
   updatedAt: string;
 }
 
+export interface ProviderPublicListingView {
+  isResidentialProvider: boolean;
+  published: boolean;
+  publishedAt: string | null;
+  slug: string | null;
+  description: string | null;
+  featuredImageUrl: string | null;
+  featuredImageStoragePath: string | null;
+  sortOrder: number | null;
+  /** True when the record satisfies the minimum public-profile requirements. */
+  ready: boolean;
+  /** Human-readable list of what still blocks publication (empty when ready). */
+  missing: string[];
+}
+
 export interface ProviderDetailView {
   id: string;
   organizationId: string;
@@ -152,6 +168,8 @@ export interface ProviderDetailView {
   capacity: ProviderCapacityView[];
   editable: boolean;
   canManageCapacity: boolean;
+  /** Public directory listing state — only meaningful for Nonnis managers. */
+  publicListing: ProviderPublicListingView;
   createdAt: string;
   updatedAt: string;
 }
@@ -305,7 +323,33 @@ export function toProviderDetailView(
     capacity: row.capacity.map(toProviderCapacityView),
     editable: opts.editable,
     canManageCapacity: opts.canManageCapacity,
+    publicListing: toPublicListingView(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toPublicListingView(row: ProviderDetailRow): ProviderPublicListingView {
+  const activeServicesCount = row.services.filter((s) => s.active).length;
+  const missing = publicListingMissing({
+    isResidentialProvider: row.isResidentialProvider,
+    status: row.status,
+    displayName: row.displayName,
+    publicSlug: row.publicSlug,
+    city: row.city,
+    state: row.state,
+    activeServicesCount,
+  });
+  return {
+    isResidentialProvider: row.isResidentialProvider,
+    published: row.publicListingEnabled,
+    publishedAt: row.publicPublishedAt ? row.publicPublishedAt.toISOString() : null,
+    slug: row.publicSlug,
+    description: row.publicDescription,
+    featuredImageUrl: row.publicFeaturedImageUrl,
+    featuredImageStoragePath: row.publicFeaturedImageStoragePath,
+    sortOrder: row.publicSortOrder,
+    ready: missing.length === 0,
+    missing,
   };
 }

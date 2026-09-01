@@ -1,11 +1,19 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS } from "../../common/rbac";
 import { AuditService } from "../audit/audit.service";
+import { MediaService, type UploadTicket } from "../content/media.service";
 import type { RequestUser } from "../auth/request-user";
 import { ProviderAccessService, canManageAllProviders, canManageProvider } from "./provider-access";
+import { publicListingMissing } from "./public-listing";
 import {
   providerDetailInclude,
   providerListInclude,
@@ -14,7 +22,13 @@ import {
   type ProviderDetailView,
   type ProviderSummaryView,
 } from "./providers.serializer";
-import type { CreateProviderDto, ListProvidersQueryDto, UpdateProviderDto } from "./dto/provider.dto";
+import type {
+  CreateProviderDto,
+  ListProvidersQueryDto,
+  ProviderUploadUrlDto,
+  UpdatePublicListingDto,
+  UpdateProviderDto,
+} from "./dto/provider.dto";
 
 export interface ProviderUserView {
   membershipId: string;
@@ -38,6 +52,7 @@ export class ProvidersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly access: ProviderAccessService,
+    private readonly media: MediaService,
   ) {}
 
   async list(user: RequestUser, query: ListProvidersQueryDto): Promise<PaginatedResult<ProviderSummaryView>> {
@@ -239,6 +254,120 @@ export class ProvidersService {
       metadata: { status },
     });
     return this.findOne(user, id);
+  }
+
+  // ---- Public residential directory listing (Nonnis-managed) ----------------
+
+  /** Update the public listing configuration. Nonnis-only via the controller guard. */
+  async updatePublicListing(user: RequestUser, id: string, dto: UpdatePublicListingDto): Promise<ProviderDetailView> {
+    const ref = await this.access.loadForWrite(user, id);
+
+    if (dto.publicSlug) {
+      const clash = await this.prisma.provider.findFirst({
+        where: { publicSlug: dto.publicSlug, id: { not: id } },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException("That public URL slug is already in use by another provider.");
+    }
+
+    const current = await this.prisma.provider.findUnique({
+      where: { id },
+      select: { publicFeaturedImageStoragePath: true },
+    });
+
+    await this.prisma.provider.update({
+      where: { id },
+      data: {
+        isResidentialProvider: dto.isResidentialProvider,
+        publicSlug: dto.publicSlug,
+        publicDescription: dto.publicDescription,
+        publicFeaturedImageUrl: dto.publicFeaturedImageUrl,
+        publicFeaturedImageStoragePath: dto.publicFeaturedImageStoragePath,
+        publicSortOrder: dto.publicSortOrder,
+      },
+    });
+
+    // Clean up a replaced managed image after the DB write succeeds.
+    const previous = current?.publicFeaturedImageStoragePath ?? null;
+    if (
+      dto.publicFeaturedImageStoragePath !== undefined &&
+      previous &&
+      previous !== dto.publicFeaturedImageStoragePath
+    ) {
+      await this.media.deleteObject(previous);
+    }
+
+    await this.audit.record({
+      action: "provider.public_listing_updated",
+      entityType: "Provider",
+      entityId: id,
+      organizationId: ref.organizationId,
+      actorUserId: user.id,
+      metadata: { fields: Object.keys(dto) },
+    });
+    return this.findOne(user, id);
+  }
+
+  /** Publish the provider to the public directory after validating the minimum profile. */
+  async publish(user: RequestUser, id: string): Promise<ProviderDetailView> {
+    const ref = await this.access.loadForWrite(user, id);
+    const [provider, activeServicesCount] = await Promise.all([
+      this.prisma.provider.findUnique({
+        where: { id },
+        select: { isResidentialProvider: true, status: true, displayName: true, publicSlug: true, city: true, state: true },
+      }),
+      this.prisma.providerService.count({ where: { providerId: id, active: true } }),
+    ]);
+    if (!provider) throw new NotFoundException(`Provider ${id} not found`);
+
+    const missing = publicListingMissing({ ...provider, activeServicesCount });
+    if (missing.length > 0) {
+      throw new UnprocessableEntityException({
+        message: "This provider cannot be published yet.",
+        missing,
+      });
+    }
+
+    await this.prisma.provider.update({
+      where: { id },
+      data: { publicListingEnabled: true, publicPublishedAt: new Date() },
+    });
+    await this.audit.record({
+      action: "provider.published",
+      entityType: "Provider",
+      entityId: id,
+      organizationId: ref.organizationId,
+      actorUserId: user.id,
+      metadata: { slug: provider.publicSlug },
+    });
+    return this.findOne(user, id);
+  }
+
+  /** Remove the provider from the public directory. */
+  async unpublish(user: RequestUser, id: string): Promise<ProviderDetailView> {
+    const ref = await this.access.loadForWrite(user, id);
+    await this.prisma.provider.update({ where: { id }, data: { publicListingEnabled: false } });
+    await this.audit.record({
+      action: "provider.unpublished",
+      entityType: "Provider",
+      entityId: id,
+      organizationId: ref.organizationId,
+      actorUserId: user.id,
+    });
+    return this.findOne(user, id);
+  }
+
+  /** Mint a signed direct-upload URL for a public provider image (Nonnis-only). */
+  async createPublicImageTicket(user: RequestUser, id: string, dto: ProviderUploadUrlDto): Promise<UploadTicket> {
+    await this.access.loadForWrite(user, id);
+    return this.media.createUploadTicket("provider-public", dto.contentType, dto.sizeBytes);
+  }
+
+  /** Delete a managed public provider image object (external URLs are ignored). */
+  async deletePublicImage(user: RequestUser, id: string, storagePath: string): Promise<{ ok: true }> {
+    await this.access.loadForWrite(user, id);
+    await this.media.deleteObject(storagePath);
+    return { ok: true };
   }
 
   /** Provider organization users/memberships (read-only view; no duplicate user system). */

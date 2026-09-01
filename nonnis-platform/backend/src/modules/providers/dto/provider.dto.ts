@@ -1,17 +1,21 @@
-import { Transform } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
+  Min,
 } from "class-validator";
 import { ProviderStatus, CapacityStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
+import { PUBLIC_SLUG_RE } from "../public-listing";
 
 const toBool = () =>
   Transform(({ value }) => (typeof value === "string" ? value === "true" : Boolean(value)), { toClassOnly: true });
@@ -196,6 +200,65 @@ export class UpdateProviderDto {
 export class ProviderStatusDto {
   @IsEnum(ProviderStatus)
   status!: ProviderStatus;
+}
+
+/** Nonnis-only public residential listing configuration (never provider self-service). */
+export class UpdatePublicListingDto {
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  isResidentialProvider?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim().toLowerCase() : value), { toClassOnly: true })
+  @IsString()
+  @MaxLength(80)
+  @Matches(PUBLIC_SLUG_RE, { message: "Slug must be lowercase words separated by single hyphens." })
+  publicSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3000)
+  publicDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  publicFeaturedImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  publicFeaturedImageStoragePath?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  publicSortOrder?: number;
+}
+
+/** Public-provider image upload ticket request (kind is fixed server-side). */
+export class ProviderUploadUrlDto {
+  @IsString()
+  @MaxLength(120)
+  contentType!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  sizeBytes?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  filename?: string;
+}
+
+export class ProviderDeleteMediaDto {
+  @IsString()
+  @MaxLength(400)
+  storagePath!: string;
 }
 
 export class ListProvidersQueryDto extends PaginationQueryDto {

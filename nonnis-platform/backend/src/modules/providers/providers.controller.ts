@@ -1,11 +1,20 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS } from "../../common/rbac";
 import { CurrentUser, RequireAnyPermission, RequirePermissions } from "../auth/decorators";
 import type { RequestUser } from "../auth/request-user";
+import type { UploadTicket } from "../content/media.service";
 import { ProvidersService } from "./providers.service";
 import type { ProviderDetailView, ProviderSummaryView } from "./providers.serializer";
-import { CreateProviderDto, ListProvidersQueryDto, ProviderStatusDto, UpdateProviderDto } from "./dto/provider.dto";
+import {
+  CreateProviderDto,
+  ListProvidersQueryDto,
+  ProviderDeleteMediaDto,
+  ProviderStatusDto,
+  ProviderUploadUrlDto,
+  UpdatePublicListingDto,
+  UpdateProviderDto,
+} from "./dto/provider.dto";
 
 const WRITE = [PERMISSIONS.PROVIDERS_MANAGE, PERMISSIONS.PROVIDERS_MANAGE_OWN] as const;
 
@@ -57,5 +66,49 @@ export class ProvidersController {
   @RequirePermissions(PERMISSIONS.PROVIDERS_READ)
   listUsers(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string) {
     return this.providers.listUsers(user, id);
+  }
+
+  // ---- Public residential directory listing (Nonnis-only) -------------------
+
+  @Patch(":id/public-listing")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
+  updatePublicListing(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdatePublicListingDto,
+  ): Promise<ProviderDetailView> {
+    return this.providers.updatePublicListing(user, id, dto);
+  }
+
+  @Post(":id/public-listing/publish")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
+  publish(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string): Promise<ProviderDetailView> {
+    return this.providers.publish(user, id);
+  }
+
+  @Post(":id/public-listing/unpublish")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
+  unpublish(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string): Promise<ProviderDetailView> {
+    return this.providers.unpublish(user, id);
+  }
+
+  @Post(":id/public-listing/image-upload-url")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
+  imageUploadUrl(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ProviderUploadUrlDto,
+  ): Promise<UploadTicket> {
+    return this.providers.createPublicImageTicket(user, id, dto);
+  }
+
+  @Delete(":id/public-listing/image")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_MANAGE)
+  deleteImage(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ProviderDeleteMediaDto,
+  ) {
+    return this.providers.deletePublicImage(user, id, dto.storagePath);
   }
 }
