@@ -16,9 +16,17 @@ export interface OutboundEmailMessage {
   subject: string;
   html: string;
   text: string;
-  /** Extra headers (e.g. List-Unsubscribe). */
+  /** Extra headers (e.g. List-Unsubscribe, In-Reply-To, References, Message-Id). */
   headers?: Record<string, string>;
   tags?: string[];
+  /** Outbound attachments (base64 content sent through the provider — never a link). */
+  attachments?: OutboundEmailAttachment[];
+}
+
+export interface OutboundEmailAttachment {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
 }
 
 /** How a failure should be treated by the dispatcher — never raw HTTP text. */

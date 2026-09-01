@@ -40,6 +40,9 @@ export class BrevoEmailTransport implements EmailTransport {
       textContent: message.text,
       headers: { "X-Nonnis-Message-Id": message.internalMessageId, ...(message.headers ?? {}) },
       ...(message.tags && message.tags.length ? { tags: message.tags } : {}),
+      ...(message.attachments && message.attachments.length
+        ? { attachment: message.attachments.map((a) => ({ name: a.fileName, content: a.contentBase64 })) }
+        : {}),
     };
 
     const controller = new AbortController();

@@ -1,7 +1,9 @@
 import { MockEmailTransport } from "./mock-email-transport";
 import { MockSmsTransport } from "./mock-sms-transport";
 import { BrevoEmailTransport } from "./brevo-email-transport";
-import { resolveEmailTransport } from "./transport.providers";
+import { MockEmailInboundAdapter } from "./mock-email-inbound-adapter";
+import { BrevoEmailInboundAdapter } from "./brevo-email-inbound-adapter";
+import { resolveEmailTransport, resolveInboundAdapter } from "./transport.providers";
 import type { OutboundEmailMessage } from "./email-transport";
 
 const msg = (to: string): OutboundEmailMessage => ({ internalMessageId: "m1", to, senderEmail: "s@nonnis.test", subject: "s", html: "<p>h</p>", text: "h" });
@@ -53,4 +55,35 @@ describe("resolveEmailTransport (fail-safe selection)", () => {
     expect(() => resolveEmailTransport("bogus", mock, brevoConfigured)).toThrow(/Unknown/i);
   });
   void cfg;
+});
+
+describe("resolveInboundAdapter (fail-safe selection)", () => {
+  const mock = new MockEmailInboundAdapter();
+  const brevoConfigured = { name: "brevo", configured: true } as unknown as BrevoEmailInboundAdapter;
+  const brevoUnconfigured = { name: "brevo", configured: false } as unknown as BrevoEmailInboundAdapter;
+
+  it("selects the mock inbound adapter by default", () => {
+    expect(resolveInboundAdapter("mock", mock, brevoUnconfigured)).toBe(mock);
+  });
+  it("selects brevo inbound when configured", () => {
+    expect(resolveInboundAdapter("brevo", mock, brevoConfigured)).toBe(brevoConfigured);
+  });
+  it("fails safely when brevo inbound is selected but not configured", () => {
+    expect(() => resolveInboundAdapter("brevo", mock, brevoUnconfigured)).toThrow(/missing/i);
+  });
+  it("fails for an unknown inbound provider", () => {
+    expect(() => resolveInboundAdapter("bogus", mock, brevoConfigured)).toThrow(/Unknown/i);
+  });
+});
+
+describe("MockEmailInboundAdapter.parse", () => {
+  it("parses a mock inbound body (single or array) and inlines attachments", async () => {
+    const adapter = new MockEmailInboundAdapter();
+    const [n] = adapter.parse({ from: { address: "a@b.com", name: "A" }, to: ["reply-tok@reply.mock.local"], subject: "Re: hi", text: "hello", messageId: "<m1>", attachments: [{ fileName: "f.pdf", mimeType: "application/pdf", contentBase64: Buffer.from("pdf").toString("base64") }] });
+    expect(n.from.address).toBe("a@b.com");
+    expect(n.destinations).toContain("reply-tok@reply.mock.local");
+    expect(n.attachments[0]?.fileName).toBe("f.pdf");
+    const buf = await adapter.fetchAttachment(n.attachments[0]!, 1024);
+    expect(buf?.toString()).toBe("pdf");
+  });
 });

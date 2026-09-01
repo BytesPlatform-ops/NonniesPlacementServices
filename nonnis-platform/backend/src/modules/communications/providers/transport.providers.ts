@@ -3,9 +3,12 @@ import { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "../../../config/configuration";
 import { EMAIL_TRANSPORT, type EmailTransport } from "./email-transport";
 import { SMS_TRANSPORT, type SmsTransport } from "./sms-transport";
+import { INBOUND_EMAIL_ADAPTER, type EmailInboundAdapter } from "./email-inbound-adapter";
 import { MockEmailTransport } from "./mock-email-transport";
 import { BrevoEmailTransport } from "./brevo-email-transport";
 import { MockSmsTransport } from "./mock-sms-transport";
+import { MockEmailInboundAdapter } from "./mock-email-inbound-adapter";
+import { BrevoEmailInboundAdapter } from "./brevo-email-inbound-adapter";
 
 const logger = new Logger("CommunicationsTransport");
 
@@ -27,6 +30,22 @@ export function resolveEmailTransport(name: string, mock: MockEmailTransport, br
   throw new Error(`Unknown COMMUNICATIONS_EMAIL_PROVIDER "${name}". Valid values: mock, brevo.`);
 }
 
+/**
+ * Resolve the configured inbound email adapter. "brevo" without inbound config
+ * (domain + secret) FAILS SAFELY so an operator never believes inbound replies are
+ * wired when they are not. Mock is always available for local development/tests.
+ */
+export function resolveInboundAdapter(name: string, mock: MockEmailInboundAdapter, brevo: BrevoEmailInboundAdapter): EmailInboundAdapter {
+  if (name === "mock") return mock;
+  if (name === "brevo") {
+    if (!brevo.configured) {
+      throw new Error("COMMUNICATIONS_INBOUND_EMAIL_PROVIDER=brevo but COMMUNICATIONS_INBOUND_EMAIL_DOMAIN / COMMUNICATIONS_INBOUND_EMAIL_SECRET are missing. Configure them or use mock.");
+    }
+    return brevo;
+  }
+  throw new Error(`Unknown COMMUNICATIONS_INBOUND_EMAIL_PROVIDER "${name}". Valid values: mock, brevo.`);
+}
+
 function resolveSms(name: string, mock: MockSmsTransport): SmsTransport {
   if (name === "mock") return mock;
   if (RESERVED_SMS.has(name)) throw new Error(`SMS provider "${name}" is not implemented yet (arrives in phase 15D). Use "mock" for now.`);
@@ -37,6 +56,8 @@ export const transportProviders: Provider[] = [
   MockEmailTransport,
   BrevoEmailTransport,
   MockSmsTransport,
+  MockEmailInboundAdapter,
+  BrevoEmailInboundAdapter,
   {
     provide: EMAIL_TRANSPORT,
     inject: [ConfigService, MockEmailTransport, BrevoEmailTransport],
@@ -44,6 +65,15 @@ export const transportProviders: Provider[] = [
       const transport = resolveEmailTransport(config.get("communicationsEmailProvider", { infer: true }), mock, brevo);
       logger.log(`Email transport: ${transport.name} (configured=${transport.configured})`);
       return transport;
+    },
+  },
+  {
+    provide: INBOUND_EMAIL_ADAPTER,
+    inject: [ConfigService, MockEmailInboundAdapter, BrevoEmailInboundAdapter],
+    useFactory: (config: ConfigService<AppConfig, true>, mock: MockEmailInboundAdapter, brevo: BrevoEmailInboundAdapter): EmailInboundAdapter => {
+      const adapter = resolveInboundAdapter(config.get("communicationsInboundEmailProvider", { infer: true }), mock, brevo);
+      logger.log(`Inbound email adapter: ${adapter.name} (configured=${adapter.configured})`);
+      return adapter;
     },
   },
   {
