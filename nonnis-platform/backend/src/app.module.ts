@@ -17,6 +17,7 @@ import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.
 import { ReadinessModule } from "./modules/readiness/readiness.module";
 import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { ReportsModule } from "./modules/reports/reports.module";
+import { CommunicationsModule } from "./modules/communications/communications.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { MessagesModule } from "./modules/messages/messages.module";
 import { TimelineModule } from "./modules/timeline/timeline.module";
@@ -45,6 +46,7 @@ import { UsersModule } from "./modules/users/users.module";
     TimelineModule,
     ContentModule,
     ReportsModule,
+    CommunicationsModule,
   ],
 })
 export class AppModule {}
