@@ -63,6 +63,63 @@ interface Paginated<T> {
   total: number;
 }
 
+export interface ResidentialProviderCard {
+  slug: string;
+  name: string;
+  summary: string | null;
+  city: string | null;
+  state: string | null;
+  imageUrl: string | null;
+  services: string[];
+  languages: string[];
+}
+
+export interface ResidentialProviderDetail {
+  slug: string;
+  name: string;
+  description: string | null;
+  city: string | null;
+  state: string | null;
+  addressLine1: string | null;
+  postalCode: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  imageUrl: string | null;
+  services: Array<{ name: string; levelOfCare: string | null; description: string | null }>;
+  coverage: string[];
+  paymentTypes: string[];
+  languages: string[];
+  hours: Array<{ day: string; closed: boolean; open24: boolean; opensAt: string | null; closesAt: string | null }>;
+}
+
+export interface ResidentialDirectoryOptions {
+  serviceCategories: Array<{ id: string; name: string }>;
+  languages: Array<{ id: string; name: string }>;
+  paymentTypes: Array<{ id: string; name: string }>;
+  states: string[];
+}
+
+export interface ResidentialDirectoryPage {
+  items: ResidentialProviderCard[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ResidentialProviderQuery {
+  q?: string;
+  state?: string;
+  city?: string;
+  serviceCategory?: string;
+  language?: string;
+  paymentType?: string;
+  sort?: string;
+  page?: number;
+  limit?: number;
+}
+
 // CMS content should reflect admin changes promptly; a 30s revalidation keeps
 // pages fast while ensuring a published/edited record appears within ~30s. An
 // indefinitely cached empty response must never make content disappear.
@@ -122,4 +179,39 @@ export async function fetchShortVideos(): Promise<ShortVideoItem[]> {
 /** Active testimonials (featured first). Returns [] on any failure. */
 export async function fetchTestimonials(): Promise<TestimonialItem[]> {
   return (await getJson<TestimonialItem[]>(`/public/testimonials`)) ?? [];
+}
+
+const EMPTY_DIRECTORY: ResidentialDirectoryPage = { items: [], total: 0, page: 1, pageSize: 12, totalPages: 0 };
+
+/** Published residential providers matching the public filters. Degrades to empty on failure. */
+export async function fetchResidentialProviders(params: ResidentialProviderQuery = {}): Promise<ResidentialDirectoryPage> {
+  const q = new URLSearchParams();
+  if (params.q) q.set("q", params.q);
+  if (params.state) q.set("state", params.state);
+  if (params.city) q.set("city", params.city);
+  if (params.serviceCategory) q.set("serviceCategory", params.serviceCategory);
+  if (params.language) q.set("language", params.language);
+  if (params.paymentType) q.set("paymentType", params.paymentType);
+  if (params.sort) q.set("sort", params.sort);
+  if (params.page && params.page > 1) q.set("page", String(params.page));
+  q.set("limit", String(params.limit ?? 12));
+  const data = await getJson<ResidentialDirectoryPage>(`/public/residential-providers?${q.toString()}`);
+  return data ?? EMPTY_DIRECTORY;
+}
+
+/** A single published residential provider by slug, or null if not found / unpublished. */
+export async function fetchResidentialProvider(slug: string): Promise<ResidentialProviderDetail | null> {
+  return getJson<ResidentialProviderDetail>(`/public/residential-providers/${encodeURIComponent(slug)}`);
+}
+
+/** Directory filter options limited to values that currently have published providers. */
+export async function fetchResidentialOptions(): Promise<ResidentialDirectoryOptions> {
+  return (
+    (await getJson<ResidentialDirectoryOptions>(`/public/residential-providers/options`)) ?? {
+      serviceCategories: [],
+      languages: [],
+      paymentTypes: [],
+      states: [],
+    }
+  );
 }
