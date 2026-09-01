@@ -22,6 +22,13 @@ import { EmailWebhookController } from "./email/email-webhook.controller";
 import { EmailStatusController } from "./email/email-status.controller";
 import { UnsubscribeController } from "./email/unsubscribe.controller";
 import { UnsubscribeService } from "./email/unsubscribe.service";
+import { ConversationsController } from "./email/conversations.controller";
+import { ConversationService } from "./email/conversation.service";
+import { InboundReviewController } from "./email/inbound-review.controller";
+import { InboundReviewService } from "./email/inbound-review.service";
+import { InboundEmailService } from "./email/inbound-email.service";
+import { EmailInboundWebhookController } from "./email/email-inbound-webhook.controller";
+import { AttachmentStorageService } from "./email/attachment-storage.service";
 
 /**
  * Communications module. Phase 15A: contacts, lists, tags, consent, suppression,
@@ -43,6 +50,9 @@ import { UnsubscribeService } from "./email/unsubscribe.service";
     EmailWebhookController,
     EmailStatusController,
     UnsubscribeController,
+    ConversationsController,
+    InboundReviewController,
+    EmailInboundWebhookController,
   ],
   providers: [
     ContactsService,
@@ -56,6 +66,10 @@ import { UnsubscribeService } from "./email/unsubscribe.service";
     EmailDispatcherService,
     EmailEventsService,
     UnsubscribeService,
+    ConversationService,
+    InboundReviewService,
+    InboundEmailService,
+    AttachmentStorageService,
     ...transportProviders,
   ],
 })
