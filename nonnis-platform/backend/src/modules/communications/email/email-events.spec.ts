@@ -11,6 +11,8 @@ function makeService(recipient: Record<string, unknown> | null, opts: { eventCre
     : jest.fn().mockResolvedValue({});
   const prisma = {
     communicationEmailCampaignRecipient: { findFirst: jest.fn().mockResolvedValue(recipient), update: recipientUpdate },
+    communicationMessage: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
+    communicationConversation: { findUnique: jest.fn().mockResolvedValue(recipient ? { contactId: "contact-1" } : null) },
     communicationEmailEvent: { create: eventCreate },
     communicationContact: { findUnique: jest.fn().mockResolvedValue(recipient ? { id: "contact-1", normalizedEmail: "p@x.com" } : null) },
     contactChannelPreference: { upsert: prefUpsert },
