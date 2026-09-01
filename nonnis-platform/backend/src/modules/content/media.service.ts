@@ -7,7 +7,7 @@ import type { AppConfig } from "../../config/configuration";
 /** One dedicated, public-read bucket for all Nonnis website CMS media. */
 export const CONTENT_BUCKET = "nonnis-content";
 
-export type MediaKind = "blog-featured" | "video" | "poster";
+export type MediaKind = "blog-featured" | "video" | "poster" | "provider-public";
 
 /** MIME → extension allow-lists. Anything not listed is rejected. */
 const IMAGE_MIME: Record<string, string> = {
@@ -29,6 +29,7 @@ const FOLDERS: Record<MediaKind, string> = {
   "blog-featured": "blog/featured",
   video: "videos",
   poster: "videos/posters",
+  "provider-public": "providers/public",
 };
 const MANAGED_PREFIXES = Object.values(FOLDERS).map((f) => `${f}/`);
 
