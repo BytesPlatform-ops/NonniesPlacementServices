@@ -323,6 +323,34 @@ and do not let an in-scope feature evolve into them.
   No matching/scoring/ranking, reviews/ratings, billing, public capacity, family
   accounts, favorites, or public referral creation. See
   `docs/RESIDENTIAL_DIRECTORY.md`.
+- **Slice 15A — Communications Foundation (Contacts + Imports + Consent/Suppression):**
+  the first phase of a new **Communications** module — a dedicated
+  marketing/outreach contact database, intentionally **separate** from
+  User/Patient/Provider identities and never linked to Case/Patient records (PHI
+  boundary). New `communications.read` / `.manage` / `.import` permissions (Nonnis
+  Admin + Operations only). Additive models: `CommunicationContact` (email/phone
+  with normalized + E.164 forms, MANUAL/PASTE/CSV/TXT source, ACTIVE/ARCHIVED),
+  channel-specific `ContactChannelPreference` (consent UNKNOWN/OPTED_IN/OPTED_OUT —
+  imports default to **UNKNOWN**, never auto opted-in), `CommunicationList` +
+  members, `CommunicationTag` + assignments, `CommunicationSuppression`
+  (upsert/reactivate, authoritative for future sending), `CommunicationImportBatch`
+  (summary counts only — never raw contact lists), and a minimal future-safe
+  `CommunicationConversation`/`CommunicationMessage` foundation (no UI, no sending).
+  Reputable normalization (`libphonenumber-js` E.164 with an explicit default
+  country; class-validator email **format** validation — not mailbox verification).
+  Deterministic duplicate/conflict classification that **never auto-merges** two
+  distinct people (email→A + phone→B = CONFLICT). A polished **import wizard**
+  (paste / CSV with column mapping / TXT) — parse → validate → preview → confirm →
+  commit, where preview never mutates and commit **re-validates server-side**;
+  bounded to 5 MB / 25,000 rows; raw files are never stored; a downloadable
+  formula-injection-safe error CSV. A **provider-independent transport
+  architecture** — `EmailTransport` / `SmsTransport` ports injected by DI token,
+  with deterministic **mock** implementations selected by config (default mock; live
+  Brevo/Twilio fail safely as not-yet-implemented). CRM UI: a **Communications** nav
+  group (Contacts / Lists / Imports) in the Warm Premium design language. A reusable
+  `evaluateChannelEligibility` policy (for 15B/15D). **No** real Brevo/Twilio calls,
+  bulk send, campaign/template builder, inbox, inbound webhooks, schedulers, or
+  analytics. See `docs/COMMUNICATIONS.md`.
 
 ---
 
@@ -345,9 +373,16 @@ COMPLETED
        (client-requested insertion; Basic Reporting was paused for it)
   12. Basic Reporting + Administrative Reports
   13. Public Residential Provider Directory
+  15A. Communications — Foundation + Contacts + Imports + Consent/Suppression
 
-NEXT
-  14. Full Core-System Audit + Production Hardening   ← next slice
+NEXT (Communications module, remaining phases)
+  15B. Email Templates + Visual Email Builder + Email Campaigns   ← next slice
+  15C. Email Inbox + Inbound Replies + Full Email Threading
+  15D. SMS Campaigns + Two-Way SMS
+  15E. Unified Communications Inbox + Security + Delivery Hardening
+
+THEN
+  14. Full Core-System Audit + Production Hardening
 ```
 
 > Slice 8 (Website Form Submissions) is **complete and additive**: the public-website
@@ -362,7 +397,20 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Full Core-System Audit + Production Hardening** (item 14): an end-to-end review
+**Communications 15B — Email Templates + Visual Email Builder + Email Campaigns:**
+build on the 15A foundation — reusable visual email templates, campaign creation
+targeting lists/segments, and delivery via the `EmailTransport` port (the Brevo
+adapter is introduced here). Campaign recipient building must enforce the 15A
+`evaluateChannelEligibility` policy + suppression. No inbound/inbox yet (15C). Do
+NOT begin automatically. (Communications 15A is complete; see
+`docs/COMMUNICATIONS.md`.)
+
+---
+
+## 7b. Later: Full Core-System Audit + Production Hardening
+
+After the Communications module (15B–15E) completes, the final planned slice is an
+end-to-end review
 and hardening pass across the completed core system — security/RBAC/tenant-isolation
 audit, input validation, error handling, performance and index review, dependency
 and config/secret hygiene, and production-readiness checks. No new product scope; no

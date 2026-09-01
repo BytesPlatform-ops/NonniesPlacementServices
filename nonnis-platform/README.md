@@ -681,6 +681,51 @@ subscription billing/Stripe, public capacity exposure, family accounts, favorite
 and public referral creation. Full details in
 [`docs/RESIDENTIAL_DIRECTORY.md`](docs/RESIDENTIAL_DIRECTORY.md).
 
+## Communications — Foundation (Phase 15A)
+
+The first phase of a new **Communications** module: a dedicated marketing/outreach
+contact database. It is **separate** from User/Patient/Provider identities and
+never references Case/Patient records — a deliberate PHI boundary. Brevo (email)
+and Twilio (SMS) are **future transport providers only**; they never own this data
+model, and this phase makes **no** live provider calls and sends nothing.
+
+- **Access:** `communications.read` / `.manage` / `.import` (Nonnis Admin +
+  Operations only; provider/discharge users denied).
+- **Contacts:** `CommunicationContact` (email + normalized email, phone +
+  E.164, organization, MANUAL/PASTE/CSV/TXT source, ACTIVE/ARCHIVED). At least one
+  usable channel is required; archiving (never hard delete) preserves future
+  history. Duplicate detection on normalized email/phone; an email matching one
+  contact and a phone matching a **different** contact is a CONFLICT that is never
+  auto-merged.
+- **Consent is channel-specific** (`ContactChannelPreference`): UNKNOWN / OPTED_IN
+  / OPTED_OUT per EMAIL and SMS. **Imports default to UNKNOWN** — uploading an
+  address never implies consent. `CommunicationSuppression` is a central,
+  authoritative, upsert-based opt-out/bounce list; import never clears it.
+- **Imports:** a polished paste / CSV (with column mapping) / TXT wizard —
+  **parse → validate → preview → confirm → commit**. Preview never mutates; commit
+  **re-validates server-side**. Bounded to 5 MB / 25,000 rows; raw files are never
+  stored; a downloadable, formula-injection-safe error CSV lists rejected rows.
+  Imported contacts can optionally join a list and receive tags.
+- **Normalization:** `libphonenumber-js` E.164 (explicit default country);
+  class-validator email **format** validation (clearly not mailbox verification).
+- **Provider-independent transports:** `EmailTransport` / `SmsTransport` ports
+  injected by DI token, with deterministic **mock** implementations. The provider is
+  chosen by `COMMUNICATIONS_EMAIL_PROVIDER` / `COMMUNICATIONS_SMS_PROVIDER` (default
+  `mock`); reserved live values fail safely until their phase ships. A reusable
+  `evaluateChannelEligibility` policy (OPTED_IN required; UNKNOWN never treated as
+  opted-in) is provided for campaign building in 15B/15D.
+- **CRM UI:** a **Communications** nav group — Contacts (counts, filters, create/
+  edit/consent/archive, detail), Lists (create + member management), Imports (the
+  wizard) — in the Warm Premium design language with confirm/toast/`MutationButton`.
+  No campaign/inbox pages yet.
+- **Demo data:** `npm run seed:communications-demo` (idempotent; `-- --clean`
+  removes it) seeds ~16 clearly-fictional contacts (no PHI) covering email-only,
+  phone-only, both, varied consent, and suppressed cases.
+
+Future phases: 15B (templates + campaigns), 15C (email inbox + replies), 15D (SMS +
+two-way), 15E (unified inbox + hardening). Full details in
+[`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root keeps its existing behavior; the
