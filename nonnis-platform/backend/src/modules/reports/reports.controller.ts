@@ -16,6 +16,7 @@ import {
   TasksReportDto,
 } from "./dto/report-filters.dto";
 import { OverviewService } from "./services/overview.service";
+import { ReportOptionsService } from "./services/report-options.service";
 import { CasesReportService } from "./services/cases-report.service";
 import { ReferralsReportService } from "./services/referrals-report.service";
 import { ProvidersReportService } from "./services/providers-report.service";
@@ -29,6 +30,7 @@ type ExportResult = { csv: string; rowCount: number } | { tooMany: number };
 export class ReportsController {
   constructor(
     private readonly overview: OverviewService,
+    private readonly optionsService: ReportOptionsService,
     private readonly cases: CasesReportService,
     private readonly referrals: ReferralsReportService,
     private readonly providers: ProvidersReportService,
@@ -44,6 +46,12 @@ export class ReportsController {
   @RequirePermissions(PERMISSIONS.REPORTS_READ)
   getOverview(@Query() query: OverviewReportDto) {
     return this.overview.overview(query);
+  }
+
+  @Get("filter-options")
+  @RequirePermissions(PERMISSIONS.REPORTS_READ)
+  getFilterOptions() {
+    return this.optionsService.options();
   }
 
   // ---- Report data --------------------------------------------------------
