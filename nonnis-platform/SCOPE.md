@@ -296,6 +296,33 @@ and do not let an in-scope feature evolve into them.
   error states, toast-driven CSV export, and print-friendly output (chrome/filters
   hidden, title + generated timestamp + applied period/scope preserved). See
   `docs/REPORTING.md`.
+- **Slice 13 — Public Residential Provider Directory:** the existing internal
+  **Provider** records became publicly discoverable on the marketing website — no
+  duplicate provider database. Minimal additive Provider fields
+  (`isResidentialProvider`, `publicListingEnabled`, `publicSlug` (unique),
+  `publicDescription`, `publicFeaturedImageUrl`/`publicFeaturedImageStoragePath`,
+  `publicSortOrder`, `publicPublishedAt`), all defaulting **OFF** so nothing is
+  auto-published; canonical Provider fields remain the public source. Publishing is
+  an explicit **Nonnis-only** action (`providers.manage`; provider users cannot
+  self-publish) with deterministic **publish validation** (residential + ACTIVE +
+  display name + valid unique slug + city/state + ≥1 active service) returning
+  structured missing fields, and `provider.published`/`unpublished`/
+  `public_listing_updated` **AuditEvents**. Public read-only `@Public()` API
+  (`/public/residential-providers`, `/:slug`, `/options`) is hard-gated to
+  ACTIVE + residential + published and returns an **explicit public serializer**
+  (no internal notes, capacity, users, ids, or storage paths). The public website
+  gained a family-facing **`/residential-providers`** directory (distinct from the
+  business-facing `/providers`, which is untouched) — image-led cards, server-side
+  search/filter/sort, pagination, a mobile filter drawer, a detail page with
+  conservative `LocalBusiness` structured data, SEO metadata, and sitemap entries
+  for published providers only. Provider images reuse the existing Supabase
+  Storage signed-upload architecture (`providers/public/…`) via a provider-scoped
+  endpoint and the shared `MediaUpload`. A **Website Listing** admin tab (Warm
+  Premium design; confirm/toast/`MutationButton`) manages it. An idempotent
+  `npm run seed:public-directory-demo` seeds clearly-fictional demo communities.
+  No matching/scoring/ranking, reviews/ratings, billing, public capacity, family
+  accounts, favorites, or public referral creation. See
+  `docs/RESIDENTIAL_DIRECTORY.md`.
 
 ---
 
@@ -317,12 +344,10 @@ COMPLETED
       Public Website Blog + Short Videos + Testimonials CMS
        (client-requested insertion; Basic Reporting was paused for it)
   12. Basic Reporting + Administrative Reports
+  13. Public Residential Provider Directory
 
 NEXT
-  13. Public Residential Provider Directory   ← next slice
-
-REMAINING
-  14. Full Core-System Audit + Production Hardening
+  14. Full Core-System Audit + Production Hardening   ← next slice
 ```
 
 > Slice 8 (Website Form Submissions) is **complete and additive**: the public-website
@@ -337,8 +362,9 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Public Residential Provider Directory** (item 13): a public-website directory of
-residential provider listings, sourced from the existing provider records, in the
-public marketing site's design language. Additive and read-only from the public
-side. NOT matching/scoring/ranking, and not the excluded advanced modules.
-(Basic Reporting — item 12 — is complete; see `docs/REPORTING.md`.)
+**Full Core-System Audit + Production Hardening** (item 14): an end-to-end review
+and hardening pass across the completed core system — security/RBAC/tenant-isolation
+audit, input validation, error handling, performance and index review, dependency
+and config/secret hygiene, and production-readiness checks. No new product scope; no
+excluded advanced modules. (Public Residential Provider Directory — item 13 — is
+complete; see `docs/RESIDENTIAL_DIRECTORY.md`.)

@@ -637,6 +637,50 @@ ranking, prediction, scheduling, or custom report builder.
 
 Full details are in [`docs/REPORTING.md`](docs/REPORTING.md).
 
+## Public residential directory (Slice 13)
+
+The existing internal **Provider** records are the single source of truth; a public
+family-facing directory on the marketing website surfaces the ones Nonnis chooses to
+publish. No second provider database.
+
+- **Minimal additive fields** on `Provider` (`isResidentialProvider`,
+  `publicListingEnabled`, unique `publicSlug`, `publicDescription`,
+  `publicFeaturedImageUrl`/`publicFeaturedImageStoragePath`, `publicSortOrder`,
+  `publicPublishedAt`) — all default **OFF**, so no existing provider is auto-published
+  and canonical fields (name, description, phone, email, website, city, state) stay the
+  public source.
+- **Nonnis-only publishing** (`providers.manage`; provider-portal users cannot
+  self-publish). `PATCH /providers/:id/public-listing`, `…/publish`, `…/unpublish`.
+  Publish is gated by deterministic validation (residential + ACTIVE + display name +
+  valid unique slug + city/state + ≥1 active service); failures return structured
+  `missing` fields. Publish/unpublish/update write `provider.published` /
+  `provider.unpublished` / `provider.public_listing_updated` **AuditEvents** (never
+  case `WorkflowEvent`s).
+- **Public read-only API** (`@Public()`): `GET /api/v1/public/residential-providers`
+  (search `q`, `state`, `city`, `serviceCategory`, `language`, `paymentType`,
+  `sort`, `page`, `limit`), `/:slug`, and `/options`. All are hard-gated to
+  ACTIVE + residential + published and use an **explicit public serializer** — no
+  internal notes, capacity, provider users, ids, or storage paths.
+- **Public website** (`/residential-providers` + `/residential-providers/[slug]`),
+  distinct from the business-facing `/providers` (untouched, along with the "List
+  Your Community" form). Image-led cards, server-side search/filter/sort,
+  pagination, a mobile filter drawer, a detail page with SEO metadata and
+  conservative `LocalBusiness` structured data (no fabricated reviews/ratings), and
+  sitemap entries for published providers only.
+- **Media** reuses the CMS Supabase Storage signed-upload architecture under
+  `providers/public/…` via a provider-scoped endpoint and the shared `MediaUpload`
+  component; the **Website Listing** admin tab (Warm Premium; confirm/toast/
+  `MutationButton`) manages residential classification, slug, description, image,
+  order, and publish/unpublish, with a "Published / Not published / Missing
+  information" state and a **View on website** link.
+- **Demo data:** `npm run seed:public-directory-demo` (idempotent; `-- --clean`
+  removes it) seeds clearly-fictional demo communities using existing Supabase images.
+
+Out of scope and confirmed absent: matching/scoring/ranking, reviews/ratings,
+subscription billing/Stripe, public capacity exposure, family accounts, favorites,
+and public referral creation. Full details in
+[`docs/RESIDENTIAL_DIRECTORY.md`](docs/RESIDENTIAL_DIRECTORY.md).
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root keeps its existing behavior; the
