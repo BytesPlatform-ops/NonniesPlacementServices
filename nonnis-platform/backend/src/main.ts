@@ -24,7 +24,11 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
 
-  app.enableCors({ origin: [config.get("frontendUrl", { infer: true })], credentials: true });
+  app.enableCors({
+    origin: [config.get("frontendUrl", { infer: true })],
+    credentials: true,
+    exposedHeaders: ["Content-Disposition"],
+  });
   app.enableShutdownHooks();
 
   const port = config.get("port", { infer: true });
