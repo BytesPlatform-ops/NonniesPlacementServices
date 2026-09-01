@@ -28,6 +28,14 @@ const NAV: NavGroup[] = [
     items: [{ label: "Reports", href: "/reports", permission: PERMISSIONS.REPORTS_READ }],
   },
   {
+    title: "Communications",
+    items: [
+      { label: "Contacts", href: "/communications/contacts", permission: PERMISSIONS.COMMUNICATIONS_READ },
+      { label: "Lists", href: "/communications/lists", permission: PERMISSIONS.COMMUNICATIONS_READ },
+      { label: "Imports", href: "/communications/imports", permission: PERMISSIONS.COMMUNICATIONS_IMPORT },
+    ],
+  },
+  {
     title: "Content",
     items: [
       { label: "Blog", href: "/content/blog", permission: PERMISSIONS.CONTENT_READ },

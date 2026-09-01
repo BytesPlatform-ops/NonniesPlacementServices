@@ -37,4 +37,7 @@ export const PERMISSIONS = {
   CONTENT_MANAGE: "content.manage",
   REPORTS_READ: "reports.read",
   REPORTS_EXPORT: "reports.export",
+  COMMUNICATIONS_READ: "communications.read",
+  COMMUNICATIONS_MANAGE: "communications.manage",
+  COMMUNICATIONS_IMPORT: "communications.import",
 } as const;
