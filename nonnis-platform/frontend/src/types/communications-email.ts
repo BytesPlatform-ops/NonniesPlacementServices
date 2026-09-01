@@ -131,5 +131,6 @@ export interface EmailProviderStatus {
 }
 export interface EmailStatus {
   provider: EmailProviderStatus;
+  inbound?: { provider: string; mockMode: boolean; configured: boolean; sendingLiveButInboundMissing: boolean };
   dispatch: { provider: string; enabled: boolean; queued: number; processing: number; failed: number; deliveryUnknown: number };
 }
