@@ -16,7 +16,8 @@
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
     "bootstrap:admin": "node --env-file=.env -r ts-node/register src/scripts/bootstrap-admin.ts",
-    "content:seed-media": "node --env-file=.env -r ts-node/register src/scripts/seed-content-media.ts"
+    "content:seed-media": "node --env-file=.env -r ts-node/register src/scripts/seed-content-media.ts",
+    "seed:public-directory-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-public-directory-demo.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
