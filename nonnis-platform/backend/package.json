@@ -18,7 +18,8 @@
     "bootstrap:admin": "node --env-file=.env -r ts-node/register src/scripts/bootstrap-admin.ts",
     "content:seed-media": "node --env-file=.env -r ts-node/register src/scripts/seed-content-media.ts",
     "seed:public-directory-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-public-directory-demo.ts",
-    "seed:communications-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-communications-demo.ts"
+    "seed:communications-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-communications-demo.ts",
+    "communications:simulate-email-reply": "node --env-file=.env -r ts-node/register src/scripts/simulate-email-reply.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -30,6 +31,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/client": "^6.2.1",
     "@supabase/supabase-js": "^2.112.4",
+    "@types/sanitize-html": "^2.16.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "csv-parse": "^7.0.2",
@@ -37,7 +39,8 @@
     "mjml": "^4.18.0",
     "nodemailer": "^9.0.6",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sanitize-html": "^2.12.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
