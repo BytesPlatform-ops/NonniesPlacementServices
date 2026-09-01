@@ -1346,6 +1346,10 @@ model CommunicationContact {
 
   organizationName String?
 
+  /// Opaque, random, per-contact token backing the public email unsubscribe link
+  /// (never exposes the contact id or email in the URL). Generated at send time.
+  unsubscribeToken String? @unique
+
   source CommunicationContactSource @default(MANUAL)
   status CommunicationContactStatus @default(ACTIVE)
 
@@ -1513,4 +1517,171 @@ model CommunicationMessage {
 
   @@index([conversationId])
   @@map("communication_messages")
+}
+
+// ============================================================================
+// Communications Phase 15B — email templates, campaigns, recipient snapshots,
+// Postgres-backed delivery queue, normalized provider events, unsubscribe.
+// Transport stays provider-independent (mock / Brevo behind EmailTransport).
+// ============================================================================
+
+enum CommunicationEmailTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CommunicationEmailCampaignStatus {
+  DRAFT
+  READY
+  QUEUED
+  SENDING
+  COMPLETED
+  PARTIALLY_FAILED
+  CANCELLED
+}
+
+enum CommunicationEmailRecipientStatus {
+  EXCLUDED
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+  UNSUBSCRIBED
+  CANCELLED
+  DELIVERY_UNKNOWN
+}
+
+enum NormalizedEmailEvent {
+  ACCEPTED
+  DELIVERED
+  BOUNCED_HARD
+  BOUNCED_SOFT
+  BLOCKED
+  COMPLAINT
+  UNSUBSCRIBED
+  FAILED
+}
+
+model CommunicationEmailTemplate {
+  id               String                           @id @default(uuid()) @db.Uuid
+  name             String
+  description      String?
+  subjectDefault   String?
+  preheaderDefault String?
+  /// Structured, versioned block design ({ version, settings, blocks }). The
+  /// backend compiler is authoritative — frontend HTML is never trusted.
+  designJson       Json
+  compiledHtml     String
+  compiledText     String
+  status           CommunicationEmailTemplateStatus @default(DRAFT)
+  createdByUserId  String?                          @db.Uuid
+  updatedByUserId  String?                          @db.Uuid
+  createdAt        DateTime                         @default(now())
+  updatedAt        DateTime                         @updatedAt
+
+  campaigns CommunicationEmailCampaign[]
+
+  @@index([status])
+  @@map("communication_email_templates")
+}
+
+model CommunicationEmailCampaign {
+  id         String                           @id @default(uuid()) @db.Uuid
+  name       String
+  status     CommunicationEmailCampaignStatus @default(DRAFT)
+  templateId String?                          @db.Uuid
+
+  /// Immutable content snapshot captured at queue time.
+  subjectSnapshot   String?
+  preheaderSnapshot String?
+  htmlSnapshot      String?
+  textSnapshot      String?
+  senderEmail       String?
+  senderName        String?
+
+  /// { listIds: string[], contactIds: string[] }
+  audienceConfig         Json
+  eligibleRecipientCount Int  @default(0)
+  excludedRecipientCount Int  @default(0)
+
+  queuedAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template   CommunicationEmailTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recipients CommunicationEmailCampaignRecipient[]
+
+  @@index([status])
+  @@map("communication_email_campaigns")
+}
+
+model CommunicationEmailCampaignRecipient {
+  id         String @id @default(uuid()) @db.Uuid
+  campaignId String @db.Uuid
+  /// Soft reference (no FK relation) so history survives contact deletion.
+  contactId  String @db.Uuid
+
+  emailSnapshot            String
+  firstNameSnapshot        String?
+  lastNameSnapshot         String?
+  organizationNameSnapshot String?
+
+  exclusionReason String?
+  deliveryStatus  CommunicationEmailRecipientStatus @default(QUEUED)
+
+  internalMessageId String  @unique
+  threadToken       String  @unique
+  providerMessageId String?
+  conversationId    String? @db.Uuid
+  messageId         String? @db.Uuid
+
+  attemptCount   Int       @default(0)
+  claimToken     String?
+  leaseExpiresAt DateTime?
+
+  queuedAt       DateTime?
+  processingAt   DateTime?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  bouncedAt      DateTime?
+  unsubscribedAt DateTime?
+  cancelledAt    DateTime?
+
+  lastErrorCode        String?
+  lastErrorMessageSafe String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign CommunicationEmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, deliveryStatus])
+  @@index([deliveryStatus])
+  @@index([providerMessageId])
+  @@map("communication_email_campaign_recipients")
+}
+
+model CommunicationEmailEvent {
+  id                String               @id @default(uuid()) @db.Uuid
+  recipientId       String?              @db.Uuid
+  providerMessageId String?
+  normalizedType    NormalizedEmailEvent
+  /// Stable dedup key (provider message id + event type + occurrence) so retried
+  /// webhooks are idempotent. Raw provider payloads are NOT stored.
+  dedupKey          String               @unique
+  occurredAt        DateTime?
+  createdAt         DateTime             @default(now())
+
+  @@index([providerMessageId])
+  @@map("communication_email_events")
 }
