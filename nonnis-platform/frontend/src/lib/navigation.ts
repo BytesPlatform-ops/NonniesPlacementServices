@@ -32,6 +32,8 @@ const NAV: NavGroup[] = [
     items: [
       { label: "Contacts", href: "/communications/contacts", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Lists", href: "/communications/lists", permission: PERMISSIONS.COMMUNICATIONS_READ },
+      { label: "Email Templates", href: "/communications/email-templates", permission: PERMISSIONS.COMMUNICATIONS_READ },
+      { label: "Email Campaigns", href: "/communications/email-campaigns", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Imports", href: "/communications/imports", permission: PERMISSIONS.COMMUNICATIONS_IMPORT },
     ],
   },

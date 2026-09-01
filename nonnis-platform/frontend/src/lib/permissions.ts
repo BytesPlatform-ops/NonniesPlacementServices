@@ -40,4 +40,5 @@ export const PERMISSIONS = {
   COMMUNICATIONS_READ: "communications.read",
   COMMUNICATIONS_MANAGE: "communications.manage",
   COMMUNICATIONS_IMPORT: "communications.import",
+  COMMUNICATIONS_SEND: "communications.send",
 } as const;
