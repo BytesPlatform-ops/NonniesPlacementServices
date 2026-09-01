@@ -3,7 +3,7 @@
 A CRM-owned marketing/outreach system. **Nonnis PostgreSQL is the source of
 truth.** Brevo (email) and Twilio (SMS) are **future transport providers** — they
 never own contacts, lists, consent, or history. This document covers **Phase 15A**
-(the foundation) and names the future phases.
+(the foundation) and **Phase 15B** (outbound email), and names the future phases.
 
 > **PHI boundary:** the Communications contact database is deliberately separate
 > from `User` / `Patient` / `Provider`. It never references `Case`/`Patient`
@@ -14,17 +14,18 @@ never own contacts, lists, consent, or history. This document covers **Phase 15A
 | Phase | Scope | Status |
 | ----- | ----- | ------ |
 | **15A** | Foundation: contacts, lists, tags, consent, suppression, imports, transport ports + mocks | **Complete** |
-| 15B | Email templates + visual builder + email campaigns (Brevo adapter) | Planned |
+| **15B** | Email templates + visual builder + email campaigns (Brevo adapter) | **Complete** |
 | 15C | Email inbox + inbound replies + full email threading | Planned |
 | 15D | SMS campaigns + two-way SMS (Twilio adapter) | Planned |
 | 15E | Unified communications inbox + security + delivery hardening | Planned |
 
 ## 1. Access (RBAC)
 
-`communications.read` / `communications.manage` / `communications.import`, granted
-only to **NONNIS_ADMIN** and **NONNIS_OPERATIONS**. Discharge and provider users get
-none. Every endpoint is authenticated + permission-gated; contacts are PII and are
-never exposed publicly.
+`communications.read` / `communications.manage` / `communications.import` /
+`communications.send` (15B), granted only to **NONNIS_ADMIN** and
+**NONNIS_OPERATIONS**. Discharge and provider users get none. Every endpoint is
+authenticated + permission-gated; contacts are PII and are never exposed publicly.
+`communications.send` specifically gates **all** campaign queueing and test sends.
 
 ## 2. Data model (additive migration `20260902010000_communications_foundation`)
 
@@ -125,10 +126,104 @@ search/filters, create/edit modal, consent controls, tags, archive, detail page)
 
 ## 10. Testing & anti-scope
 
-Backend (309 total): normalization, eligibility, duplicate classification, CSV/paste
+Backend: normalization, eligibility, duplicate classification, CSV/paste
 parsing, import preview classification (in-batch dup, existing dup, suppressed,
 invalid, CSV mapping), contact conflict rules, RBAC, and mock-transport + fail-safe
-factory. Frontend (86 total): consent/import labels + the client CSV sanitizer.
-Confirmed **absent**: real Brevo/Twilio calls, bulk email/SMS send, campaign/template
-builder, inbound webhooks, inbox UI, schedulers/cron, analytics, AI, external email
-validation, patient import.
+factory. **15B adds**: email compiler (MJML + merge escaping), campaign audience
+evaluation, delivery dispatcher, normalized delivery events + idempotency, unsubscribe
+flow, and the Brevo transport adapter (mocked HTTP). Frontend (86 total): consent/
+import labels + the client CSV sanitizer. Confirmed **absent** through 15B: SMS
+send, inbound webhooks/replies, inbox UI, schedulers/cron/recurring sends, open/click
+tracking, analytics, AI, external email validation, patient import.
+
+---
+
+## Phase 15B — Email templates, visual builder & campaigns
+
+### Data model (additive migration `20260902020000_communications_email_campaigns`)
+
+- **`CommunicationEmailTemplate`** — `subjectDefault?`, `preheaderDefault?`, a
+  versioned block **`designJson`** (`{ version, settings, blocks }`), server-compiled
+  **`compiledHtml`/`compiledText`**, `status` DRAFT/ACTIVE/ARCHIVED. The **backend
+  compiler is authoritative** — the frontend never supplies trusted HTML.
+- **`CommunicationEmailCampaign`** — `status`
+  DRAFT→READY→QUEUED→SENDING→COMPLETED/PARTIALLY_FAILED/CANCELLED, optional
+  `templateId`, an **immutable content snapshot** (`subject/preheader/html/text
+  Snapshot`, `senderEmail/Name`) captured at queue time, `audienceConfig`
+  (`{ listIds, contactIds }`), eligible/excluded counts, and lifecycle timestamps.
+- **`CommunicationEmailCampaignRecipient`** — per-recipient **snapshots**
+  (`emailSnapshot`, name/org), `deliveryStatus`
+  (EXCLUDED/QUEUED/PROCESSING/SENT/DELIVERED/BOUNCED/FAILED/UNSUBSCRIBED/CANCELLED/
+  DELIVERY_UNKNOWN), `exclusionReason?`, delivery bookkeeping (`attemptCount`,
+  `claimToken`/`leaseExpiresAt`, `providerMessageId`), and opaque
+  `unsubscribeToken`/`threadToken`. `contactId` is a scalar (no FK) so recipient
+  history survives contact deletion.
+- **`CommunicationEmailEvent`** — normalized provider events (ACCEPTED/DELIVERED/
+  BOUNCED_HARD/BOUNCED_SOFT/BLOCKED/COMPLAINT/UNSUBSCRIBED/FAILED) with a unique
+  `dedupKey` for idempotency. `CommunicationContact` gains a unique `unsubscribeToken`.
+
+### Templates & the visual builder
+
+Blocks: text / heading / image / button / columns / divider / spacer. The compiler
+emits responsive HTML via **MJML** and a plain-text alternative. **Merge fields are
+allow-listed** — `firstName`, `lastName`, `fullName`, `email`, `organizationName`,
+plus the system `unsubscribeUrl` — and **all patient/case/diagnosis/clinical/insurance
+fields are excluded by construction** (PHI boundary). Merge values are HTML-escaped
+per recipient. Image/link URLs must be HTTPS (no localhost); campaign compilation
+requires production media. The frontend **preview uses the same server compiler**
+(`POST …/templates/preview`) — it never renders its own HTML.
+
+### Campaigns & delivery
+
+- **Sender is fixed** to the configured verified sender; only **From-Name** is
+  user-editable (CRM users can never enter an arbitrary From address).
+- **Two eligibility checks:** the 15A `evaluateChannelEligibility` policy (+
+  suppression) runs at **queue time** and **again at send time** — a contact that
+  became opted-out/suppressed between queue and send is **not sent** (marked
+  UNSUBSCRIBED/CANCELLED).
+- **Queue, not inline send:** queueing snapshots content + recipients and returns
+  immediately. A **Postgres-backed dispatcher** claims recipients with `FOR UPDATE
+  SKIP LOCKED` (multi-instance safe), sends with bounded concurrency, and retries
+  transient failures with backoff (max 3). **Ambiguous** sends become
+  `DELIVERY_UNKNOWN` and are **never blindly retried**.
+- **Cancellation** stops not-yet-sent recipients; already-sent emails cannot be recalled.
+
+```
+COMMUNICATIONS_EMAIL_PROVIDER=mock   # default; "brevo" selects the live adapter
+EMAIL_DISPATCH_ENABLED=true          # dispatcher poll loop (mock-safe)
+# live-only, never committed: BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME
+```
+
+The **Brevo** adapter posts to `api.brevo.com/v3/smtp/email` behind the 15A
+`EmailTransport` port. Mock stays the default and needs no keys; selecting `brevo`
+without a key **fails at DI resolution** (never silently mocks). The API key is never
+exposed through any API, logged, or committed.
+
+### Delivery events, suppression & unsubscribe
+
+A **secret-guarded** webhook (`POST …/communications/email/webhook?secret=…`,
+constant-time compare, 401 without a configured secret) ingests delivery events
+idempotently (dedupKey). Hard bounce → BOUNCED + suppress; complaint → suppress +
+opt-out; unsubscribe → UNSUBSCRIBED + suppress + opt-out. The **public unsubscribe**
+page lives on the marketing site and uses an **opaque token** (no id/email in the
+URL); one-click `List-Unsubscribe`/`List-Unsubscribe-Post` headers are set on every
+send. Raw webhook payloads are not stored unbounded.
+
+### API surface (15B additions)
+
+Under `/api/v1/communications/email` (permission-gated): `templates`
+(list/get/create/patch/duplicate/archive/**preview**/**test-send**), `campaigns`
+(list/get/create/patch/**audience-preview**/**queue**/**cancel**/recipients),
+`status`. Public + `@SkipTransform`: the delivery webhook and
+`/api/v1/public/communications/unsubscribe` (status/perform). Queue, cancel, and
+test-send require `communications.send`; **queue and cancel require confirmation** in
+the UI.
+
+### CRM UI
+
+**Email Templates** (list + visual builder with live preview, merge chips, and a
+rate-limited test send) and **Email Campaigns** (a Details→Template→Audience→Review
+wizard with a recipient-eligibility preview, and a campaign detail page with count
+cards, a filterable recipient table, live status polling while sending, and
+cancel/queue actions). A **mock-mode banner** shows when no live provider is
+configured. Warm Premium design system throughout.

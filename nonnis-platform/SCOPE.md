@@ -352,6 +352,38 @@ and do not let an in-scope feature evolve into them.
   bulk send, campaign/template builder, inbox, inbound webhooks, schedulers, or
   analytics. See `docs/COMMUNICATIONS.md`.
 
+- **Slice 15B — Email Templates + Visual Email Builder + Email Campaigns:** the
+  outbound-email phase of the Communications module. New `communications.send`
+  permission gates all campaign queueing and test sends. Additive models:
+  `CommunicationEmailTemplate` (versioned block **design JSON** + server-compiled
+  HTML/text; DRAFT/ACTIVE/ARCHIVED), `CommunicationEmailCampaign` (immutable content
+  **snapshot** + audience config, DRAFT→READY→QUEUED→SENDING→COMPLETED/
+  PARTIALLY_FAILED/CANCELLED), `CommunicationEmailCampaignRecipient` (per-recipient
+  contact/email snapshot, delivery status, attempt/lease bookkeeping, opaque
+  `unsubscribeToken`/`threadToken`), and `CommunicationEmailEvent` (idempotent,
+  deduped provider delivery events). A **visual email builder** (text/heading/image/
+  button/columns/divider/spacer blocks) whose HTML the **backend MJML compiler is
+  authoritative over** — the frontend never supplies trusted HTML; a merge-field
+  **allow-list** (firstName/lastName/fullName/email/organizationName + system
+  `unsubscribeUrl`) that **excludes all patient/case/clinical/PHI fields**. Campaign
+  recipient building enforces the 15A `evaluateChannelEligibility` policy +
+  suppression at **both** queue time and a **second check at send time** (never send
+  if newly ineligible). A **Postgres-backed delivery queue** (`FOR UPDATE SKIP
+  LOCKED`, bounded concurrency, retry with backoff) so the HTTP request that queues a
+  campaign never sends the emails itself; ambiguous sends become `DELIVERY_UNKNOWN`
+  and are **never blindly retried**. Real **Brevo** transport behind the 15A
+  `EmailTransport` port (mock stays the default; Brevo without a key fails safely at
+  DI resolution — never silently mock); the API key is never exposed, logged, or
+  committed. Sender is fixed to the **configured verified sender** (only From-Name is
+  user-editable). A **secret-guarded** delivery-event webhook driving bounce/complaint/
+  unsubscribe → suppression, and a **public opaque-token unsubscribe** page on the
+  marketing site (List-Unsubscribe one-click headers, no id/email in the URL).
+  Campaign **cancellation**. CRM UI: Email Templates + Email Campaigns (builder,
+  preview, test send, audience eligibility preview, campaign detail with live
+  recipient statuses) in the Warm Premium design language. **No** inbox, inbound
+  replies, SMS, scheduled/recurring sends, or open/click tracking/analytics. See
+  `docs/COMMUNICATIONS.md`.
+
 ---
 
 ## 6. Remaining implementation sequence
@@ -374,10 +406,10 @@ COMPLETED
   12. Basic Reporting + Administrative Reports
   13. Public Residential Provider Directory
   15A. Communications — Foundation + Contacts + Imports + Consent/Suppression
+  15B. Email Templates + Visual Email Builder + Email Campaigns
 
 NEXT (Communications module, remaining phases)
-  15B. Email Templates + Visual Email Builder + Email Campaigns   ← next slice
-  15C. Email Inbox + Inbound Replies + Full Email Threading
+  15C. Email Inbox + Inbound Replies + Full Email Threading   ← next slice
   15D. SMS Campaigns + Two-Way SMS
   15E. Unified Communications Inbox + Security + Delivery Hardening
 
@@ -397,13 +429,11 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Communications 15B — Email Templates + Visual Email Builder + Email Campaigns:**
-build on the 15A foundation — reusable visual email templates, campaign creation
-targeting lists/segments, and delivery via the `EmailTransport` port (the Brevo
-adapter is introduced here). Campaign recipient building must enforce the 15A
-`evaluateChannelEligibility` policy + suppression. No inbound/inbox yet (15C). Do
-NOT begin automatically. (Communications 15A is complete; see
-`docs/COMMUNICATIONS.md`.)
+**Communications 15C — Email Inbox + Inbound Replies + Full Email Threading:**
+build on the 15A/15B foundation — an internal email inbox, inbound-reply ingestion,
+and conversation threading (the `threadToken` correlation token and `Conversation`/
+`Message` records were laid down in 15B). No SMS yet (15D). Do NOT begin
+automatically. (Communications 15A + 15B are complete; see `docs/COMMUNICATIONS.md`.)
 
 ---
 

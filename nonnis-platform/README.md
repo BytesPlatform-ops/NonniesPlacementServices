@@ -720,11 +720,45 @@ model, and this phase makes **no** live provider calls and sends nothing.
   No campaign/inbox pages yet.
 - **Demo data:** `npm run seed:communications-demo` (idempotent; `-- --clean`
   removes it) seeds ~16 clearly-fictional contacts (no PHI) covering email-only,
-  phone-only, both, varied consent, and suppressed cases.
+  phone-only, both, varied consent, and suppressed cases — plus (15B) two demo email
+  templates and one **draft** campaign (never queued or sent).
 
-Future phases: 15B (templates + campaigns), 15C (email inbox + replies), 15D (SMS +
-two-way), 15E (unified inbox + hardening). Full details in
-[`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+## Communications — Email Templates & Campaigns (Phase 15B)
+
+Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis Admin
++ Operations), which gates **all** campaign queueing and test sends.
+
+- **Templates + visual builder:** reusable templates with a block builder (text /
+  heading / image / button / columns / divider / spacer). The **backend MJML compiler
+  is authoritative** over the HTML — the frontend never sends trusted HTML, and the
+  live preview calls the same server compiler. **Merge fields are allow-listed**
+  (`firstName`, `lastName`, `fullName`, `email`, `organizationName`, system
+  `unsubscribeUrl`) and **exclude all patient/case/clinical/PHI fields**; values are
+  HTML-escaped per recipient.
+- **Campaigns:** a Details → Template → Audience → Review wizard with a recipient
+  **eligibility preview**. The **sender is fixed** to the configured verified sender
+  (only From-Name is editable). Queueing snapshots content + recipients and returns
+  immediately — it never sends inline.
+- **Delivery:** a **Postgres-backed dispatcher** claims recipients with `FOR UPDATE
+  SKIP LOCKED` (multi-instance safe), sends with bounded concurrency, and retries
+  transient failures with backoff. The 15A eligibility + suppression policy is
+  re-checked **at send time** (a newly opted-out contact is not sent). Ambiguous
+  sends become `DELIVERY_UNKNOWN` and are **never blindly retried**. Campaigns can be
+  **cancelled** (stops not-yet-sent recipients).
+- **Provider:** a real **Brevo** adapter behind the 15A `EmailTransport` port.
+  `COMMUNICATIONS_EMAIL_PROVIDER=mock` stays the default and needs no keys; selecting
+  `brevo` without a key **fails at startup** (never silently mocks). The API key is
+  never exposed through an API, logged, or committed.
+- **Events & unsubscribe:** a **secret-guarded** delivery-event webhook drives
+  bounce/complaint/unsubscribe → suppression idempotently; a **public opaque-token
+  unsubscribe** page (no id/email in the URL) plus one-click `List-Unsubscribe`
+  headers on every send.
+- **CRM UI:** **Email Templates** (builder + preview + test send) and **Email
+  Campaigns** (wizard + detail page with count cards, filterable recipient table, and
+  live status polling). A mock-mode banner shows when no live provider is configured.
+
+Future phases: 15C (email inbox + replies), 15D (SMS + two-way), 15E (unified inbox +
+hardening). Full details in [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
 ## Relationship to the existing website
 
