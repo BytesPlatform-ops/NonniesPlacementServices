@@ -24,6 +24,10 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    title: "Reports",
+    items: [{ label: "Reports", href: "/reports", permission: PERMISSIONS.REPORTS_READ }],
+  },
+  {
     title: "Content",
     items: [
       { label: "Blog", href: "/content/blog", permission: PERMISSIONS.CONTENT_READ },

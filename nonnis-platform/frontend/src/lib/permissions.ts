@@ -35,4 +35,6 @@ export const PERMISSIONS = {
   INTERNAL_NOTES_MANAGE: "internal_notes.manage",
   CONTENT_READ: "content.read",
   CONTENT_MANAGE: "content.manage",
+  REPORTS_READ: "reports.read",
+  REPORTS_EXPORT: "reports.export",
 } as const;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Boxes,
   Building2,
   Clock,
@@ -37,6 +38,7 @@ const ICONS: Record<string, LucideIcon> = {
   Tasks: CheckSquare,
   Cases: ClipboardList,
   Providers: Stethoscope,
+  Reports: BarChart3,
   Blog: FileText,
   "Short Videos": Video,
   Testimonials: Quote,
