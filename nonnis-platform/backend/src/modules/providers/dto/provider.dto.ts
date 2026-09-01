@@ -12,6 +12,7 @@ import {
   Matches,
   MaxLength,
   Min,
+  ValidateIf,
 } from "class-validator";
 import { ProviderStatus, CapacityStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
@@ -221,15 +222,18 @@ export class UpdatePublicListingDto {
   @MaxLength(3000)
   publicDescription?: string;
 
+  // Nullable so removing an image clears the stored value.
   @IsOptional()
+  @ValidateIf((o: UpdatePublicListingDto) => o.publicFeaturedImageUrl !== null)
   @IsString()
   @MaxLength(500)
-  publicFeaturedImageUrl?: string;
+  publicFeaturedImageUrl?: string | null;
 
   @IsOptional()
+  @ValidateIf((o: UpdatePublicListingDto) => o.publicFeaturedImageStoragePath !== null)
   @IsString()
   @MaxLength(400)
-  publicFeaturedImageStoragePath?: string;
+  publicFeaturedImageStoragePath?: string | null;
 
   @IsOptional()
   @Type(() => Number)
