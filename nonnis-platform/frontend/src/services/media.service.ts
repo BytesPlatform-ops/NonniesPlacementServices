@@ -1,6 +1,6 @@
 import { apiDelete, apiPost } from "@/lib/api-client";
 
-export type MediaKind = "blog-featured" | "video" | "poster";
+export type MediaKind = "blog-featured" | "video" | "poster" | "email-image";
 
 export interface MediaValue {
   url: string | null;
