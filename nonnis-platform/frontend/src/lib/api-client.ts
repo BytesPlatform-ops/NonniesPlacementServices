@@ -79,6 +79,43 @@ async function apiSend<T>(method: "POST" | "PATCH" | "PUT" | "DELETE", path: str
   return unwrap<T>(response);
 }
 
+/**
+ * Fetch a file (e.g. a CSV export) with auth headers and trigger a browser
+ * download. Non-2xx responses are surfaced as ApiError (parsed from the JSON
+ * error envelope) so callers can show a toast; the filename is taken from the
+ * Content-Disposition header when present.
+ */
+export async function apiDownload(path: string, fallbackName = "download"): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { headers: await buildHeaders(), cache: "no-store" });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Unable to reach the API. Is the backend running?");
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    const body = (text ? safeParse(text) : undefined) as ApiErrorBody | undefined;
+    throw new ApiError(
+      response.status,
+      body?.error?.code ?? "ERROR",
+      body?.error?.message ?? (response.statusText || "Export failed."),
+      body?.error?.details,
+    );
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const apiPost = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>("POST", path, body);
 export const apiPatch = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>("PATCH", path, body);
 export const apiPut = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>("PUT", path, body);
