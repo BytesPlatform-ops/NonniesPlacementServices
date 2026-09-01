@@ -28,6 +28,23 @@ export interface AppConfig {
    *  development/tests never require live Brevo/Twilio credentials. */
   communicationsEmailProvider: string;
   communicationsSmsProvider: string;
+  /** Brevo transactional-email adapter config (only required when provider=brevo). */
+  brevoApiKey: string | undefined;
+  brevoSenderEmail: string | undefined;
+  brevoSenderName: string | undefined;
+  /** Public marketing site base URL for the friendly unsubscribe page. */
+  communicationsPublicSiteUrl: string;
+  /** Backend public base URL for one-click List-Unsubscribe headers. */
+  communicationsApiUrl: string;
+  /** HMAC secret backing the public unsubscribe token (stored-token fallback if unset). */
+  communicationsUnsubscribeSecret: string | undefined;
+  /** Shared secret guarding the provider delivery-event webhook. */
+  communicationsWebhookSecret: string | undefined;
+  /** Email dispatcher tuning. */
+  emailDispatchEnabled: boolean;
+  emailDispatchBatchSize: number;
+  emailDispatchConcurrency: number;
+  emailDispatchPollMs: number;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -50,5 +67,16 @@ export function loadConfiguration(): AppConfig {
     mailFrom: process.env.MAIL_FROM ?? process.env.SMTP_USER,
     communicationsEmailProvider: (process.env.COMMUNICATIONS_EMAIL_PROVIDER ?? "mock").toLowerCase(),
     communicationsSmsProvider: (process.env.COMMUNICATIONS_SMS_PROVIDER ?? "mock").toLowerCase(),
+    brevoApiKey: process.env.BREVO_API_KEY,
+    brevoSenderEmail: process.env.BREVO_SENDER_EMAIL,
+    brevoSenderName: process.env.BREVO_SENDER_NAME,
+    communicationsPublicSiteUrl: (process.env.COMMUNICATIONS_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, ""),
+    communicationsApiUrl: (process.env.COMMUNICATIONS_API_URL ?? "http://localhost:4000").replace(/\/$/, ""),
+    communicationsUnsubscribeSecret: process.env.COMMUNICATIONS_UNSUBSCRIBE_SECRET,
+    communicationsWebhookSecret: process.env.COMMUNICATIONS_WEBHOOK_SECRET,
+    emailDispatchEnabled: String(process.env.EMAIL_DISPATCH_ENABLED ?? "true").toLowerCase() === "true",
+    emailDispatchBatchSize: Number.parseInt(process.env.EMAIL_DISPATCH_BATCH_SIZE ?? "25", 10) || 25,
+    emailDispatchConcurrency: Number.parseInt(process.env.EMAIL_DISPATCH_CONCURRENCY ?? "5", 10) || 5,
+    emailDispatchPollMs: Number.parseInt(process.env.EMAIL_DISPATCH_POLL_MS ?? "3000", 10) || 3000,
   };
 }
