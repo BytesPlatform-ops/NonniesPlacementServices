@@ -53,12 +53,25 @@ export function emailProviderStatus(config: ConfigService<AppConfig, true>, conf
   return { provider, configured, mockMode: provider === "mock", senderEmail: sender.email, senderName: sender.name };
 }
 
-/** Constant-time-ish webhook secret comparison. */
-export function verifyWebhookSecret(config: ConfigService<AppConfig, true>, provided: string | undefined): boolean {
-  const expected = config.get("communicationsWebhookSecret", { infer: true });
+/** Constant-time-ish comparison of a provided secret against an expected one. */
+function secretsMatch(expected: string | undefined, provided: string | undefined): boolean {
   if (!expected) return false; // never accept an unauthenticated mutation webhook
   if (!provided || provided.length !== expected.length) return false;
   const a = createHmac("sha256", expected).update(provided).digest();
   const b = createHmac("sha256", expected).update(expected).digest();
   return a.equals(b);
+}
+
+/** Guards the provider delivery-event webhook. */
+export function verifyWebhookSecret(config: ConfigService<AppConfig, true>, provided: string | undefined): boolean {
+  return secretsMatch(config.get("communicationsWebhookSecret", { infer: true }), provided);
+}
+
+/**
+ * Guards the provider INBOUND-content webhook. Brevo inbound parsing is not
+ * cryptographically signed, so a high-entropy shared secret (URL/header) is the
+ * strongest available verification — a missing configured secret rejects everything.
+ */
+export function verifyInboundSecret(config: ConfigService<AppConfig, true>, provided: string | undefined): boolean {
+  return secretsMatch(config.get("communicationsInboundEmailSecret", { infer: true }), provided);
 }
