@@ -2,14 +2,19 @@ import "reflect-metadata";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory, Reflector } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import type { AppConfig } from "./config/configuration";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService<AppConfig, true>);
+
+  // Contact imports post their (bounded ≤5 MB) file text as JSON — raise the
+  // default 100kb body limit so those requests are not rejected.
+  app.useBodyParser("json", { limit: "6mb" });
 
   // Versioned API routing; health stays unprefixed for infra checks.
   app.setGlobalPrefix("api/v1", { exclude: ["health"] });
