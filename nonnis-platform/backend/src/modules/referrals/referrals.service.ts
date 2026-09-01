@@ -9,6 +9,7 @@ import type { RequestUser } from "../auth/request-user";
 import { ReferralAccessService, type ReferralRef } from "./referral-access";
 import { ReferralMailService } from "./referral-mail.service";
 import { generateReferralReference } from "./referral-reference";
+import { referralOverdueWhere } from "./referral-overdue";
 import { canTransitionPlacement, canTransitionReferral, isReferralTerminal } from "./referral-transition";
 import { allServiceRequestsPlaced, applyCaseStatus, hasOutstandingInformationRequest } from "./case-status-policy";
 import {
@@ -282,7 +283,7 @@ export class ReferralsService {
       { status: { notIn: ["DRAFT"] } },
     ];
     if (query.status) and.push({ status: query.status });
-    if (query.overdueOnly) and.push({ responseDueAt: { lt: now }, status: { in: ["SENT", "VIEWED", "INFORMATION_REQUESTED", "CONDITIONALLY_ACCEPTED"] } });
+    if (query.overdueOnly) and.push(referralOverdueWhere(now));
     if (query.actionRequired) and.push({ status: { in: ["SENT", "VIEWED"] } });
     if (query.search) and.push({ reference: { contains: query.search, mode: "insensitive" } });
 
@@ -426,7 +427,7 @@ export class ReferralsService {
     if (query.organizationId) and.push({ case: { organizationId: query.organizationId } });
     if (query.facilityId) and.push({ case: { originatingFacilityId: query.facilityId } });
     if (query.providerId) and.push({ providerId: query.providerId });
-    if (query.overdueOnly) and.push({ responseDueAt: { lt: now }, status: { in: ["SENT", "VIEWED", "INFORMATION_REQUESTED", "CONDITIONALLY_ACCEPTED"] } });
+    if (query.overdueOnly) and.push(referralOverdueWhere(now));
     if (query.actionRequired) and.push({ status: { in: ["SENT", "VIEWED", "INFORMATION_REQUESTED"] } });
     if (query.dateFrom) and.push({ createdAt: { gte: new Date(query.dateFrom) } });
     if (query.dateTo) and.push({ createdAt: { lte: new Date(query.dateTo) } });
