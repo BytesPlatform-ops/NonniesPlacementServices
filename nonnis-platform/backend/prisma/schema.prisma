@@ -1317,6 +1317,7 @@ enum CommunicationSuppressionReason {
 enum CommunicationConversationStatus {
   OPEN
   CLOSED
+  ARCHIVED
 }
 
 enum CommunicationMessageDirection {
@@ -1326,9 +1327,12 @@ enum CommunicationMessageDirection {
 
 enum CommunicationMessageStatus {
   QUEUED
+  PROCESSING
   SENT
   DELIVERED
+  BOUNCED
   FAILED
+  DELIVERY_UNKNOWN
   RECEIVED
 }
 
@@ -1482,14 +1486,34 @@ model CommunicationConversation {
   status        CommunicationConversationStatus @default(OPEN)
   subject       String?
   lastMessageAt DateTime?
-  createdAt     DateTime                        @default(now())
-  updatedAt     DateTime                        @updatedAt
 
-  contact  CommunicationContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  messages CommunicationMessage[]
+  /// High-entropy opaque token backing the conversation-specific inbound reply
+  /// address (reply-<token>@<domain>). Stable per conversation; never a raw id.
+  threadToken String? @unique
+
+  /// Cheap Inbox derivation without re-parsing bodies. lastInboundAt tracks only
+  /// human (non auto-submitted) inbound; needsReply = lastInboundAt > lastOutboundAt.
+  lastInboundAt   DateTime?
+  lastOutboundAt  DateTime?
+  latestDirection CommunicationMessageDirection?
+  previewText     String?
+  archivedAt      DateTime?
+
+  /// Optional origin campaign (for the "Started from campaign" link). SetNull so
+  /// deleting a campaign never destroys conversation history.
+  originCampaignId String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contact        CommunicationContact                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  originCampaign CommunicationEmailCampaign?          @relation(fields: [originCampaignId], references: [id], onDelete: SetNull)
+  messages       CommunicationMessage[]
+  readStates     CommunicationConversationReadState[]
 
   @@index([contactId])
   @@index([channel, status])
+  @@index([channel, status, lastMessageAt])
   @@map("communication_conversations")
 }
 
@@ -1500,23 +1524,145 @@ model CommunicationMessage {
   direction      CommunicationMessageDirection
   status         CommunicationMessageStatus    @default(QUEUED)
 
-  subject  String?
-  textBody String?
-  htmlBody String?
+  subject     String?
+  textBody    String?
+  /// Sanitized, email-safe HTML only (never raw untrusted inbound HTML).
+  htmlBody    String?
+  previewText String?
 
+  fromAddress    String?
+  fromName       String?
+  toAddress      String?
+  replyToAddress String?
+
+  /// RFC/Internet Message-ID (the <...@...> header). Distinct from the provider's
+  /// API message id below. Used to satisfy In-Reply-To on future replies.
   messageId  String?
   inReplyTo  String?
+  /// Space-separated RFC References chain (bounded length).
   references String?
 
+  /// Provider transactional API id (Brevo messageId) — NOT the RFC Message-ID.
   providerMessageId String?
-  sentAt            DateTime?
-  receivedAt        DateTime?
-  createdAt         DateTime  @default(now())
+  /// Provider inbound identity for idempotent inbound ingestion (unique).
+  providerInboundId String? @unique
+  /// True for detected auto-responders (Auto-Submitted header) — never sets needsReply.
+  autoSubmitted     Boolean @default(false)
+
+  // Direct-reply outbox delivery bookkeeping (campaign sends use the recipient row).
+  attemptCount         Int       @default(0)
+  claimToken           String?
+  leaseExpiresAt       DateTime?
+  nextAttemptAt        DateTime?
+  lastErrorCode        String?
+  lastErrorMessageSafe String?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  receivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  conversation CommunicationConversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments  CommunicationMessageAttachment[]
+
+  @@index([conversationId])
+  @@index([providerMessageId])
+  @@index([direction, status])
+  @@map("communication_messages")
+}
+
+model CommunicationConversationReadState {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @db.Uuid
+  userId         String   @db.Uuid
+  lastReadAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   conversation CommunicationConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@index([conversationId])
-  @@map("communication_messages")
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("communication_conversation_read_states")
+}
+
+enum CommunicationInboundReviewReason {
+  NO_TOKEN
+  UNKNOWN_TOKEN
+  MALFORMED_ADDRESS
+  THREAD_SENDER_MISMATCH
+  HEADER_SENDER_MISMATCH
+  UNRESOLVED
+}
+
+enum CommunicationInboundReviewStatus {
+  PENDING
+  LINKED
+  DISMISSED
+}
+
+/// Safe quarantine for inbound email that failed correlation or a sender-identity
+/// check. Never auto-creates contacts; staff link or dismiss it. Only the minimal
+/// fields for review are stored — never the full raw provider payload.
+model CommunicationInboundEmailReview {
+  id       String @id @default(uuid()) @db.Uuid
+  provider String
+
+  /// Provider inbound identity (idempotency for the quarantine too).
+  providerInboundId String? @unique
+
+  fromEmail String
+  fromName  String?
+  toAddress String?
+  subject   String?
+
+  textBody          String?
+  sanitizedHtmlBody String?
+  previewText       String?
+
+  internetMessageId String?
+  inReplyTo         String?
+  references        String?
+
+  receivedAt DateTime?
+
+  reason CommunicationInboundReviewReason
+  status CommunicationInboundReviewStatus @default(PENDING)
+
+  linkedConversationId String?   @db.Uuid
+  reviewedByUserId     String?   @db.Uuid
+  reviewedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("communication_inbound_email_reviews")
+}
+
+/// Communication email attachments (inbound + outbound). Binary lives in a PRIVATE
+/// Supabase Storage bucket — only the storage path is kept here, never public URLs.
+model CommunicationMessageAttachment {
+  id        String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid
+
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+
+  /// Object path inside the private communications bucket (never returned publicly).
+  storagePath String
+
+  providerAttachmentId String?
+  contentId            String?
+
+  createdAt DateTime @default(now())
+
+  message CommunicationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("communication_message_attachments")
 }
 
 // ============================================================================
@@ -1617,8 +1763,9 @@ model CommunicationEmailCampaign {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  template   CommunicationEmailTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  recipients CommunicationEmailCampaignRecipient[]
+  template            CommunicationEmailTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recipients          CommunicationEmailCampaignRecipient[]
+  originConversations CommunicationConversation[]
 
   @@index([status])
   @@map("communication_email_campaigns")
