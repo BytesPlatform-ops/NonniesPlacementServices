@@ -266,6 +266,36 @@ and do not let an in-scope feature evolve into them.
     `window.confirm` and silent mutation across content, users, orgs, facilities,
     catalogs, cases, tasks, referrals, providers, provider-portal, operations, and
     form submissions. Frontend-only; no backend/schema change.
+- **Slice 12 — Basic Reporting + Administrative Reports:** a Nonnis-only `reports`
+  module answering straightforward administrative questions over **current**
+  PostgreSQL data — no analytics warehouse, trends, comparisons, scoring, ranking,
+  prediction, scheduling, or report builder. New `reports.read`/`reports.export`
+  permissions (Nonnis Admin + Operations only; providers/discharge pros excluded,
+  enforced by the backend guard, not nav hiding). Reporting queries are
+  intentionally cross-organization and live inside `ReportsService`/dataset
+  services — ordinary tenant-scoped APIs are unchanged. Reports: an **overview**
+  hub (`GET /reports/overview`, counts only) plus **Case**, **Referral**,
+  **Provider directory**, **Readiness snapshot**, **Task**, and **Website form
+  submission** reports, each returning a typed `{ appliedFilters, summary, groups,
+  items, page… }` envelope with server-side date/organization/facility filtering,
+  search, whitelisted sort, and pagination. Business definitions are **reused, not
+  duplicated** — active-case statuses (`case-query`), the deterministic readiness
+  domain + `readiness-query` WHERE fragments (readiness is computed live per
+  displayed row via `computeReadiness`, bounded to the page — no N+1), a shared
+  `referralOverdueWhere`, and existing enums. **CSV export** (`reports.export`) for
+  every dataset reuses the on-screen filters, sanitizes against spreadsheet
+  formula-injection (`sanitizeCsvCell`), caps at 10,000 rows (422 otherwise),
+  streams UTF-8 with a dated filename, and writes a lightweight `report.exported`
+  audit event (actor + type + safe filters + row count — never the rows).
+  Minimum-necessary data only: no clinical notes, internal notes, message bodies,
+  or `submittedData`. The CRM gains a **Reports** nav group and `/reports` +
+  `/reports/{cases,referrals,providers,readiness,tasks,form-submissions}` pages in
+  the Warm Premium design language — compact filter bar, active-filter chips,
+  reset, URL/query filter state, summary metric cards (counts only), grouped-count
+  tables, responsive scrolling tables with server-side pagination, loading/empty/
+  error states, toast-driven CSV export, and print-friendly output (chrome/filters
+  hidden, title + generated timestamp + applied period/scope preserved). See
+  `docs/REPORTING.md`.
 
 ---
 
@@ -284,14 +314,14 @@ COMPLETED
   9. Referral Workflow + Manual Provider Selection
   10. Tasks + Basic Case Messaging + Unified Timeline
   11. Discharge Readiness Score + Operational Blockers
-  ★  Public Website Blog + Short Videos + Testimonials CMS   ← current slice
+      Public Website Blog + Short Videos + Testimonials CMS
        (client-requested insertion; Basic Reporting was paused for it)
-
-NEXT
   12. Basic Reporting + Administrative Reports
 
+NEXT
+  13. Public Residential Provider Directory   ← next slice
+
 REMAINING
-  13. Public Residential Provider Directory
   14. Full Core-System Audit + Production Hardening
 ```
 
@@ -307,9 +337,8 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Basic Reporting + Administrative Reports** (item 12): simple, deterministic
-counts and grouped summaries over existing data — total/open/completed cases, cases
-by status/facility/organization, referral response counts, provider directory
-summaries, readiness snapshots — with date-range filters and exportable admin
-reports. Basic reporting only — NOT analytics event pipelines, trend/cohort analysis,
-predictive metrics, BI dashboards, or a warehouse. No new automation.
+**Public Residential Provider Directory** (item 13): a public-website directory of
+residential provider listings, sourced from the existing provider records, in the
+public marketing site's design language. Additive and read-only from the public
+side. NOT matching/scoring/ranking, and not the excluded advanced modules.
+(Basic Reporting — item 12 — is complete; see `docs/REPORTING.md`.)

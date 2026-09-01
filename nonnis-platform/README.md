@@ -593,6 +593,50 @@ remove & activate), operations (block/unblock/assign) and form-submission review
 Destructive actions (delete, cancel, withdraw, suspend, archive, remove) use the
 `danger` variant; routine form saves are deliberately *not* gated by confirmation.
 
+## Administrative reporting (Slice 12)
+
+A Nonnis-only `reports` module answers straightforward administrative questions
+over **current** database state — counts, groupings, and filtered lists. It is
+**basic reporting, not analytics**: no warehouse, trends, comparisons, scoring,
+ranking, prediction, scheduling, or custom report builder.
+
+- **Access:** new `reports.read` / `reports.export` permissions, granted only to
+  **Nonnis Admin** and **Nonnis Operations**. Access is enforced by the backend
+  `PermissionsGuard`, not just by hiding the nav. Reporting queries are
+  intentionally cross-organization and live inside the reports services; the
+  ordinary tenant-scoped APIs are untouched.
+- **Endpoints:** `GET /api/v1/reports/overview` (counts only), plus `cases`,
+  `referrals`, `providers`, `readiness`, `tasks`, and `form-submissions` reports,
+  each returning `{ appliedFilters, summary, groups, items, page, pageSize, total,
+  totalPages }` with server-side date / organization / facility filtering, search,
+  whitelisted sort, and pagination. `GET /api/v1/reports/filter-options` feeds the
+  filter dropdowns.
+- **One definition everywhere:** reports reuse existing business logic — active-case
+  statuses (`case-query`), the deterministic readiness domain (`computeReadiness`
+  is run live per displayed row, bounded to the page — no N+1) with its shared
+  `readiness-query` WHERE fragments, a shared `referralOverdueWhere`, and existing
+  enums. Nothing is re-implemented.
+- **CSV export** (`reports.export`): every dataset exports with the same on-screen
+  filters, sanitized against spreadsheet formula-injection (`sanitizeCsvCell`),
+  capped at 10,000 rows (`422` otherwise), streamed as UTF-8 with a dated filename
+  (`nonnis-<type>-YYYY-MM-DD.csv`). Each export writes a lightweight
+  `report.exported` audit event (actor, report type, safe filter summary, row
+  count — never the rows). `Content-Disposition` is CORS-exposed so the browser
+  keeps the dated filename.
+- **Minimum-necessary data:** reports never expose clinical notes, internal notes,
+  message bodies, or the raw `submittedData` JSON; full details stay in the
+  existing detail screens (rows link to them).
+- **UI:** a **Reports** nav group and `/reports` hub + one page per dataset, in the
+  Warm Premium design language — compact filter bar, active-filter chips, reset,
+  URL/query filter state (refresh- and link-safe), summary metric cards (counts
+  only), grouped-count tables, responsive scrolling tables with server-side
+  pagination, loading/empty/error states, toast-driven CSV export, and a
+  **Print** action (browser print; app chrome and controls hidden, report title +
+  generated timestamp + applied period/scope preserved). Default period is the last
+  30 days, shown in the URL and clearable.
+
+Full details are in [`docs/REPORTING.md`](docs/REPORTING.md).
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root keeps its existing behavior; the
