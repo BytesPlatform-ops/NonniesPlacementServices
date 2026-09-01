@@ -48,11 +48,19 @@ export class EmailEventsService {
     private readonly suppressions: SuppressionsService,
   ) {}
 
-  /** Apply one normalized event idempotently (retried webhooks are no-ops). */
+  /**
+   * Apply one normalized event idempotently (retried webhooks are no-ops). A single
+   * provider message id maps to either a bulk campaign recipient OR a direct CRM
+   * reply message (both carry providerMessageId) — this updates whichever exists, so
+   * one delivery-webhook implementation serves both outbound paths.
+   */
   async apply(input: NormalizedEventInput): Promise<{ applied: boolean }> {
-    const recipient = input.providerMessageId
-      ? await this.prisma.communicationEmailCampaignRecipient.findFirst({ where: { providerMessageId: input.providerMessageId }, orderBy: { createdAt: "desc" } })
-      : null;
+    const [recipient, message] = input.providerMessageId
+      ? await Promise.all([
+          this.prisma.communicationEmailCampaignRecipient.findFirst({ where: { providerMessageId: input.providerMessageId }, orderBy: { createdAt: "desc" } }),
+          this.prisma.communicationMessage.findFirst({ where: { providerMessageId: input.providerMessageId, direction: "OUTBOUND" }, orderBy: { createdAt: "desc" } }),
+        ])
+      : [null, null];
 
     try {
       await this.prisma.communicationEmailEvent.create({
@@ -63,34 +71,39 @@ export class EmailEventsService {
       throw err;
     }
 
-    if (!recipient) {
+    if (!recipient && !message) {
       this.logger.warn(`Email event ${input.type} for unknown provider message id.`);
       return { applied: true };
     }
 
-    const contact = await this.prisma.communicationContact.findUnique({ where: { id: recipient.contactId }, select: { id: true, normalizedEmail: true } });
-    const address = contact?.normalizedEmail ?? recipient.emailSnapshot.trim().toLowerCase();
+    // Resolve the affected contact + address from whichever record we have.
+    const contactId = recipient?.contactId ?? (message ? (await this.prisma.communicationConversation.findUnique({ where: { id: message.conversationId }, select: { contactId: true } }))?.contactId : undefined);
+    const contact = contactId ? await this.prisma.communicationContact.findUnique({ where: { id: contactId }, select: { id: true, normalizedEmail: true } }) : null;
+    const address = contact?.normalizedEmail ?? recipient?.emailSnapshot.trim().toLowerCase() ?? message?.toAddress?.trim().toLowerCase() ?? "";
     const now = input.occurredAt ?? new Date();
+
+    const setRecipient = (data: Prisma.CommunicationEmailCampaignRecipientUpdateInput) => (recipient ? this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data }) : Promise.resolve());
+    const setMessage = (status: "DELIVERED" | "BOUNCED" | "FAILED", extra?: Partial<Prisma.CommunicationMessageUpdateInput>) => (message ? this.prisma.communicationMessage.update({ where: { id: message.id }, data: { status, ...extra } }) : Promise.resolve());
 
     switch (input.type) {
       case "DELIVERED":
-        await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "DELIVERED", deliveredAt: now } });
+        await Promise.all([setRecipient({ deliveryStatus: "DELIVERED", deliveredAt: now }), setMessage("DELIVERED", { deliveredAt: now })]);
         break;
       case "BOUNCED_HARD":
-        await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "BOUNCED", bouncedAt: now, lastErrorCode: "HARD_BOUNCE" } });
-        await this.suppressions.suppressSystem("EMAIL", address, "HARD_BOUNCE", "delivery-webhook");
+        await Promise.all([setRecipient({ deliveryStatus: "BOUNCED", bouncedAt: now, lastErrorCode: "HARD_BOUNCE" }), setMessage("BOUNCED", { lastErrorCode: "HARD_BOUNCE" })]);
+        if (address) await this.suppressions.suppressSystem("EMAIL", address, "HARD_BOUNCE", "delivery-webhook");
         break;
       case "COMPLAINT":
-        await this.suppressions.suppressSystem("EMAIL", address, "SPAM_COMPLAINT", "delivery-webhook");
+        if (address) await this.suppressions.suppressSystem("EMAIL", address, "SPAM_COMPLAINT", "delivery-webhook");
         if (contact) await this.optOut(contact.id, now);
         break;
       case "UNSUBSCRIBED":
-        await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "UNSUBSCRIBED", unsubscribedAt: now } });
-        await this.suppressions.suppressSystem("EMAIL", address, "USER_OPT_OUT", "delivery-webhook");
+        await setRecipient({ deliveryStatus: "UNSUBSCRIBED", unsubscribedAt: now });
+        if (address) await this.suppressions.suppressSystem("EMAIL", address, "USER_OPT_OUT", "delivery-webhook");
         if (contact) await this.optOut(contact.id, now);
         break;
       case "FAILED":
-        await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "FAILED", failedAt: now, lastErrorCode: "PROVIDER_FAILED" } });
+        await Promise.all([setRecipient({ deliveryStatus: "FAILED", failedAt: now, lastErrorCode: "PROVIDER_FAILED" }), setMessage("FAILED", { lastErrorCode: "PROVIDER_FAILED" })]);
         break;
       case "BOUNCED_SOFT":
       case "BLOCKED":
