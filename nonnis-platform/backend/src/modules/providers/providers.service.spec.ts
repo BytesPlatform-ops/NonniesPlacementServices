@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
+import type { MediaService } from "../content/media.service";
 import { PERMISSIONS } from "../../common/rbac";
 import type { RequestUser } from "../auth/request-user";
 import { ProviderAccessService } from "./provider-access";
@@ -36,9 +37,11 @@ function makeUser(permissions: string[], orgIds: string[] = []): RequestUser {
 const NONNIS = makeUser([PERMISSIONS.PROVIDERS_MANAGE, PERMISSIONS.PROVIDERS_READ]);
 const audit = { record: async () => undefined } as unknown as AuditService;
 
+const media = { createUploadTicket: async () => ({}), deleteObject: async () => undefined } as unknown as MediaService;
+
 function build(prisma: unknown) {
   const p = prisma as PrismaService;
-  return new ProvidersService(p, audit, new ProviderAccessService(p));
+  return new ProvidersService(p, audit, new ProviderAccessService(p), media);
 }
 
 describe("ProvidersService.create validation", () => {
