@@ -43,6 +43,7 @@ const ICONS: Record<string, LucideIcon> = {
   Cases: ClipboardList,
   Providers: Stethoscope,
   Reports: BarChart3,
+  Inbox: Inbox,
   Contacts: Contact,
   Lists: List,
   "Email Templates": LayoutTemplate,

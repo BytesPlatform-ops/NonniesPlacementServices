@@ -30,6 +30,7 @@ const NAV: NavGroup[] = [
   {
     title: "Communications",
     items: [
+      { label: "Inbox", href: "/communications/inbox", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Contacts", href: "/communications/contacts", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Lists", href: "/communications/lists", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Email Templates", href: "/communications/email-templates", permission: PERMISSIONS.COMMUNICATIONS_READ },
