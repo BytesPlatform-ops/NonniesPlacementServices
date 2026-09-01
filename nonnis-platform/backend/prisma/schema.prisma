@@ -1275,3 +1275,242 @@ model Testimonial {
   @@index([active, sortOrder])
   @@map("testimonials")
 }
+
+// ============================================================================
+// Communications module (Phase 15A) — a dedicated marketing/outreach contact
+// database. Intentionally SEPARATE from User/Patient/Provider identities; it
+// never references Case/Patient records (PHI boundary). Brevo/Twilio are future
+// transport providers only and never own this data model.
+// ============================================================================
+
+enum CommunicationContactSource {
+  MANUAL
+  PASTE_IMPORT
+  CSV_IMPORT
+  TXT_IMPORT
+}
+
+enum CommunicationContactStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CommunicationChannel {
+  EMAIL
+  SMS
+}
+
+enum CommunicationConsentStatus {
+  UNKNOWN
+  OPTED_IN
+  OPTED_OUT
+}
+
+enum CommunicationSuppressionReason {
+  USER_OPT_OUT
+  ADMIN_BLOCK
+  HARD_BOUNCE
+  SPAM_COMPLAINT
+  INVALID_ADDRESS
+}
+
+enum CommunicationConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum CommunicationMessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum CommunicationMessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  RECEIVED
+}
+
+model CommunicationContact {
+  id String @id @default(uuid()) @db.Uuid
+
+  firstName String?
+  lastName  String?
+
+  email           String?
+  normalizedEmail String? @unique
+
+  phone               String?
+  normalizedPhoneE164 String? @unique
+
+  organizationName String?
+
+  source CommunicationContactSource @default(MANUAL)
+  status CommunicationContactStatus @default(ACTIVE)
+
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  preferences     ContactChannelPreference[]
+  listMemberships CommunicationListMember[]
+  tagAssignments  CommunicationContactTag[]
+  conversations   CommunicationConversation[]
+
+  @@index([status])
+  @@index([organizationName])
+  @@map("communication_contacts")
+}
+
+model ContactChannelPreference {
+  id              String                     @id @default(uuid()) @db.Uuid
+  contactId       String                     @db.Uuid
+  channel         CommunicationChannel
+  consentStatus   CommunicationConsentStatus @default(UNKNOWN)
+  consentSource   String?
+  consentAt       DateTime?
+  optOutAt        DateTime?
+  updatedByUserId String?                    @db.Uuid
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  contact CommunicationContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, channel])
+  @@index([channel, consentStatus])
+  @@map("contact_channel_preferences")
+}
+
+model CommunicationList {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  description     String?
+  active          Boolean  @default(true)
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members CommunicationListMember[]
+
+  @@index([active])
+  @@map("communication_lists")
+}
+
+model CommunicationListMember {
+  id            String   @id @default(uuid()) @db.Uuid
+  listId        String   @db.Uuid
+  contactId     String   @db.Uuid
+  addedByUserId String?  @db.Uuid
+  addedAt       DateTime @default(now())
+
+  list    CommunicationList    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contact CommunicationContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, contactId])
+  @@index([contactId])
+  @@map("communication_list_members")
+}
+
+model CommunicationTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  assignments CommunicationContactTag[]
+
+  @@map("communication_tags")
+}
+
+model CommunicationContactTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  contactId String   @db.Uuid
+  tagId     String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  contact CommunicationContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     CommunicationTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+  @@index([tagId])
+  @@map("communication_contact_tags")
+}
+
+model CommunicationSuppression {
+  id                String                         @id @default(uuid()) @db.Uuid
+  channel           CommunicationChannel
+  normalizedAddress String
+  reason            CommunicationSuppressionReason
+  active            Boolean                        @default(true)
+  source            String?
+  createdByUserId   String?                        @db.Uuid
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  @@unique([channel, normalizedAddress])
+  @@index([active])
+  @@map("communication_suppressions")
+}
+
+model CommunicationImportBatch {
+  id               String                     @id @default(uuid()) @db.Uuid
+  sourceType       CommunicationContactSource
+  originalFilename String?
+  totalRows        Int
+  importedCount    Int                        @default(0)
+  duplicateCount   Int                        @default(0)
+  invalidCount     Int                        @default(0)
+  conflictCount    Int                        @default(0)
+  suppressedCount  Int                        @default(0)
+  createdByUserId  String?                    @db.Uuid
+  createdAt        DateTime                   @default(now())
+
+  @@index([createdAt])
+  @@map("communication_import_batches")
+}
+
+model CommunicationConversation {
+  id            String                          @id @default(uuid()) @db.Uuid
+  contactId     String                          @db.Uuid
+  channel       CommunicationChannel
+  status        CommunicationConversationStatus @default(OPEN)
+  subject       String?
+  lastMessageAt DateTime?
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
+
+  contact  CommunicationContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages CommunicationMessage[]
+
+  @@index([contactId])
+  @@index([channel, status])
+  @@map("communication_conversations")
+}
+
+model CommunicationMessage {
+  id             String                        @id @default(uuid()) @db.Uuid
+  conversationId String                        @db.Uuid
+  channel        CommunicationChannel
+  direction      CommunicationMessageDirection
+  status         CommunicationMessageStatus    @default(QUEUED)
+
+  subject  String?
+  textBody String?
+  htmlBody String?
+
+  messageId  String?
+  inReplyTo  String?
+  references String?
+
+  providerMessageId String?
+  sentAt            DateTime?
+  receivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  conversation CommunicationConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("communication_messages")
+}
