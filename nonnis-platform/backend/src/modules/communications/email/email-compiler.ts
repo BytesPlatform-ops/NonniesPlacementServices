@@ -1,3 +1,4 @@
+/// <reference path="../../../types/mjml.d.ts" />
 import mjml2html from "mjml";
 import { ALLOWED_MERGE_FIELDS, isAllowedLinkUrl, type Align, type Block, type EmailDesign, type SimpleBlock } from "./template-design";
 
