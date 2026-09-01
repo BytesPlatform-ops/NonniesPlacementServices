@@ -46,6 +46,7 @@ export const PERMISSIONS = {
   COMMUNICATIONS_READ: "communications.read",
   COMMUNICATIONS_MANAGE: "communications.manage",
   COMMUNICATIONS_IMPORT: "communications.import",
+  COMMUNICATIONS_SEND: "communications.send",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -92,6 +93,7 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.COMMUNICATIONS_READ]: "Read communications contacts, lists, tags and consent",
   [PERMISSIONS.COMMUNICATIONS_MANAGE]: "Create, edit, archive communications contacts, lists, tags, consent and suppressions",
   [PERMISSIONS.COMMUNICATIONS_IMPORT]: "Import communications contacts (paste/CSV/TXT)",
+  [PERMISSIONS.COMMUNICATIONS_SEND]: "Queue and send bulk email campaigns and test emails",
 };
 
 export const ROLES = {
@@ -152,6 +154,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.COMMUNICATIONS_READ,
       PERMISSIONS.COMMUNICATIONS_MANAGE,
       PERMISSIONS.COMMUNICATIONS_IMPORT,
+      PERMISSIONS.COMMUNICATIONS_SEND,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
