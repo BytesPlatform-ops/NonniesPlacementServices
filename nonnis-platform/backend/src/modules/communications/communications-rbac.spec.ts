@@ -13,3 +13,14 @@ describe("Communications RBAC", () => {
     }
   });
 });
+
+describe("Communications send permission (15B)", () => {
+  it("grants communications.send to Nonnis Admin and Operations only", () => {
+    for (const role of [ROLES.NONNIS_ADMIN, ROLES.NONNIS_OPERATIONS]) {
+      expect(ROLE_DEFINITIONS[role].permissions).toContain(PERMISSIONS.COMMUNICATIONS_SEND);
+    }
+    for (const role of [ROLES.DISCHARGE_PROFESSIONAL, ROLES.PROVIDER_ADMIN, ROLES.PROVIDER_STAFF]) {
+      expect(ROLE_DEFINITIONS[role].permissions).not.toContain(PERMISSIONS.COMMUNICATIONS_SEND);
+    }
+  });
+});

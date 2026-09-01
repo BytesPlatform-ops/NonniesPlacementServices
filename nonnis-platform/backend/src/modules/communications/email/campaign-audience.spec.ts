@@ -1,0 +1,60 @@
+import type { PrismaService } from "../../../database/prisma.service";
+import type { SuppressionsService } from "../suppressions/suppressions.service";
+import { CampaignAudienceService } from "./campaign-audience.service";
+
+function contact(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    email: `${id}@x.com`,
+    normalizedEmail: `${id}@x.com`,
+    firstName: "F",
+    lastName: "L",
+    organizationName: null,
+    status: "ACTIVE",
+    preferences: [{ consentStatus: "OPTED_IN" }],
+    ...over,
+  };
+}
+
+function makeService(contacts: Array<ReturnType<typeof contact>>, members: string[] = [], suppressedEmails: string[] = []) {
+  const prisma = {
+    communicationListMember: { findMany: jest.fn().mockResolvedValue(members.map((contactId) => ({ contactId }))) },
+    communicationContact: { findMany: jest.fn().mockResolvedValue(contacts) },
+  } as unknown as PrismaService;
+  const suppressions = { flagsFor: jest.fn().mockResolvedValue({ emails: new Set(suppressedEmails), phones: new Set() }) } as unknown as SuppressionsService;
+  return new CampaignAudienceService(prisma, suppressions);
+}
+
+describe("CampaignAudienceService.evaluate (marketing eligibility)", () => {
+  it("includes only OPTED_IN, valid, non-suppressed, non-archived contacts", async () => {
+    const contacts = [
+      contact("in"), // eligible
+      contact("unk", { preferences: [{ consentStatus: "UNKNOWN" }] }),
+      contact("out", { preferences: [{ consentStatus: "OPTED_OUT" }] }),
+      contact("noemail", { normalizedEmail: null, email: null, preferences: [] }),
+      contact("arch", { status: "ARCHIVED" }),
+    ];
+    const svc = makeService(contacts, contacts.map((c) => c.id), ["sup@x.com"]);
+    const r = await svc.evaluate({ listIds: ["l1"], contactIds: [] });
+    expect(r.eligibleCount).toBe(1);
+    expect(r.eligible[0].contactId).toBe("in");
+    expect(r.exclusions.CONSENT_UNKNOWN).toBe(1);
+    expect(r.exclusions.OPTED_OUT).toBe(1);
+    expect(r.exclusions.NO_EMAIL).toBe(1);
+    expect(r.exclusions.CONTACT_ARCHIVED).toBe(1);
+  });
+
+  it("excludes a suppressed opted-in contact", async () => {
+    const svc = makeService([contact("sup", { email: "sup@x.com", normalizedEmail: "sup@x.com" })], ["sup"], ["sup@x.com"]);
+    const r = await svc.evaluate({ listIds: ["l1"], contactIds: [] });
+    expect(r.eligibleCount).toBe(0);
+    expect(r.exclusions.SUPPRESSED).toBe(1);
+  });
+
+  it("dedupes the union of lists + explicit contacts", async () => {
+    const svc = makeService([contact("a"), contact("b")], ["a", "b"]);
+    const r = await svc.evaluate({ listIds: ["l1"], contactIds: ["b"] });
+    expect(r.totalUnique).toBe(2);
+    expect(r.duplicatesRemoved).toBe(1);
+  });
+});
