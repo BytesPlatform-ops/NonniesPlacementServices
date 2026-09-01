@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- load the mjml ambient decl under ts-node (seed scripts) where tsconfig `include` is bypassed
 /// <reference path="../../../types/mjml.d.ts" />
 import mjml2html from "mjml";
 import { ALLOWED_MERGE_FIELDS, isAllowedLinkUrl, type Align, type Block, type EmailDesign, type SimpleBlock } from "./template-design";
