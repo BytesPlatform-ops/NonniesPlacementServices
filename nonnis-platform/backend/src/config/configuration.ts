@@ -45,6 +45,15 @@ export interface AppConfig {
   emailDispatchBatchSize: number;
   emailDispatchConcurrency: number;
   emailDispatchPollMs: number;
+  /** Inbound email (15C) — replies routed back into the CRM via provider webhook. */
+  communicationsInboundEmailProvider: string;
+  /** Dedicated inbound reply (sub)domain, e.g. reply.nonnis.com. Mock uses a safe default. */
+  communicationsInboundEmailDomain: string;
+  /** High-entropy secret guarding the inbound webhook (Brevo inbound is not signed). */
+  communicationsInboundEmailSecret: string | undefined;
+  communicationsInboundMaxBodyBytes: number;
+  communicationsInboundMaxAttachmentBytes: number;
+  communicationsInboundMaxAttachments: number;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -78,5 +87,11 @@ export function loadConfiguration(): AppConfig {
     emailDispatchBatchSize: Number.parseInt(process.env.EMAIL_DISPATCH_BATCH_SIZE ?? "25", 10) || 25,
     emailDispatchConcurrency: Number.parseInt(process.env.EMAIL_DISPATCH_CONCURRENCY ?? "5", 10) || 5,
     emailDispatchPollMs: Number.parseInt(process.env.EMAIL_DISPATCH_POLL_MS ?? "3000", 10) || 3000,
+    communicationsInboundEmailProvider: (process.env.COMMUNICATIONS_INBOUND_EMAIL_PROVIDER ?? "mock").toLowerCase(),
+    communicationsInboundEmailDomain: (process.env.COMMUNICATIONS_INBOUND_EMAIL_DOMAIN ?? "reply.mock.local").replace(/^@/, "").toLowerCase(),
+    communicationsInboundEmailSecret: process.env.COMMUNICATIONS_INBOUND_EMAIL_SECRET,
+    communicationsInboundMaxBodyBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_BODY_BYTES ?? "524288", 10) || 524288,
+    communicationsInboundMaxAttachmentBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENT_BYTES ?? "10485760", 10) || 10485760,
+    communicationsInboundMaxAttachments: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENTS ?? "5", 10) || 5,
   };
 }
