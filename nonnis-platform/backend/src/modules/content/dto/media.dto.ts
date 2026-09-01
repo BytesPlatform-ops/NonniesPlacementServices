@@ -2,7 +2,7 @@ import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from "class-validat
 import type { MediaKind } from "../media.service";
 
 export class CreateUploadUrlDto {
-  @IsIn(["blog-featured", "video", "poster"])
+  @IsIn(["blog-featured", "video", "poster", "email-image"])
   kind!: MediaKind;
 
   @IsString()
