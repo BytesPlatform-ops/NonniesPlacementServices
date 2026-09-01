@@ -663,6 +663,19 @@ model Provider {
   licenseNumber String?
   licenseType   String?
 
+  /// Public residential directory listing. Nonnis-managed only; every field
+  /// defaults OFF so no existing provider is auto-published. Canonical provider
+  /// fields (displayName, description, phone, email, website, city, state) are
+  /// the public source; only the fields below are listing-specific.
+  isResidentialProvider          Boolean   @default(false)
+  publicListingEnabled           Boolean   @default(false)
+  publicSlug                     String?   @unique
+  publicDescription              String?
+  publicFeaturedImageUrl         String?
+  publicFeaturedImageStoragePath String?
+  publicSortOrder                Int?
+  publicPublishedAt              DateTime?
+
   metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -679,6 +692,7 @@ model Provider {
   @@index([status])
   @@index([state])
   @@index([city])
+  @@index([publicListingEnabled])
   @@map("providers")
 }
 
