@@ -21,16 +21,16 @@ export class UpdateEmailTemplateDto {
   @IsOptional() @IsEnum(CommunicationEmailTemplateStatus) status?: CommunicationEmailTemplateStatus;
 }
 
-export class PreviewDesignDto {
-  @IsObject() designJson!: Record<string, unknown>;
-  @IsOptional() @IsString() @MaxLength(300) preheader?: string;
-  @IsOptional() @ValidateNested() @Type(() => SampleValues) sampleValues?: SampleValues;
-}
-
 export class SampleValues {
   @IsOptional() @IsString() @MaxLength(120) firstName?: string;
   @IsOptional() @IsString() @MaxLength(120) lastName?: string;
   @IsOptional() @IsString() @MaxLength(200) organizationName?: string;
+}
+
+export class PreviewDesignDto {
+  @IsObject() designJson!: Record<string, unknown>;
+  @IsOptional() @IsString() @MaxLength(300) preheader?: string;
+  @IsOptional() @ValidateNested() @Type(() => SampleValues) sampleValues?: SampleValues;
 }
 
 export class TestSendDto {
