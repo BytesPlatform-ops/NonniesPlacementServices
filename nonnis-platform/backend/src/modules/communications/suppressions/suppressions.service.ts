@@ -114,6 +114,22 @@ export class SuppressionsService {
     return toView(row);
   }
 
+  /** System-initiated suppression (delivery webhook / public unsubscribe) — no user actor. */
+  async suppressSystem(channel: CommunicationChannel, normalizedAddress: string, reason: Parameters<typeof this.create>[1]["reason"], source: string): Promise<void> {
+    await this.prisma.communicationSuppression.upsert({
+      where: { channel_normalizedAddress: { channel, normalizedAddress } },
+      create: { channel, normalizedAddress, reason, source, active: true },
+      update: { reason, source, active: true },
+    });
+    await this.audit.record({
+      action: "communication.suppression.added",
+      entityType: "CommunicationSuppression",
+      entityId: normalizedAddress,
+      actorRef: `system:${source}`,
+      metadata: { channel, reason },
+    });
+  }
+
   /** Active-suppression flags for a batch of normalized addresses (no N+1). */
   async flagsFor(emails: string[], phones: string[]): Promise<{ emails: Set<string>; phones: Set<string> }> {
     const uniqEmails = [...new Set(emails.filter(Boolean))];
