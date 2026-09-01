@@ -24,6 +24,10 @@ export interface AppConfig {
   smtpUser: string | undefined;
   smtpPass: string | undefined;
   mailFrom: string | undefined;
+  /** Communications transport selection. Defaults to the mock providers so
+   *  development/tests never require live Brevo/Twilio credentials. */
+  communicationsEmailProvider: string;
+  communicationsSmsProvider: string;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -44,5 +48,7 @@ export function loadConfiguration(): AppConfig {
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
     mailFrom: process.env.MAIL_FROM ?? process.env.SMTP_USER,
+    communicationsEmailProvider: (process.env.COMMUNICATIONS_EMAIL_PROVIDER ?? "mock").toLowerCase(),
+    communicationsSmsProvider: (process.env.COMMUNICATIONS_SMS_PROVIDER ?? "mock").toLowerCase(),
   };
 }
