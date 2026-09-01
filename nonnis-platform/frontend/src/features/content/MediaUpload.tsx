@@ -20,16 +20,23 @@ export function MediaUpload({
   value,
   initialStoragePath,
   onChange,
+  uploader,
+  deleter,
 }: {
   label: string;
-  kind: MediaKind;
+  kind?: MediaKind;
   accept: string;
   maxBytes: number;
   variant: "image" | "video";
   value: MediaValue;
   initialStoragePath: string | null;
   onChange: (value: MediaValue) => void;
+  /** Custom upload/delete (e.g. provider-scoped endpoints); defaults to the CMS media endpoints. */
+  uploader?: (file: File, onProgress?: (pct: number) => void) => Promise<MediaValue>;
+  deleter?: (storagePath: string) => Promise<void>;
 }) {
+  const doUpload = uploader ?? ((file: File, onProgress?: (pct: number) => void) => uploadMedia(kind ?? "blog-featured", file, onProgress));
+  const doDelete = deleter ?? deleteMedia;
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -53,9 +60,9 @@ export function MediaUpload({
     setProgress(0);
     setError(null);
     try {
-      const result = await uploadMedia(kind, file, setProgress);
+      const result = await doUpload(file, setProgress);
       onChange(result);
-      if (isSessionUpload(previous) && previous) await deleteMedia(previous); // drop the replaced orphan
+      if (isSessionUpload(previous) && previous) await doDelete(previous); // drop the replaced orphan
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -67,7 +74,7 @@ export function MediaUpload({
   const remove = async () => {
     const current = value.storagePath;
     onChange({ url: null, storagePath: null });
-    if (isSessionUpload(current) && current) await deleteMedia(current);
+    if (isSessionUpload(current) && current) await doDelete(current);
   };
 
   return (

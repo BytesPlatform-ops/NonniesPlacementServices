@@ -53,6 +53,27 @@ export function setProviderStatus(id: string, status: string): Promise<ProviderD
   return apiPatch<ProviderDetailView>(`/api/v1/providers/${id}/status`, { status });
 }
 
+export interface PublicListingUpdate {
+  isResidentialProvider?: boolean;
+  publicSlug?: string;
+  publicDescription?: string;
+  publicFeaturedImageUrl?: string | null;
+  publicFeaturedImageStoragePath?: string | null;
+  publicSortOrder?: number;
+}
+
+export function updatePublicListing(id: string, body: PublicListingUpdate): Promise<ProviderDetailView> {
+  return apiPatch<ProviderDetailView>(`/api/v1/providers/${id}/public-listing`, body);
+}
+
+export function publishProvider(id: string): Promise<ProviderDetailView> {
+  return apiPost<ProviderDetailView>(`/api/v1/providers/${id}/public-listing/publish`, {});
+}
+
+export function unpublishProvider(id: string): Promise<ProviderDetailView> {
+  return apiPost<ProviderDetailView>(`/api/v1/providers/${id}/public-listing/unpublish`, {});
+}
+
 export function listProviderUsers(id: string): Promise<ProviderUserView[]> {
   return apiGet<ProviderUserView[]>(`/api/v1/providers/${id}/users`);
 }

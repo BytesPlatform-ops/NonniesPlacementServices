@@ -61,3 +61,27 @@ export async function deleteMedia(storagePath: string): Promise<void> {
     /* best-effort cleanup — never block the UI */
   }
 }
+
+/** Upload a public provider image via the provider-scoped signed-URL endpoint. */
+export async function uploadProviderImage(
+  providerId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<MediaValue> {
+  const ticket = await apiPost<UploadTicket>(`/api/v1/providers/${providerId}/public-listing/image-upload-url`, {
+    contentType: file.type,
+    sizeBytes: file.size,
+    filename: file.name,
+  });
+  await putSignedUrl(ticket.signedUrl, file, onProgress);
+  return { url: ticket.publicUrl, storagePath: ticket.path };
+}
+
+/** Best-effort delete of a managed provider image object. */
+export async function deleteProviderImage(providerId: string, storagePath: string): Promise<void> {
+  try {
+    await apiDelete<{ ok: boolean }>(`/api/v1/providers/${providerId}/public-listing/image`, { storagePath });
+  } catch {
+    /* best-effort cleanup */
+  }
+}

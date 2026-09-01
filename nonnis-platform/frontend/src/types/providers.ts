@@ -134,8 +134,22 @@ export interface ProviderDetailView {
   capacity: ProviderCapacityView[];
   editable: boolean;
   canManageCapacity: boolean;
+  publicListing: ProviderPublicListingView;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProviderPublicListingView {
+  isResidentialProvider: boolean;
+  published: boolean;
+  publishedAt: string | null;
+  slug: string | null;
+  description: string | null;
+  featuredImageUrl: string | null;
+  featuredImageStoragePath: string | null;
+  sortOrder: number | null;
+  ready: boolean;
+  missing: string[];
 }
 
 export const DAYS_OF_WEEK: DayOfWeek[] = [
