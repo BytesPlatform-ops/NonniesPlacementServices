@@ -17,9 +17,12 @@ import { DescriptionList } from "@/components/ui/DescriptionList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { useAction } from "@/hooks/use-action";
+import { useAuth } from "@/providers/auth-provider";
+import { PERMISSIONS } from "@/lib/permissions";
 import { CapacityTab, CoverageTab, HoursTab, LanguagesTab, PaymentTab, ServicesTab, UsersTab } from "./provider-tabs";
+import { PublicListingTab } from "./PublicListingTab";
 
-type TabKey = "overview" | "services" | "coverage" | "payment" | "languages" | "hours" | "capacity" | "users";
+type TabKey = "overview" | "services" | "coverage" | "payment" | "languages" | "hours" | "capacity" | "public-listing" | "users";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "overview", label: "Overview" },
@@ -29,11 +32,14 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "languages", label: "Languages" },
   { key: "hours", label: "Hours" },
   { key: "capacity", label: "Capacity" },
+  { key: "public-listing", label: "Website Listing" },
   { key: "users", label: "Users" },
 ];
 
 export function ProviderWorkspace({ providerId }: { providerId: string }) {
   const { data, loading, error, reload } = useAsync(() => getProvider(providerId), [providerId]);
+  const { hasPermission } = useAuth();
+  const canManagePublic = hasPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const [tab, setTab] = useState<TabKey>("overview");
 
   const back = (
@@ -47,7 +53,9 @@ export function ProviderWorkspace({ providerId }: { providerId: string }) {
   if (!data) return null;
 
   const provider = data;
-  const tabs = TABS.filter((t) => t.key !== "users" || provider.editable);
+  const tabs = TABS.filter(
+    (t) => (t.key !== "users" || provider.editable) && (t.key !== "public-listing" || canManagePublic),
+  );
 
   return (
     <div className="space-y-6">
@@ -55,7 +63,14 @@ export function ProviderWorkspace({ providerId }: { providerId: string }) {
         title={provider.displayName}
         description={provider.organization.name}
         breadcrumb={back}
-        actions={<StatusBadge label={humanizeEnum(provider.status)} tone={providerStatusTone(provider.status)} />}
+        actions={
+          <div className="flex items-center gap-2">
+            {canManagePublic && provider.publicListing.published ? (
+              <StatusBadge label="On website" tone="positive" />
+            ) : null}
+            <StatusBadge label={humanizeEnum(provider.status)} tone={providerStatusTone(provider.status)} />
+          </div>
+        }
       />
 
       {provider.editable ? <StatusControl provider={provider} reload={reload} /> : null}
@@ -87,6 +102,7 @@ export function ProviderWorkspace({ providerId }: { providerId: string }) {
       {tab === "languages" ? <LanguagesTab provider={provider} reload={reload} /> : null}
       {tab === "hours" ? <HoursTab provider={provider} reload={reload} /> : null}
       {tab === "capacity" ? <CapacityTab provider={provider} reload={reload} /> : null}
+      {tab === "public-listing" && canManagePublic ? <PublicListingTab provider={provider} reload={reload} /> : null}
       {tab === "users" && provider.editable ? <UsersTab provider={provider} /> : null}
     </div>
   );
