@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { fetchBlogPosts } from "@/lib/platform/content";
+import { fetchBlogPosts, fetchResidentialProviders } from "@/lib/platform/content";
 
 // Mirrors the metadataBase placeholder in `layout.tsx`. Update both when the
 // production domain is finalized.
@@ -7,7 +7,7 @@ const SITE_URL = "https://nonnisplacement.example";
 
 export const revalidate = 300;
 
-const STATIC_ROUTES = ["/", "/families", "/providers", "/home-health-care", "/blog", "/about", "/contact", "/hospital-referral", "/privacy", "/terms"];
+const STATIC_ROUTES = ["/", "/families", "/residential-providers", "/providers", "/home-health-care", "/blog", "/about", "/contact", "/hospital-referral", "/privacy", "/terms"];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = SITE_URL.replace(/\/$/, "");
@@ -27,5 +27,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticEntries, ...postEntries];
+  // Only ACTIVE + published residential providers are returned by the public API,
+  // so unpublished/inactive/paused providers never enter the sitemap.
+  const directory = await fetchResidentialProviders({ limit: 48 });
+  const first = directory.items;
+  const rest =
+    directory.totalPages > 1
+      ? (
+          await Promise.all(
+            Array.from({ length: directory.totalPages - 1 }, (_, i) => fetchResidentialProviders({ page: i + 2, limit: 48 })),
+          )
+        ).flatMap((d) => d.items)
+      : [];
+  const providerEntries: MetadataRoute.Sitemap = [...first, ...rest].map((p) => ({
+    url: `${base}/residential-providers/${p.slug}`,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
+  return [...staticEntries, ...postEntries, ...providerEntries];
 }

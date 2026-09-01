@@ -5,6 +5,7 @@ export type NavLink = { label: string; href: string };
 export const NAV_LINKS: NavLink[] = [
   { label: "How it works", href: "/#how-it-works" },
   { label: "For Families", href: "/families" },
+  { label: "Residential Care", href: "/residential-providers" },
   { label: "For Providers", href: "/providers" },
   { label: "Home Health Care", href: "/home-health-care" },
   { label: "Blog", href: "/blog" },
@@ -46,11 +47,11 @@ export const FOOTER_SECTIONS = [
   {
     title: "Care types",
     links: [
+      { label: "Residential care directory", href: "/residential-providers" },
       { label: "Adult Family Homes", href: "/families#care-types" },
       { label: "Assisted Living", href: "/families#care-types" },
       { label: "Memory Care", href: "/families#care-types" },
       { label: "Skilled Nursing", href: "/families#care-types" },
-      { label: "Respite Care", href: "/families#care-types" },
     ],
   },
   {
