@@ -11,21 +11,51 @@ import { SuppressionsService } from "./suppressions/suppressions.service";
 import { ImportsController } from "./imports/imports.controller";
 import { ImportsService } from "./imports/imports.service";
 import { transportProviders } from "./providers/transport.providers";
+import { EmailTemplatesController } from "./email/email-templates.controller";
+import { EmailTemplateService } from "./email/email-template.service";
+import { EmailCampaignsController } from "./email/email-campaigns.controller";
+import { EmailCampaignService } from "./email/email-campaign.service";
+import { CampaignAudienceService } from "./email/campaign-audience.service";
+import { EmailDispatcherService } from "./email/email-dispatcher.service";
+import { EmailEventsService } from "./email/email-events.service";
+import { EmailWebhookController } from "./email/email-webhook.controller";
+import { EmailStatusController } from "./email/email-status.controller";
+import { UnsubscribeController } from "./email/unsubscribe.controller";
+import { UnsubscribeService } from "./email/unsubscribe.service";
 
 /**
- * Communications Phase 15A — a dedicated marketing/outreach contact database
- * (contacts, lists, tags, consent, suppression, imports) plus provider-independent
- * transport ports with mock implementations. No live Brevo/Twilio, no sending.
+ * Communications module. Phase 15A: contacts, lists, tags, consent, suppression,
+ * imports, transport ports. Phase 15B: email templates + visual builder, campaigns,
+ * recipient snapshots, a Postgres-backed delivery dispatcher, mock + Brevo email
+ * transports, delivery-event webhook, and public unsubscribe. Still no inbox/inbound
+ * (15C) or SMS (15D).
  */
 @Module({
   imports: [AuditModule],
-  controllers: [ContactsController, ListsController, TagsController, SuppressionsController, ImportsController],
+  controllers: [
+    ContactsController,
+    ListsController,
+    TagsController,
+    SuppressionsController,
+    ImportsController,
+    EmailTemplatesController,
+    EmailCampaignsController,
+    EmailWebhookController,
+    EmailStatusController,
+    UnsubscribeController,
+  ],
   providers: [
     ContactsService,
     ListsService,
     TagsService,
     SuppressionsService,
     ImportsService,
+    EmailTemplateService,
+    EmailCampaignService,
+    CampaignAudienceService,
+    EmailDispatcherService,
+    EmailEventsService,
+    UnsubscribeService,
     ...transportProviders,
   ],
 })
