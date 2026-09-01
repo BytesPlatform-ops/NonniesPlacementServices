@@ -16,3 +16,43 @@ h2,
 h3 {
   @apply font-display;
 }
+
+/* Print-friendly reports: hide app chrome + filter/action controls, and print
+   only the report surface in readable neutral ink. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #report-print,
+  #report-print * {
+    visibility: visible;
+  }
+  #report-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #111827;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  /* Keep grouped/summary blocks and table rows from splitting awkwardly. */
+  #report-print table {
+    width: 100%;
+  }
+  #report-print tr,
+  #report-print .report-card {
+    break-inside: avoid;
+  }
+}
