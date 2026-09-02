@@ -3,6 +3,7 @@ import type { PrismaService } from "../../../database/prisma.service";
 import type { SmsTransport } from "../providers/sms-transport";
 import type { SmsConversationService } from "./sms-conversation.service";
 import type { SmsStatusService } from "./sms-status.service";
+import type { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { SmsDispatcherService } from "./sms-dispatcher.service";
 
 const RECIPIENT = {
@@ -49,7 +50,8 @@ function build(opts: Opts = {}) {
   } as unknown as SmsTransport;
   const conversations = { findOrCreate: jest.fn().mockResolvedValue({ id: "conv-1", businessNumber: null }) } as unknown as SmsConversationService;
   const status = { applyProviderOptOut: jest.fn().mockResolvedValue(undefined) } as unknown as SmsStatusService;
-  const svc = new SmsDispatcherService(prisma, config as never, transport, conversations, status);
+  const maintenance = { runMaintenance: jest.fn().mockResolvedValue({}) } as unknown as DeliveryMaintenanceService;
+  const svc = new SmsDispatcherService(prisma, config as never, transport, conversations, status, maintenance);
   return { svc, recipientUpdate, transport, tx, status, conversations };
 }
 

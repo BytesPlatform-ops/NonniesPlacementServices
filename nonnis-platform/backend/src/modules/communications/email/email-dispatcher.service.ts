@@ -11,6 +11,7 @@ import { generateUnsubscribeToken, resolveSender, unsubscribeUrl } from "./email
 import { formatReplyAddress, inboundDomain } from "./reply-address";
 import { generateInternetMessageId } from "./thread-headers";
 import { classifySendResult } from "../dispatch/send-outcome";
+import { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { AttachmentStorageService } from "./attachment-storage.service";
 
 const LEASE_MS = 5 * 60_000;
@@ -34,6 +35,7 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService<AppConfig, true>,
     @Inject(EMAIL_TRANSPORT) private readonly transport: EmailTransport,
     private readonly attachments: AttachmentStorageService,
+    private readonly maintenance: DeliveryMaintenanceService,
   ) {}
 
   onModuleInit(): void {
@@ -54,6 +56,9 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
+      // Repair crashed-worker leftovers and finalize terminal campaigns first, so a
+      // recovered row can be picked up by the very same pass.
+      await this.maintenance.runMaintenance();
       await this.runOnce();
       await this.runRepliesOnce();
     } catch (err) {
@@ -145,6 +150,10 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
     const replyTo = formatReplyAddress(this.config, recipient.threadToken);
     const internetMessageId = generateInternetMessageId(inboundDomain(this.config));
 
+    // Mark the exact moment we hand this to the provider. If the worker dies after
+    // this point the row becomes DELIVERY_UNKNOWN rather than being resent.
+    await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipient.id }, data: { dispatchedAt: new Date() } });
+
     const outcome = await this.transport.sendEmail({
       internalMessageId: recipient.internalMessageId,
       to: recipient.emailSnapshot,
@@ -188,7 +197,7 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (action.kind === "retry") {
-      await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipientId }, data: { deliveryStatus: "QUEUED", queuedAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
+      await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipientId }, data: { deliveryStatus: "QUEUED", queuedAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, dispatchedAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
       return;
     }
     await this.prisma.communicationEmailCampaignRecipient.update({ where: { id: recipientId }, data: { deliveryStatus: "FAILED", failedAt: new Date(), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
@@ -281,6 +290,7 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       attachments,
     };
 
+    await this.prisma.communicationMessage.update({ where: { id: message.id }, data: { dispatchedAt: new Date() } });
     const outcome = await this.transport.sendEmail(out);
     const action = classifySendResult(outcome, message.attemptCount);
     if (action.kind === "sent") {
@@ -311,7 +321,7 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (action.kind === "retry") {
-      await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "QUEUED", nextAttemptAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
+      await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "QUEUED", nextAttemptAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, dispatchedAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
       return;
     }
     await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "FAILED", attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });

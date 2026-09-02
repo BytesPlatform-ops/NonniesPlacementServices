@@ -7,6 +7,7 @@ import type { AppConfig } from "../../../config/configuration";
 import { SMS_TRANSPORT, type SmsSendOutcome, type SmsTransport } from "../providers/sms-transport";
 import { evaluateChannelEligibility } from "../eligibility";
 import { classifySendResult, type SendAction } from "../dispatch/send-outcome";
+import { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { calculateSegments } from "./sms-segments";
 import { statusCallbackUrl } from "./sms-config";
 import { SmsConversationService } from "./sms-conversation.service";
@@ -35,6 +36,7 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
     @Inject(SMS_TRANSPORT) private readonly transport: SmsTransport,
     private readonly conversations: SmsConversationService,
     private readonly status: SmsStatusService,
+    private readonly maintenance: DeliveryMaintenanceService,
   ) {}
 
   onModuleInit(): void {
@@ -55,6 +57,8 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
+      // Shared queue recovery + campaign finalization (see DeliveryMaintenanceService).
+      await this.maintenance.runMaintenance();
       await this.runOnce();
       await this.runRepliesOnce();
     } catch (err) {
@@ -120,6 +124,9 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
+
+    // Mark the exact moment we hand this to the provider — see DeliveryMaintenanceService.
+    await this.prisma.communicationSmsCampaignRecipient.update({ where: { id: recipient.id }, data: { dispatchedAt: new Date() } });
 
     const outcome = await this.transport.sendSms({
       internalMessageId: recipient.internalMessageId,
@@ -213,7 +220,7 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (action.kind === "retry") {
-      await this.prisma.communicationSmsCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "QUEUED", queuedAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
+      await this.prisma.communicationSmsCampaignRecipient.update({ where: { id: recipient.id }, data: { deliveryStatus: "QUEUED", queuedAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, dispatchedAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
       return;
     }
     if (action.kind === "failed") {
@@ -286,6 +293,7 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    await this.prisma.communicationMessage.update({ where: { id: message.id }, data: { dispatchedAt: new Date() } });
     const outcome = await this.transport.sendSms({
       internalMessageId: message.id,
       to,
@@ -336,7 +344,7 @@ export class SmsDispatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     if (action.kind === "retry") {
-      await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "QUEUED", nextAttemptAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
+      await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "QUEUED", nextAttemptAt: new Date(Date.now() + action.backoffMs), attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, dispatchedAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });
       return;
     }
     await this.prisma.communicationMessage.update({ where: { id: messageId }, data: { status: "FAILED", attemptCount: action.attempt, claimToken: null, leaseExpiresAt: null, lastErrorCode: action.code, lastErrorMessageSafe: action.message } });

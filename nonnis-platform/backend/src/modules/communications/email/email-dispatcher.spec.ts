@@ -2,6 +2,7 @@ import type { PrismaService } from "../../../database/prisma.service";
 import type { ConfigService } from "@nestjs/config";
 import type { EmailTransport } from "../providers/email-transport";
 import type { AttachmentStorageService } from "./attachment-storage.service";
+import type { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { EmailDispatcherService } from "./email-dispatcher.service";
 
 const CAMPAIGN = { id: "c1", status: "SENDING", htmlSnapshot: "<p>Hi {{firstName}}</p>", textSnapshot: "Hi {{firstName}} {{unsubscribeUrl}}", subjectSnapshot: "Subject", senderEmail: "s@nonnis.test", senderName: "Nonni's" };
@@ -24,7 +25,8 @@ function makeDispatcher(opts: { consent?: string; outcome?: unknown } = {}) {
   const config = { get: (n: string) => (n === "communicationsPublicSiteUrl" ? "https://site" : n === "communicationsInboundEmailDomain" ? "reply.mock.local" : n === "brevoSenderEmail" ? "s@nonnis.test" : n === "brevoSenderName" ? "Nonni's" : undefined) } as unknown as ConfigService;
   const transport = { name: "mock", configured: true, sendEmail: jest.fn().mockResolvedValue(opts.outcome ?? { ok: true, providerMessageId: "pm1", acceptedAt: "now" }) } as unknown as EmailTransport;
   const attachments = { downloadBuffer: jest.fn() } as unknown as AttachmentStorageService;
-  const svc = new EmailDispatcherService(prisma, config as never, transport, attachments);
+  const maintenance = { runMaintenance: jest.fn().mockResolvedValue({}) } as unknown as DeliveryMaintenanceService;
+  const svc = new EmailDispatcherService(prisma, config as never, transport, attachments, maintenance);
   return { svc, recipientUpdate, transport, tx };
 }
 
