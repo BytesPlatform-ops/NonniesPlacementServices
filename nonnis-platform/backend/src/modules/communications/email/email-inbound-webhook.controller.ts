@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Inject, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Headers, Inject, Logger, Post, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "../../../config/configuration";
@@ -17,6 +17,8 @@ import { verifyInboundSecret } from "./email-config";
  */
 @Controller("webhooks/communications/email")
 export class EmailInboundWebhookController {
+  private readonly logger = new Logger("EmailInboundWebhook");
+
   constructor(
     private readonly config: ConfigService<AppConfig, true>,
     @Inject(INBOUND_EMAIL_ADAPTER) private readonly adapter: EmailInboundAdapter,
@@ -44,8 +46,10 @@ export class EmailInboundWebhookController {
       const review = results.filter((r) => r.status === "review").length;
       const duplicate = results.filter((r) => r.status === "duplicate").length;
       res.status(200).json({ ok: true, processed: results.length, linked, review, duplicate });
-    } catch {
-      // Never leak internals; acknowledge parse issues without a 500 storm from retries.
+    } catch (err) {
+      // Acknowledge so the provider does not retry-storm, but never fail silently:
+      // record a safe, content-free trace so an operator can see it happened.
+      this.logger.error(`Inbound email processing failed: ${err instanceof Error ? err.message : "unknown"}`);
       res.status(200).json({ ok: true, processed: 0 });
     }
   }

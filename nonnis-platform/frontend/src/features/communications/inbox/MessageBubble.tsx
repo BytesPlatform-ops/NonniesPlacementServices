@@ -6,14 +6,25 @@ import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MutationButton } from "@/components/ui/MutationButton";
 import { downloadAttachment, retryReply } from "@/services/communications-inbox.service";
+import { useToast } from "@/providers/toast-provider";
+import { ApiError } from "@/lib/api-client";
 import type { MessageView } from "@/types/communications-inbox";
 import { formatBytes, messageStatusLabel, messageStatusTone } from "./inbox-format";
 
 const RETRYABLE = new Set(["FAILED", "DELIVERY_UNKNOWN"]);
 
 export function MessageBubble({ message, conversationId, onChanged, channel = "EMAIL" }: { message: MessageView; conversationId: string; onChanged: () => void; channel?: "EMAIL" | "SMS" }) {
+  const toast = useToast();
   const inbound = message.direction === "INBOUND";
   const isSms = channel === "SMS";
+
+  const download = async (attachmentId: string, fileName: string) => {
+    try {
+      await downloadAttachment(conversationId, attachmentId);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : `Could not download ${fileName}.`);
+    }
+  };
   const [showHtml, setShowHtml] = useState(false);
   const time = message.receivedAt ?? message.sentAt ?? message.createdAt;
 
@@ -44,7 +55,7 @@ export function MessageBubble({ message, conversationId, onChanged, channel = "E
         {!isSms && message.attachments.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {message.attachments.map((a) => (
-              <button key={a.id} type="button" onClick={() => void downloadAttachment(conversationId, a.id)} className="inline-flex items-center gap-1.5 rounded-md border border-sage bg-ivory px-2 py-1 text-xs text-slate-700 hover:bg-white" title={`${a.mimeType} · ${formatBytes(a.sizeBytes)}`}>
+              <button key={a.id} type="button" onClick={() => void download(a.id, a.fileName)} className="inline-flex items-center gap-1.5 rounded-md border border-sage bg-ivory px-2 py-1 text-xs text-slate-700 hover:bg-white" title={`${a.mimeType} · ${formatBytes(a.sizeBytes)}`}>
                 <Paperclip className="h-3.5 w-3.5" aria-hidden /> <span className="max-w-[12rem] truncate">{a.fileName}</span> <Download className="h-3.5 w-3.5 text-slate-400" aria-hidden />
               </button>
             ))}
