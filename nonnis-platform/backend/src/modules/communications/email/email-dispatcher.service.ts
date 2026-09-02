@@ -10,7 +10,7 @@ import { renderForRecipient } from "./email-compiler";
 import { generateUnsubscribeToken, resolveSender, unsubscribeUrl } from "./email-config";
 import { formatReplyAddress, inboundDomain } from "./reply-address";
 import { generateInternetMessageId } from "./thread-headers";
-import { classifySendResult } from "./send-outcome";
+import { classifySendResult } from "../dispatch/send-outcome";
 import { AttachmentStorageService } from "./attachment-storage.service";
 
 const LEASE_MS = 5 * 60_000;
