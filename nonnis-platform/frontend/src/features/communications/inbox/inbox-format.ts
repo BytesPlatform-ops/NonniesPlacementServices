@@ -27,16 +27,11 @@ export function messageStatusLabel(status: MessageStatus): string {
 }
 
 const REVIEW_REASON_LABEL: Record<string, string> = {
-  NO_TOKEN: "No reply token",
-  UNKNOWN_TOKEN: "Unknown reply token",
-  MALFORMED_ADDRESS: "Malformed reply address",
-  THREAD_SENDER_MISMATCH: "Sender mismatch (thread)",
-  HEADER_SENDER_MISMATCH: "Sender mismatch (headers)",
-  UNRESOLVED: "Could not match a conversation",
-  // SMS (15D)
-  UNKNOWN_PHONE: "Unknown phone number",
-  PHONE_CONFLICT: "Number matches several contacts",
-  UNKNOWN_BUSINESS_NUMBER: "Unrecognised business number",
+  UNKNOWN_CONTACT: "Unknown contact",
+  AMBIGUOUS_CONTACT: "Matches several contacts",
+  SENDER_IDENTITY_MISMATCH: "Sender identity mismatch",
+  UNKNOWN_THREAD: "Could not match a conversation",
+  UNKNOWN_BUSINESS_DESTINATION: "Unrecognised business destination",
   INVALID_PROVIDER_PAYLOAD: "Malformed provider payload",
 };
 export function reviewReasonLabel(reason: string): string {

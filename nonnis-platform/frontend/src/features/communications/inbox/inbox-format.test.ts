@@ -15,9 +15,14 @@ describe("inbox-format", () => {
     expect(messageStatusLabel("SENT")).toBe("sent");
   });
 
-  it("labels review reasons", () => {
-    expect(reviewReasonLabel("THREAD_SENDER_MISMATCH")).toBe("Sender mismatch (thread)");
-    expect(reviewReasonLabel("UNKNOWN_TOKEN")).toBe("Unknown reply token");
+  it("labels the normalized, provider-neutral review reasons", () => {
+    expect(reviewReasonLabel("SENDER_IDENTITY_MISMATCH")).toBe("Sender identity mismatch");
+    expect(reviewReasonLabel("UNKNOWN_THREAD")).toBe("Could not match a conversation");
+    expect(reviewReasonLabel("UNKNOWN_CONTACT")).toBe("Unknown contact");
+    // Nothing provider-specific may leak into a user-facing label.
+    for (const label of ["SENDER_IDENTITY_MISMATCH", "UNKNOWN_THREAD", "UNKNOWN_CONTACT", "INVALID_PROVIDER_PAYLOAD"]) {
+      expect(reviewReasonLabel(label).toLowerCase()).not.toMatch(/brevo|twilio|sid|token/);
+    }
   });
 
   it("formats relative time and bytes", () => {

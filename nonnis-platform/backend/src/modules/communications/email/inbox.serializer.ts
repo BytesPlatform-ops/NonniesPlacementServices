@@ -122,6 +122,36 @@ export interface ConversationDetail {
   messages: MessageView[];
 }
 
+/**
+ * Provider-neutral review reasons. The stored enum keeps channel-specific detail for
+ * support, while the UI only ever sees these normalized codes so Brevo/Twilio wording
+ * never leaks into the product.
+ */
+export type NormalizedReviewReason =
+  | "UNKNOWN_CONTACT"
+  | "AMBIGUOUS_CONTACT"
+  | "SENDER_IDENTITY_MISMATCH"
+  | "UNKNOWN_THREAD"
+  | "UNKNOWN_BUSINESS_DESTINATION"
+  | "INVALID_PROVIDER_PAYLOAD";
+
+const REASON_MAP: Record<CommunicationInboundReviewReason, NormalizedReviewReason> = {
+  NO_TOKEN: "UNKNOWN_THREAD",
+  UNKNOWN_TOKEN: "UNKNOWN_THREAD",
+  MALFORMED_ADDRESS: "UNKNOWN_THREAD",
+  UNRESOLVED: "UNKNOWN_THREAD",
+  THREAD_SENDER_MISMATCH: "SENDER_IDENTITY_MISMATCH",
+  HEADER_SENDER_MISMATCH: "SENDER_IDENTITY_MISMATCH",
+  UNKNOWN_PHONE: "UNKNOWN_CONTACT",
+  PHONE_CONFLICT: "AMBIGUOUS_CONTACT",
+  UNKNOWN_BUSINESS_NUMBER: "UNKNOWN_BUSINESS_DESTINATION",
+  INVALID_PROVIDER_PAYLOAD: "INVALID_PROVIDER_PAYLOAD",
+};
+
+export function normalizeReviewReason(reason: CommunicationInboundReviewReason): NormalizedReviewReason {
+  return REASON_MAP[reason];
+}
+
 export interface InboundReviewView {
   id: string;
   provider: string;
@@ -134,7 +164,8 @@ export interface InboundReviewView {
   preview: string | null;
   textBody: string | null;
   htmlBody: string | null;
-  reason: CommunicationInboundReviewReason;
+  /** Normalized, provider-neutral code used by the UI. */
+  reason: NormalizedReviewReason;
   status: CommunicationInboundReviewStatus;
   receivedAt: string | null;
   createdAt: string;
@@ -152,7 +183,7 @@ export function toInboundReviewView(r: CommunicationInboundEmailReview): Inbound
     preview: r.previewText,
     textBody: r.textBody,
     htmlBody: r.sanitizedHtmlBody,
-    reason: r.reason,
+    reason: normalizeReviewReason(r.reason),
     status: r.status,
     receivedAt: iso(r.receivedAt),
     createdAt: r.createdAt.toISOString(),

@@ -3,16 +3,13 @@ export type CommunicationChannel = "EMAIL" | "SMS";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type ConversationStatus = "OPEN" | "CLOSED" | "ARCHIVED";
 export type MessageStatus = "QUEUED" | "PROCESSING" | "ACCEPTED" | "SENT" | "DELIVERED" | "UNDELIVERED" | "BOUNCED" | "FAILED" | "DELIVERY_UNKNOWN" | "RECEIVED";
+/** Provider-neutral review reasons — the API normalizes channel detail away. */
 export type ReviewReason =
-  | "NO_TOKEN"
-  | "UNKNOWN_TOKEN"
-  | "MALFORMED_ADDRESS"
-  | "THREAD_SENDER_MISMATCH"
-  | "HEADER_SENDER_MISMATCH"
-  | "UNRESOLVED"
-  | "UNKNOWN_PHONE"
-  | "PHONE_CONFLICT"
-  | "UNKNOWN_BUSINESS_NUMBER"
+  | "UNKNOWN_CONTACT"
+  | "AMBIGUOUS_CONTACT"
+  | "SENDER_IDENTITY_MISMATCH"
+  | "UNKNOWN_THREAD"
+  | "UNKNOWN_BUSINESS_DESTINATION"
   | "INVALID_PROVIDER_PAYLOAD";
 export type ReviewStatus = "PENDING" | "LINKED" | "DISMISSED";
 
