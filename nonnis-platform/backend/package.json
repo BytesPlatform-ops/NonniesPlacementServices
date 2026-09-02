@@ -2,7 +2,7 @@
   "name": "nonnis-platform-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Nonnis Digital Optimization Platform — backend API (modular monolith)",
+  "description": "Nonnis Digital Optimization Platform \u2014 backend API (modular monolith)",
   "scripts": {
     "build": "prisma generate && nest build",
     "postinstall": "prisma generate",
@@ -19,7 +19,8 @@
     "content:seed-media": "node --env-file=.env -r ts-node/register src/scripts/seed-content-media.ts",
     "seed:public-directory-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-public-directory-demo.ts",
     "seed:communications-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-communications-demo.ts",
-    "communications:simulate-email-reply": "node --env-file=.env -r ts-node/register src/scripts/simulate-email-reply.ts"
+    "communications:simulate-email-reply": "node --env-file=.env -r ts-node/register src/scripts/simulate-email-reply.ts",
+    "communications:simulate-sms": "node --env-file=.env -r ts-node/register src/scripts/simulate-sms.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -42,7 +42,7 @@ describe("mock sms transport", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.providerMessageId).toMatch(/^mock-sms-[0-9a-f-]{36}$/);
-      expect(r.fromNumber).toBe("+15550001000");
+      expect(r.fromNumber).toBe("+14155550100");
     }
   });
 
@@ -52,11 +52,11 @@ describe("mock sms transport", () => {
       const r = await t.sendSms(sms(to));
       return r.ok ? "ok" : r.classification;
     };
-    expect(await cls("+15550000001")).toBe("PERMANENT");
-    expect(await cls("+15550000002")).toBe("RATE_LIMIT");
-    expect(await cls("+15550000003")).toBe("AMBIGUOUS");
-    expect(await cls("+15550000004")).toBe("TEMPORARY");
-    expect(await cls("+15550000005")).toBe("PROVIDER_OPT_OUT_BLOCK");
+    expect(await cls("+14155550001")).toBe("PERMANENT");
+    expect(await cls("+14155550002")).toBe("RATE_LIMIT");
+    expect(await cls("+14155550003")).toBe("AMBIGUOUS");
+    expect(await cls("+14155550004")).toBe("TEMPORARY");
+    expect(await cls("+14155550005")).toBe("PROVIDER_OPT_OUT_BLOCK");
   });
 });
 

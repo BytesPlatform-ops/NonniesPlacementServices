@@ -6,7 +6,7 @@ import { calculateSegments } from "../sms/sms-segments";
 import type { OutboundSmsMessage, SmsSendOutcome, SmsTransport } from "./sms-transport";
 
 /** Deterministic mock sender number used when no real number is configured. */
-export const MOCK_SMS_FROM_NUMBER = "+15550001000";
+export const MOCK_SMS_FROM_NUMBER = "+14155550100";
 
 /**
  * Deterministic mock SMS transport for development/tests. Performs ZERO network
