@@ -1572,6 +1572,11 @@ model CommunicationMessage {
   claimToken           String?
   leaseExpiresAt       DateTime?
   nextAttemptAt        DateTime?
+  /// Set immediately BEFORE the provider call — see the campaign recipient fields.
+  dispatchedAt         DateTime?
+  /// Client-supplied key making a direct reply queue request idempotent, so a
+  /// double-click or a browser/network retry can never create two outbound messages.
+  idempotencyKey       String?   @unique
   lastErrorCode        String?
   lastErrorMessageSafe String?
 
@@ -1588,6 +1593,8 @@ model CommunicationMessage {
   @@index([conversationId])
   @@index([providerMessageId])
   @@index([direction, status])
+  /// Drives expired-lease recovery + delivery-operations scans.
+  @@index([channel, direction, status])
   @@map("communication_messages")
 }
 
@@ -1827,6 +1834,10 @@ model CommunicationEmailCampaignRecipient {
 
   queuedAt       DateTime?
   processingAt   DateTime?
+  /// Set immediately BEFORE the provider call. If a lease expires with this null the
+  /// worker died before dispatching, so the row is safe to re-queue; if it is set we
+  /// cannot know whether the provider accepted, so it becomes DELIVERY_UNKNOWN.
+  dispatchedAt   DateTime?
   sentAt         DateTime?
   deliveredAt    DateTime?
   failedAt       DateTime?
@@ -1845,6 +1856,8 @@ model CommunicationEmailCampaignRecipient {
   @@index([campaignId, deliveryStatus])
   @@index([deliveryStatus])
   @@index([providerMessageId])
+  /// Drives expired-lease recovery scans.
+  @@index([deliveryStatus, leaseExpiresAt])
   @@map("communication_email_campaign_recipients")
 }
 
@@ -2009,6 +2022,8 @@ model CommunicationSmsCampaignRecipient {
 
   queuedAt      DateTime?
   processingAt  DateTime?
+  /// Set immediately BEFORE the provider call — see the email recipient field.
+  dispatchedAt  DateTime?
   sentAt        DateTime?
   deliveredAt   DateTime?
   undeliveredAt DateTime?
@@ -2026,5 +2041,7 @@ model CommunicationSmsCampaignRecipient {
   @@index([campaignId, deliveryStatus])
   @@index([deliveryStatus])
   @@index([providerMessageId])
+  /// Drives expired-lease recovery scans.
+  @@index([deliveryStatus, leaseExpiresAt])
   @@map("communication_sms_campaign_recipients")
 }
