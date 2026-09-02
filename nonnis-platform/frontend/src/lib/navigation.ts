@@ -38,6 +38,8 @@ const NAV: NavGroup[] = [
       { label: "SMS Templates", href: "/communications/sms-templates", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "SMS Campaigns", href: "/communications/sms-campaigns", permission: PERMISSIONS.COMMUNICATIONS_READ },
       { label: "Imports", href: "/communications/imports", permission: PERMISSIONS.COMMUNICATIONS_IMPORT },
+      { label: "Delivery", href: "/communications/delivery", permission: PERMISSIONS.COMMUNICATIONS_READ },
+      { label: "Configuration", href: "/communications/configuration", permission: PERMISSIONS.COMMUNICATIONS_READ },
     ],
   },
   {
