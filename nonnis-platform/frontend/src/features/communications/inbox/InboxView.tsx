@@ -7,7 +7,7 @@ import { useAsync } from "@/hooks/use-async";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { listConversations, reviewPendingCount, unreadCount } from "@/services/communications-inbox.service";
-import type { InboxView as InboxViewKey } from "@/types/communications-inbox";
+import type { CommunicationChannel, InboxView as InboxViewKey } from "@/types/communications-inbox";
 import { ConversationList } from "./ConversationList";
 import { ConversationThread } from "./ConversationThread";
 import { InboundReviewPanel } from "./InboundReviewPanel";
@@ -23,20 +23,30 @@ const TABS: Array<{ key: Tab; label: string }> = [
 ];
 const LIST_POLL_MS = 25_000;
 
+const CHANNELS: Array<{ key: CommunicationChannel | "ALL"; label: string }> = [
+  { key: "ALL", label: "All channels" },
+  { key: "EMAIL", label: "Email" },
+  { key: "SMS", label: "SMS" },
+];
+
 export function InboxView() {
   const router = useRouter();
   const params = useSearchParams();
   const [tab, setTab] = useState<Tab>("all");
+  const [channel, setChannel] = useState<CommunicationChannel | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(params.get("c"));
 
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 300); return () => clearTimeout(t); }, [search]);
-  useEffect(() => setPage(1), [tab, debounced]);
+  useEffect(() => setPage(1), [tab, debounced, channel]);
 
   const isReview = tab === "review";
-  const filters = useMemo(() => ({ view: tab as InboxViewKey, search: debounced || undefined, page, pageSize: 20 }), [tab, debounced, page]);
+  const filters = useMemo(
+    () => ({ view: tab as InboxViewKey, channel: channel === "ALL" ? undefined : channel, search: debounced || undefined, page, pageSize: 20 }),
+    [tab, debounced, page, channel],
+  );
   const list = useAsync(() => (isReview ? Promise.resolve(null) : listConversations(filters)), [isReview, filters]);
   const counts = useAsync(() => Promise.all([unreadCount(), reviewPendingCount()]).then(([u, r]) => ({ unread: u.count, review: r.count })), []);
 
@@ -59,13 +69,26 @@ export function InboxView() {
 
   return (
     <div className="space-y-4">
-      <PageHeading title="Inbox" description="Email conversations with your contacts — replies from campaigns and direct outreach, all in one place." />
+      <PageHeading title="Inbox" description="Email and SMS conversations with your contacts — replies from campaigns and direct outreach, all in one place." />
       <InboxConfigBanner />
 
       <div className="flex h-[calc(100vh-13rem)] min-h-[32rem] overflow-hidden rounded-lg border border-sage bg-ivory shadow-card">
         {/* LEFT: list + tabs */}
         <div className={`flex w-full min-w-0 flex-col border-r border-sage lg:w-[22rem] lg:shrink-0 ${selectedId && !isReview ? "hidden lg:flex" : "flex"}`}>
           <div className="border-b border-sage px-2 pt-2">
+            <div className="mb-1.5 flex gap-1" role="group" aria-label="Filter by channel">
+              {CHANNELS.map((ch) => (
+                <button
+                  key={ch.key}
+                  type="button"
+                  onClick={() => { setChannel(ch.key); setSelectedId(null); }}
+                  className={`flex-1 rounded-md px-2 py-1 text-xs font-medium ${channel === ch.key ? "bg-sage/60 text-umber" : "text-slate-500 hover:bg-sage/30"}`}
+                  aria-pressed={channel === ch.key}
+                >
+                  {ch.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-1">
               {TABS.map((t) => (
                 <button key={t.key} type="button" onClick={() => { setTab(t.key); if (t.key !== tab) setSelectedId(null); }}
@@ -79,7 +102,7 @@ export function InboxView() {
             {!isReview ? (
               <div className="relative my-2">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, subject…" className="w-full rounded-md border border-slate-300 py-1.5 pl-8 pr-3 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone, subject…" className="w-full rounded-md border border-slate-300 py-1.5 pl-8 pr-3 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600" />
               </div>
             ) : null}
           </div>

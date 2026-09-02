@@ -32,18 +32,19 @@ export function InboundReviewPanel({ onResolved, onOpenConversation }: { onResol
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       {items.length === 0 ? (
-        <EmptyState title="Nothing to review" message="Inbound email that can't be matched to a conversation, or fails a sender check, is safely quarantined here." />
+        <EmptyState title="Nothing to review" message="Inbound email or SMS that can't be matched to a contact, or fails a sender check, is safely quarantined here." />
       ) : (
         <ul className="divide-y divide-sage/70">
           {items.map((r) => (
             <li key={r.id} className="px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${r.channel === "SMS" ? "bg-teal-100 text-teal-800" : "bg-slate-200 text-slate-700"}`}>{r.channel === "SMS" ? "SMS" : "Email"}</span>
                 <span className="text-sm font-semibold text-umber">{r.fromName ?? r.fromEmail}</span>
                 <span className="text-xs text-slate-400">{r.fromEmail}</span>
                 <StatusBadge label={reviewReasonLabel(r.reason)} tone="warning" />
                 <span className="ml-auto text-xs text-slate-400">{formatDateTime(r.receivedAt ?? r.createdAt)}</span>
               </div>
-              <p className="mt-1 text-sm text-slate-700">{r.subject ?? "(no subject)"}</p>
+              <p className="mt-1 text-sm text-slate-700">{r.channel === "SMS" ? (r.textBody ?? "") : (r.subject ?? "(no subject)")}</p>
               <p className="mt-0.5 text-xs text-slate-500">{r.preview ?? r.textBody ?? ""}</p>
               {canManage ? (
                 <div className="mt-2 flex items-center gap-3">
@@ -94,6 +95,7 @@ function LinkToContactModal({ review, onClose, onLinked }: { review: InboundRevi
   return (
     <Modal title="Link message to a contact" onClose={onClose} size="md">
       <p className="text-sm text-slate-500">Linking creates a conversation for the chosen existing contact. A stranger is never turned into a contact automatically.</p>
+      {review.channel === "SMS" ? <p className="mt-1 text-xs text-slate-400">For SMS, the contact&apos;s saved number must already match {review.fromEmail} — linking never rewrites a contact&apos;s phone.</p> : null}
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contacts by name or email…" className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600" autoFocus />
       <div className="mt-3 max-h-72 overflow-y-auto rounded-md border border-sage">
         {results.loading ? (

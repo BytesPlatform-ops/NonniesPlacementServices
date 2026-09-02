@@ -1,6 +1,7 @@
 import { apiGet, apiPost } from "@/lib/api-client";
 import type { PaginatedResult } from "@/types/api";
 import type {
+  CommunicationChannel,
   ConversationDetail,
   ConversationListItem,
   InboundReviewView,
@@ -10,7 +11,7 @@ import type {
   ReviewStatus,
 } from "@/types/communications-inbox";
 
-const BASE = "/api/v1/communications/email";
+const BASE = "/api/v1/communications";
 
 function qs(f: Record<string, string | number | undefined>): string {
   const q = new URLSearchParams();
@@ -20,7 +21,7 @@ function qs(f: Record<string, string | number | undefined>): string {
 }
 
 // ---- Conversations ----
-export function listConversations(f: { view: InboxView; search?: string; page?: number; pageSize?: number }): Promise<PaginatedResult<ConversationListItem>> {
+export function listConversations(f: { view: InboxView; channel?: CommunicationChannel; search?: string; page?: number; pageSize?: number }): Promise<PaginatedResult<ConversationListItem>> {
   return apiGet(`${BASE}/conversations${qs(f)}`);
 }
 export function getConversation(id: string): Promise<ConversationDetail> {
@@ -84,7 +85,7 @@ export async function downloadAttachment(conversationId: string, attachmentId: s
 }
 
 // ---- Inbound review (quarantine) ----
-export function listReviews(f: { status?: ReviewStatus; page?: number; pageSize?: number }): Promise<PaginatedResult<InboundReviewView>> {
+export function listReviews(f: { status?: ReviewStatus; channel?: CommunicationChannel; page?: number; pageSize?: number }): Promise<PaginatedResult<InboundReviewView>> {
   return apiGet(`${BASE}/inbound-review${qs(f)}`);
 }
 export function reviewPendingCount(): Promise<{ count: number }> {

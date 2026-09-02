@@ -12,6 +12,7 @@ import { MutationButton } from "@/components/ui/MutationButton";
 import { archiveConversation, getConversation, markUnread, restoreConversation } from "@/services/communications-inbox.service";
 import { MessageBubble } from "./MessageBubble";
 import { ReplyComposer } from "./ReplyComposer";
+import { SmsComposer } from "./SmsComposer";
 
 const POLL_MS = 20_000;
 
@@ -47,6 +48,7 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
   if (error) return <ErrorState message={error.message} onRetry={reload} />;
   if (!data) return null;
   const c = data;
+  const isSms = c.channel === "SMS";
   const afterMutation = () => { reload(); onMutated(); };
 
   return (
@@ -56,15 +58,16 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
         {onBack ? <button type="button" onClick={onBack} className="lg:hidden -ml-1 mt-0.5 text-slate-500 hover:text-umber" aria-label="Back to inbox"><ArrowLeft className="h-5 w-5" aria-hidden /></button> : null}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-semibold text-umber">{c.contact.name ?? c.contact.email ?? "Unknown contact"}</h2>
+            <h2 className="truncate text-base font-semibold text-umber">{c.contact.name ?? (isSms ? c.contact.phone : c.contact.email) ?? "Unknown contact"}</h2>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isSms ? "bg-teal-100 text-teal-800" : "bg-slate-200 text-slate-700"}`}>{isSms ? "SMS" : "Email"}</span>
             {c.needsReply ? <StatusBadge label="needs reply" tone="warning" /> : null}
             {c.status === "ARCHIVED" ? <StatusBadge label="archived" tone="neutral" /> : null}
           </div>
-          <p className="truncate text-sm text-slate-500">{c.subject ?? "(no subject)"}</p>
-          <p className="truncate text-xs text-slate-400">{c.contact.email}{c.contact.organization ? ` · ${c.contact.organization}` : ""}</p>
+          <p className="truncate text-sm text-slate-500">{isSms ? (c.contact.phone ?? "SMS conversation") : (c.subject ?? "(no subject)")}</p>
+          <p className="truncate text-xs text-slate-400">{isSms ? (c.businessNumber ? `via ${c.businessNumber}` : "") : c.contact.email}{c.contact.organization ? `${isSms && !c.businessNumber ? "" : " · "}${c.contact.organization}` : ""}</p>
           {c.originCampaignId ? (
-            <Link href={`/communications/email-campaigns/${c.originCampaignId}`} className="mt-0.5 inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
-              <Megaphone className="h-3.5 w-3.5" aria-hidden /> Started from campaign: {c.originCampaignName ?? "view"}
+            <Link href={`/communications/${isSms ? "sms" : "email"}-campaigns/${c.originCampaignId}`} className="mt-0.5 inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
+              <Megaphone className="h-3.5 w-3.5" aria-hidden /> Started from {isSms ? "SMS " : ""}campaign: {c.originCampaignName ?? "view"}
             </Link>
           ) : null}
         </div>
@@ -88,8 +91,10 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
 
       {/* Contact context strip */}
       <div className="flex flex-wrap items-center gap-2 border-b border-sage/70 bg-ivory px-4 py-1.5 text-xs text-slate-500">
-        {c.contact.emailConsent ? <span>Consent: <strong className="text-slate-600">{c.contact.emailConsent.replace(/_/g, " ").toLowerCase()}</strong></span> : null}
-        {c.contact.suppressed ? <span className="inline-flex items-center gap-1 text-amber-700"><Ban className="h-3.5 w-3.5" aria-hidden /> suppressed (marketing)</span> : null}
+        {isSms
+          ? c.contact.smsConsent ? <span>SMS consent: <strong className="text-slate-600">{c.contact.smsConsent.replace(/_/g, " ").toLowerCase()}</strong></span> : null
+          : c.contact.emailConsent ? <span>Consent: <strong className="text-slate-600">{c.contact.emailConsent.replace(/_/g, " ").toLowerCase()}</strong></span> : null}
+        {(isSms ? c.contact.smsSuppressed : c.contact.suppressed) ? <span className="inline-flex items-center gap-1 text-amber-700"><Ban className="h-3.5 w-3.5" aria-hidden /> {isSms ? "opted out — SMS blocked until they text START" : "suppressed (marketing)"}</span> : null}
         {c.contact.lists.length ? <span>Lists: {c.contact.lists.join(", ")}</span> : null}
         {c.contact.tags.length ? <span>Tags: {c.contact.tags.join(", ")}</span> : null}
         <Link href={`/communications/contacts/${c.contact.id}`} className="ml-auto text-brand-700 hover:underline">Open contact</Link>
@@ -97,17 +102,34 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
 
       {/* Messages */}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-cream px-4 py-4">
-        {c.messages.length === 0 ? <p className="text-sm text-slate-400">No messages yet.</p> : c.messages.map((m) => <MessageBubble key={m.id} message={m} conversationId={conversationId} onChanged={afterMutation} />)}
+        {c.messages.length === 0 ? <p className="text-sm text-slate-400">No messages yet.</p> : c.messages.map((m) => <MessageBubble key={m.id} message={m} conversationId={conversationId} onChanged={afterMutation} channel={c.channel} />)}
         <div ref={bottomRef} />
       </div>
 
-      {/* Composer */}
-      <ReplyComposer
-        conversationId={conversationId}
-        disabled={!canReply || !c.contact.email}
-        disabledReason={!canReply ? "You do not have permission to send replies." : !c.contact.email ? "This contact has no email address." : undefined}
-        onSent={afterMutation}
-      />
+      {/* Composer — plain-text SMS or rich email reply */}
+      {isSms ? (
+        <SmsComposer
+          conversationId={conversationId}
+          disabled={!canReply || !c.contact.phone || c.contact.smsSuppressed}
+          disabledReason={
+            !canReply
+              ? "You do not have permission to send replies."
+              : !c.contact.phone
+                ? "This contact has no phone number."
+                : c.contact.smsSuppressed
+                  ? "This contact has opted out of SMS. They must text START before you can message them again."
+                  : undefined
+          }
+          onSent={afterMutation}
+        />
+      ) : (
+        <ReplyComposer
+          conversationId={conversationId}
+          disabled={!canReply || !c.contact.email}
+          disabledReason={!canReply ? "You do not have permission to send replies." : !c.contact.email ? "This contact has no email address." : undefined}
+          onSent={afterMutation}
+        />
+      )}
     </div>
   );
 }

@@ -8,9 +8,11 @@ export function messageStatusTone(status: MessageStatus): StatusTone {
       return "positive";
     case "QUEUED":
     case "PROCESSING":
+    case "ACCEPTED":
       return "progress";
     case "BOUNCED":
     case "FAILED":
+    case "UNDELIVERED":
       return "negative";
     case "DELIVERY_UNKNOWN":
       return "warning";
@@ -31,6 +33,11 @@ const REVIEW_REASON_LABEL: Record<string, string> = {
   THREAD_SENDER_MISMATCH: "Sender mismatch (thread)",
   HEADER_SENDER_MISMATCH: "Sender mismatch (headers)",
   UNRESOLVED: "Could not match a conversation",
+  // SMS (15D)
+  UNKNOWN_PHONE: "Unknown phone number",
+  PHONE_CONFLICT: "Number matches several contacts",
+  UNKNOWN_BUSINESS_NUMBER: "Unrecognised business number",
+  INVALID_PROVIDER_PAYLOAD: "Malformed provider payload",
 };
 export function reviewReasonLabel(reason: string): string {
   return REVIEW_REASON_LABEL[reason] ?? reason.replace(/_/g, " ").toLowerCase();
