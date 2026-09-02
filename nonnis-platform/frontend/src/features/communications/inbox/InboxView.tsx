@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Inbox as InboxIcon, Search } from "lucide-react";
 import { useAsync } from "@/hooks/use-async";
 import { PageHeading } from "@/components/ui/PageHeading";
@@ -31,16 +31,35 @@ const CHANNELS: Array<{ key: CommunicationChannel | "ALL"; label: string }> = [
 
 export function InboxView() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useSearchParams();
-  const [tab, setTab] = useState<Tab>("all");
-  const [channel, setChannel] = useState<CommunicationChannel | "ALL">("ALL");
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [page, setPage] = useState(1);
+  // Inbox state is seeded from (and mirrored back to) the URL so refresh, deep links
+  // and browser back all restore the same view.
+  const initialTab = (TABS.find((t) => t.key === params.get("view"))?.key ?? "all") as Tab;
+  const initialChannel = (CHANNELS.find((c) => c.key === params.get("channel"))?.key ?? "ALL") as CommunicationChannel | "ALL";
+  const initialPage = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
+
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [channel, setChannel] = useState<CommunicationChannel | "ALL">(initialChannel);
+  const [search, setSearch] = useState(params.get("q") ?? "");
+  const [debounced, setDebounced] = useState(params.get("q") ?? "");
+  const [page, setPage] = useState(initialPage);
   const [selectedId, setSelectedId] = useState<string | null>(params.get("c"));
 
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 300); return () => clearTimeout(t); }, [search]);
   useEffect(() => setPage(1), [tab, debounced, channel]);
+
+  // Mirror state into the URL without adding a history entry per keystroke.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (tab !== "all") next.set("view", tab);
+    if (channel !== "ALL") next.set("channel", channel);
+    if (debounced.trim()) next.set("q", debounced.trim());
+    if (page > 1) next.set("page", String(page));
+    if (selectedId) next.set("c", selectedId);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [tab, channel, debounced, page, selectedId, pathname, router]);
 
   const isReview = tab === "review";
   const filters = useMemo(
@@ -57,12 +76,7 @@ export function InboxView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReview, filters]);
 
-  const select = (id: string) => {
-    setSelectedId(id);
-    const url = new URL(window.location.href);
-    url.searchParams.set("c", id);
-    router.replace(`${url.pathname}${url.search}`, { scroll: false });
-  };
+  const select = (id: string) => setSelectedId(id);
   const refreshLists = () => { if (!isReview) list.reload(); counts.reload(); };
 
   const badge = (n: number) => (n > 0 ? <span className="ml-1 rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{n}</span> : null);
