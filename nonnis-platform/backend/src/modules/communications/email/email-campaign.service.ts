@@ -140,8 +140,11 @@ export class EmailCampaignService {
     if (evaluation.eligibleCount === 0) throw new BadRequestException("No eligible recipients. Everyone in the audience is excluded (no opted-in, non-suppressed email).");
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.communicationEmailCampaign.update({
-        where: { id },
+      // Atomically CLAIM the DRAFT -> QUEUED transition. A concurrent duplicate
+      // request (double-click, browser retry) updates zero rows and rolls the whole
+      // transaction back, so a campaign can never be snapshotted or queued twice.
+      const claimed = await tx.communicationEmailCampaign.updateMany({
+        where: { id, status: "DRAFT" },
         data: {
           status: "QUEUED",
           queuedAt: new Date(),
@@ -151,8 +154,10 @@ export class EmailCampaignService {
           senderName: c.senderName ?? sender.name,
           eligibleRecipientCount: evaluation.eligibleCount,
           excludedRecipientCount: evaluation.excludedCount,
+          updatedByUserId: user.id,
         },
       });
+      if (claimed.count === 0) throw new BadRequestException("Only a draft campaign can be queued.");
       const now = new Date();
       for (let i = 0; i < evaluation.eligible.length; i += CHUNK) {
         const chunk = evaluation.eligible.slice(i, i + CHUNK);

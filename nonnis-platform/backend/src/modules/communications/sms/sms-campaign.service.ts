@@ -1,7 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma, type SmsEncoding } from "@prisma/client";
-import { randomUUID } from "node:crypto";
 import { PrismaService } from "../../../database/prisma.service";
 import type { AppConfig } from "../../../config/configuration";
 import type { PaginatedResult } from "../../../common/types/api-response";
@@ -212,8 +211,10 @@ export class SmsCampaignService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.communicationSmsCampaign.update({
-        where: { id },
+      // Atomically CLAIM the DRAFT -> QUEUED transition — see the email campaign
+      // service. A concurrent duplicate request rolls back instead of double-queueing.
+      const claimed = await tx.communicationSmsCampaign.updateMany({
+        where: { id, status: { in: ["DRAFT", "READY"] } },
         data: {
           status: "QUEUED",
           bodySnapshot: body,
@@ -228,7 +229,9 @@ export class SmsCampaignService {
           updatedByUserId: user.id,
         },
       });
+      if (claimed.count === 0) throw new BadRequestException("Only a draft campaign can be queued.");
       await tx.communicationSmsCampaignRecipient.createMany({
+        skipDuplicates: true,
         data: recipients.map((r) => ({
           campaignId: id,
           contactId: r.contactId,
@@ -239,7 +242,7 @@ export class SmsCampaignService {
           bodySnapshot: r.renderedBody,
           encodingSnapshot: r.encoding,
           estimatedSegmentCount: r.segmentCount,
-          internalMessageId: randomUUID(),
+          internalMessageId: `${id}:${r.contactId}`,
           deliveryStatus: "QUEUED" as const,
           queuedAt: now,
         })),
