@@ -1328,8 +1328,10 @@ enum CommunicationMessageDirection {
 enum CommunicationMessageStatus {
   QUEUED
   PROCESSING
+  ACCEPTED
   SENT
   DELIVERED
+  UNDELIVERED
   BOUNCED
   FAILED
   DELIVERY_UNKNOWN
@@ -1503,17 +1505,24 @@ model CommunicationConversation {
   /// deleting a campaign never destroys conversation history.
   originCampaignId String? @db.Uuid
 
+  /// SMS (15D): the Nonnis/Twilio business number this conversation runs through.
+  /// Kept per-conversation so a Messaging Service holding several senders stays safe.
+  businessNumber      String?
+  originSmsCampaignId String? @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contact        CommunicationContact                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  originCampaign CommunicationEmailCampaign?          @relation(fields: [originCampaignId], references: [id], onDelete: SetNull)
-  messages       CommunicationMessage[]
-  readStates     CommunicationConversationReadState[]
+  contact           CommunicationContact                 @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  originCampaign    CommunicationEmailCampaign?          @relation(fields: [originCampaignId], references: [id], onDelete: SetNull)
+  originSmsCampaign CommunicationSmsCampaign?            @relation(fields: [originSmsCampaignId], references: [id], onDelete: SetNull)
+  messages          CommunicationMessage[]
+  readStates        CommunicationConversationReadState[]
 
   @@index([contactId])
   @@index([channel, status])
   @@index([channel, status, lastMessageAt])
+  @@index([channel, contactId, businessNumber])
   @@map("communication_conversations")
 }
 
@@ -1549,6 +1558,15 @@ model CommunicationMessage {
   /// True for detected auto-responders (Auto-Submitted header) — never sets needsReply.
   autoSubmitted     Boolean @default(false)
 
+  /// SMS (15D). encoding/segmentCount are OUR estimate; providerSegmentCount is what
+  /// the provider actually reported (NumSegments) when available.
+  encoding             SmsEncoding?
+  segmentCount         Int?
+  providerSegmentCount Int?
+  /// Provider-authoritative opt-out classification for an inbound SMS (Twilio
+  /// Advanced Opt-Out `OptOutType`). Never sets needsReply.
+  smsOptOutType        SmsOptOutType?
+
   // Direct-reply outbox delivery bookkeeping (campaign sends use the recipient row).
   attemptCount         Int       @default(0)
   claimToken           String?
@@ -1557,11 +1575,12 @@ model CommunicationMessage {
   lastErrorCode        String?
   lastErrorMessageSafe String?
 
-  sentAt      DateTime?
-  deliveredAt DateTime?
-  receivedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now()) @updatedAt
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  undeliveredAt DateTime?
+  receivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
 
   conversation CommunicationConversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   attachments  CommunicationMessageAttachment[]
@@ -1593,6 +1612,11 @@ enum CommunicationInboundReviewReason {
   THREAD_SENDER_MISMATCH
   HEADER_SENDER_MISMATCH
   UNRESOLVED
+  // SMS (15D)
+  UNKNOWN_PHONE
+  PHONE_CONFLICT
+  UNKNOWN_BUSINESS_NUMBER
+  INVALID_PROVIDER_PAYLOAD
 }
 
 enum CommunicationInboundReviewStatus {
@@ -1607,6 +1631,11 @@ enum CommunicationInboundReviewStatus {
 model CommunicationInboundEmailReview {
   id       String @id @default(uuid()) @db.Uuid
   provider String
+
+  /// Which channel the quarantined message arrived on. One review queue serves both
+  /// EMAIL (15C) and SMS (15D); `fromEmail`/`toAddress` hold that channel's address
+  /// form (an email address, or an E.164 phone number for SMS).
+  channel CommunicationChannel @default(EMAIL)
 
   /// Provider inbound identity (idempotency for the quarantine too).
   providerInboundId String? @unique
@@ -1638,6 +1667,7 @@ model CommunicationInboundEmailReview {
 
   @@index([status])
   @@index([createdAt])
+  @@index([channel, status])
   @@map("communication_inbound_email_reviews")
 }
 
@@ -1831,4 +1861,170 @@ model CommunicationEmailEvent {
 
   @@index([providerMessageId])
   @@map("communication_email_events")
+}
+
+// ============================================================================
+// Communications Phase 15D — SMS templates, campaigns, recipient snapshots and
+// two-way SMS. Transport stays provider-independent (mock / Twilio behind the
+// SmsTransport port). Conversations/messages reuse the 15A/15C models with
+// channel = SMS; there is no second messaging system.
+// ============================================================================
+
+enum SmsEncoding {
+  GSM7
+  UCS2
+}
+
+/// Provider-authoritative inbound classification (Twilio Advanced Opt-Out
+/// `OptOutType`). Twilio has already sent its own confirmation reply when this
+/// is present — the CRM must never send a duplicate.
+enum SmsOptOutType {
+  STOP
+  START
+  HELP
+}
+
+enum CommunicationSmsTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CommunicationSmsCampaignStatus {
+  DRAFT
+  READY
+  QUEUED
+  SENDING
+  COMPLETED
+  PARTIALLY_FAILED
+  CANCELLED
+}
+
+/// Provider-neutral SMS delivery states. Twilio status strings are normalized
+/// into these by the adapter/status service — never leaked into business logic.
+enum CommunicationSmsRecipientStatus {
+  EXCLUDED
+  QUEUED
+  PROCESSING
+  ACCEPTED
+  SENT
+  DELIVERED
+  UNDELIVERED
+  FAILED
+  CANCELLED
+  DELIVERY_UNKNOWN
+}
+
+/// A reusable plain-text SMS template. No HTML, no Markdown, no page builder —
+/// SMS is text. Merge fields use the same safe contact allow-list as email.
+model CommunicationSmsTemplate {
+  id          String                         @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  body        String
+  status      CommunicationSmsTemplateStatus @default(DRAFT)
+
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaigns CommunicationSmsCampaign[]
+
+  @@index([status])
+  @@map("communication_sms_templates")
+}
+
+model CommunicationSmsCampaign {
+  id         String                         @id @default(uuid()) @db.Uuid
+  name       String
+  status     CommunicationSmsCampaignStatus @default(DRAFT)
+  templateId String?                        @db.Uuid
+
+  /// Immutable message snapshot captured at queue time (pre-merge template body).
+  bodySnapshot String?
+
+  /// { listIds: string[], contactIds: string[] }
+  audienceConfig Json
+
+  eligibleRecipientCount Int @default(0)
+  excludedRecipientCount Int @default(0)
+  /// Aggregate ESTIMATES computed from per-recipient rendered bodies. Segment
+  /// counts are an estimate, never an invoice — carrier/provider billing may differ.
+  estimatedSegmentCount  Int @default(0)
+  gsm7RecipientCount     Int @default(0)
+  ucs2RecipientCount     Int @default(0)
+  multiSegmentCount      Int @default(0)
+  longestBodyChars       Int @default(0)
+
+  queuedAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdByUserId String?  @db.Uuid
+  updatedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template            CommunicationSmsTemplate?           @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recipients          CommunicationSmsCampaignRecipient[]
+  originConversations CommunicationConversation[]
+
+  @@index([status])
+  @@map("communication_sms_campaigns")
+}
+
+model CommunicationSmsCampaignRecipient {
+  id         String @id @default(uuid()) @db.Uuid
+  campaignId String @db.Uuid
+  /// Soft reference (no FK relation) so history survives contact deletion.
+  contactId  String @db.Uuid
+
+  /// Snapshots taken at queue time — history never depends on the contact changing.
+  phoneSnapshot            String
+  firstNameSnapshot        String?
+  lastNameSnapshot         String?
+  organizationNameSnapshot String?
+  /// The fully merge-rendered message for THIS recipient.
+  bodySnapshot             String
+  encodingSnapshot         SmsEncoding
+  estimatedSegmentCount    Int         @default(1)
+
+  exclusionReason String?
+  deliveryStatus  CommunicationSmsRecipientStatus @default(QUEUED)
+
+  internalMessageId    String  @unique
+  providerMessageId    String?
+  /// The sender the provider actually used (a Messaging Service may pick it).
+  actualFromNumber     String?
+  /// Provider-reported segment count (Twilio NumSegments) when available.
+  providerSegmentCount Int?
+  conversationId       String? @db.Uuid
+  messageId            String? @db.Uuid
+
+  attemptCount   Int       @default(0)
+  claimToken     String?
+  leaseExpiresAt DateTime?
+
+  queuedAt      DateTime?
+  processingAt  DateTime?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  undeliveredAt DateTime?
+  failedAt      DateTime?
+  cancelledAt   DateTime?
+
+  lastErrorCode        String?
+  lastErrorMessageSafe String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign CommunicationSmsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, deliveryStatus])
+  @@index([deliveryStatus])
+  @@index([providerMessageId])
+  @@map("communication_sms_campaign_recipients")
 }
