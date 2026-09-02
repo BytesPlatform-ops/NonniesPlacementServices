@@ -2,8 +2,10 @@ import { MockEmailTransport } from "./mock-email-transport";
 import { MockSmsTransport } from "./mock-sms-transport";
 import { BrevoEmailTransport } from "./brevo-email-transport";
 import { MockEmailInboundAdapter } from "./mock-email-inbound-adapter";
+import { TwilioSmsTransport } from "./twilio-sms-transport";
+import type { ConfigService } from "@nestjs/config";
 import { BrevoEmailInboundAdapter } from "./brevo-email-inbound-adapter";
-import { resolveEmailTransport, resolveInboundAdapter } from "./transport.providers";
+import { resolveEmailTransport, resolveInboundAdapter, resolveSmsTransport } from "./transport.providers";
 import type { OutboundEmailMessage } from "./email-transport";
 
 const msg = (to: string): OutboundEmailMessage => ({ internalMessageId: "m1", to, senderEmail: "s@nonnis.test", subject: "s", html: "<p>h</p>", text: "h" });
@@ -29,10 +31,51 @@ describe("mock email transport", () => {
   });
 });
 
+const smsConfig = { get: () => undefined } as unknown as ConfigService<never, true>;
+const sms = (to: string) => ({ internalMessageId: "m1", to, body: "hi" });
+
 describe("mock sms transport", () => {
-  it("returns a deterministic id", async () => {
-    const r = await new MockSmsTransport().send({ to: "+15550000000", body: "hi" });
-    expect(r.providerMessageId).toMatch(/^mock-sms-[0-9a-f-]{36}$/);
+  it("is always configured and returns a deterministic id with zero network", async () => {
+    const t = new MockSmsTransport(smsConfig);
+    expect(t.configured).toBe(true);
+    const r = await t.sendSms(sms("+15551234567"));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.providerMessageId).toMatch(/^mock-sms-[0-9a-f-]{36}$/);
+      expect(r.fromNumber).toBe("+15550001000");
+    }
+  });
+
+  it("simulates each failure class from the destination's last four digits", async () => {
+    const t = new MockSmsTransport(smsConfig);
+    const cls = async (to: string) => {
+      const r = await t.sendSms(sms(to));
+      return r.ok ? "ok" : r.classification;
+    };
+    expect(await cls("+15550000001")).toBe("PERMANENT");
+    expect(await cls("+15550000002")).toBe("RATE_LIMIT");
+    expect(await cls("+15550000003")).toBe("AMBIGUOUS");
+    expect(await cls("+15550000004")).toBe("TEMPORARY");
+    expect(await cls("+15550000005")).toBe("PROVIDER_OPT_OUT_BLOCK");
+  });
+});
+
+describe("resolveSmsTransport (fail-safe selection)", () => {
+  const mock = new MockSmsTransport(smsConfig);
+  const twilioConfigured = { name: "twilio", configured: true, configurationError: null } as unknown as TwilioSmsTransport;
+  const twilioUnconfigured = { name: "twilio", configured: false, configurationError: "Missing: TWILIO_ACCOUNT_SID." } as unknown as TwilioSmsTransport;
+
+  it("selects mock by default", () => {
+    expect(resolveSmsTransport("mock", mock, twilioUnconfigured)).toBe(mock);
+  });
+  it("selects twilio when configured", () => {
+    expect(resolveSmsTransport("twilio", mock, twilioConfigured)).toBe(twilioConfigured);
+  });
+  it("fails safely when twilio is selected but not configured (never silently mocks)", () => {
+    expect(() => resolveSmsTransport("twilio", mock, twilioUnconfigured)).toThrow(/not fully configured/i);
+  });
+  it("fails for an unknown provider", () => {
+    expect(() => resolveSmsTransport("bogus", mock, twilioConfigured)).toThrow(/Unknown/i);
   });
 });
 
