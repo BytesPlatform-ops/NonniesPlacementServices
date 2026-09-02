@@ -1,7 +1,7 @@
 /**
- * Idempotent DEMO seed for Communications (Phases 15A + 15B).
+ * Idempotent DEMO seed for Communications (Phases 15A + 15B + 15D).
  *
- *   npm run seed:communications-demo            # (re)create demo contacts + email templates
+ *   npm run seed:communications-demo            # (re)create demo contacts + email/SMS templates
  *   npm run seed:communications-demo -- --clean # remove them
  *
  * All records are clearly FICTIONAL (no real people, no patient/PHI data). Demo
@@ -12,6 +12,7 @@ import { PrismaClient, type CommunicationConsentStatus, type Prisma } from "@pri
 import { toEmailValue, toPhoneValue } from "../modules/communications/normalization";
 import { compileDesign } from "../modules/communications/email/email-compiler";
 import { validateDesign, type Block, type EmailDesign } from "../modules/communications/email/template-design";
+import { validateSmsBody } from "../modules/communications/sms/sms-merge";
 
 const prisma = new PrismaClient();
 const LIST_PREFIX = "Demo — ";
@@ -20,6 +21,8 @@ async function clean(): Promise<void> {
   // Campaigns first (recipients cascade), then templates, then contacts/lists/tags.
   await prisma.communicationEmailCampaign.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
   await prisma.communicationEmailTemplate.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
+  await prisma.communicationSmsCampaign.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
+  await prisma.communicationSmsTemplate.deleteMany({ where: { name: { startsWith: LIST_PREFIX } } });
   const demoLists = await prisma.communicationList.findMany({ where: { name: { startsWith: LIST_PREFIX } }, select: { id: true } });
   const memberIds = (await prisma.communicationListMember.findMany({ where: { listId: { in: demoLists.map((l) => l.id) } }, select: { contactId: true } })).map((m) => m.contactId);
   const c = await prisma.communicationContact.deleteMany({ where: { id: { in: memberIds } } });
@@ -107,6 +110,45 @@ async function seedEmailTemplates(newsletterListId: string): Promise<void> {
     },
   });
   console.log(`Seeded ${TEMPLATE_SPECS.length} email template(s) and 1 draft campaign.`);
+}
+
+/**
+ * Demo SMS templates (15D). Plain text with safe contact merge fields only —
+ * deliberately short so they stay a single GSM-7 segment. The seeded SMS campaign
+ * is a DRAFT: nothing is ever queued or sent.
+ */
+const SMS_TEMPLATE_SPECS = [
+  {
+    name: "Demo — Appointment reminder",
+    description: "Short single-segment reminder.",
+    body: "Hi {{firstName}}, this is a reminder from Nonni's Placement about your upcoming appointment. Reply STOP to opt out.",
+  },
+  {
+    name: "Demo — Placement update",
+    description: "Brief status update for partner contacts.",
+    body: "Hi {{firstName}}, we have an update on your placement request. A member of our team will call you today.",
+  },
+];
+
+async function seedSmsTemplates(newsletterListId: string): Promise<void> {
+  let firstTemplateId: string | null = null;
+  for (const spec of SMS_TEMPLATE_SPECS) {
+    const body = validateSmsBody(spec.body);
+    const template = await prisma.communicationSmsTemplate.create({
+      data: { name: spec.name, description: spec.description, body, status: "ACTIVE" },
+    });
+    firstTemplateId ??= template.id;
+  }
+
+  await prisma.communicationSmsCampaign.create({
+    data: {
+      name: "Demo — SMS reminder draft",
+      status: "DRAFT",
+      templateId: firstTemplateId,
+      audienceConfig: { listIds: [newsletterListId], contactIds: [] } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  console.log(`Seeded ${SMS_TEMPLATE_SPECS.length} SMS template(s) and 1 draft SMS campaign.`);
 }
 
 interface Spec {
@@ -198,6 +240,7 @@ async function main(): Promise<void> {
   console.log(`Seeded ${created} demo contact(s), ${lists.length} lists, tags, and 2 suppressions.`);
 
   await seedEmailTemplates(lists[1].id);
+  await seedSmsTemplates(lists[0].id);
 }
 
 main()

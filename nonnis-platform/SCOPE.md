@@ -407,6 +407,40 @@ and do not let an in-scope feature evolve into them.
   works in **mock mode** (dev-only `communications:simulate-email-reply`). **No** SMS,
   no Gmail/IMAP/Graph sync, no schedulers/analytics/AI. See `docs/COMMUNICATIONS.md`.
 
+- **Slice 15D — SMS Templates + SMS Campaigns + Two-Way SMS:** the SMS phase, built on
+  the same foundations. A real **Twilio Programmable Messaging** adapter behind the 15A
+  `SmsTransport` port (mock stays the default; `twilio` without complete credentials
+  fails at DI resolution — it never silently mocks), sending through a **Messaging
+  Service** so CRM users can never supply a From number. Additive models:
+  `CommunicationSmsTemplate` (plain text, no builder), `CommunicationSmsCampaign`
+  (immutable body snapshot + aggregate segment estimate) and
+  `CommunicationSmsCampaignRecipient` (per-recipient rendered body, encoding and
+  segment snapshots). A deterministic **GSM-7 / UCS-2 segment calculator** (160/153 and
+  70/67, extended characters costing two septets, two-unit characters never split
+  across a boundary) — an estimate, never an invoice — computed **per recipient**
+  because merge values change length and encoding. Audience eligibility reuses
+  `evaluateChannelEligibility(contact, SMS)` (OPTED_IN required, UNKNOWN never
+  eligible), and the SMS dispatcher reuses the **same** Postgres `FOR UPDATE SKIP
+  LOCKED` claiming and the **same** shared send-result policy as email, with a
+  **second consent/suppression check immediately before each provider call** so a
+  recipient who texts STOP after queueing is never sent to. **Two-way SMS**: separate
+  signature-verified inbound-content and status-callback webhooks (validated with the
+  official Twilio validator against the exact public URL), deterministic correlation on
+  (contact number, business number) — never message text — unknown numbers safely
+  quarantined for review with **no** auto-created contacts, idempotency on `MessageSid`,
+  and monotonic status handling so out-of-order callbacks never regress `delivered`.
+  **STOP / START / HELP** are handled from Twilio's authoritative `OptOutType` (with a
+  conservative bare-keyword fallback): STOP blocks bulk **and** direct sending, START
+  releases only the `USER_OPT_OUT` suppression and re-opts in with an audit trail, HELP
+  changes nothing — and the CRM never sends a duplicate acknowledgement or TwiML.
+  Live bulk campaigns additionally require an explicit operator **A2P 10DLC**
+  acknowledgement. CRM UI: SMS Templates (live character/encoding/segment meter,
+  preview, rate-limited test send), SMS Campaigns (wizard + delivery detail), and the
+  existing Inbox extended with **Email / SMS channel filters**, an SMS thread and a
+  plain-text SMS composer. Everything works in **mock mode** (dev-only
+  `communications:simulate-sms`). **No** MMS, scheduled/recurring SMS, link tracking,
+  SMS analytics or AI. See `docs/COMMUNICATIONS.md`.
+
 ---
 
 ## 6. Remaining implementation sequence
@@ -431,10 +465,10 @@ COMPLETED
   15A. Communications — Foundation + Contacts + Imports + Consent/Suppression
   15B. Email Templates + Visual Email Builder + Email Campaigns
   15C. Email Inbox + Inbound Replies + Full Email Threading + Attachments
+  15D. SMS Templates + SMS Campaigns + Two-Way SMS
 
-NEXT (Communications module, remaining phases)
-  15D. SMS Campaigns + Two-Way SMS   ← next slice
-  15E. Unified Communications Inbox + Security + Delivery Hardening
+NEXT (Communications module, remaining phase)
+  15E. Unified Communications Inbox + Security + Delivery Hardening   ← next slice
 
 THEN
   14. Full Core-System Audit + Production Hardening
@@ -452,17 +486,17 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Communications 15D — SMS Campaigns + Two-Way SMS:** build on the 15A/15B/15C
-foundation — SMS campaigns and two-way SMS via the `SmsTransport` port (Twilio adapter
-introduced here), reusing the shared send/queue executor, eligibility policy, and the
-inbox/threading model. No new email work. Do NOT begin automatically. (Communications
-15A + 15B + 15C are complete; see `docs/COMMUNICATIONS.md`.)
+**Communications 15E — Unified Communications Inbox + Security / Delivery Hardening:**
+the final Communications phase — consolidate the email + SMS inbox UX (routes are still
+email-scoped aliases from 15C/15D), and harden communications security and delivery
+across both channels. Do NOT begin automatically. (Communications 15A–15D are complete;
+see `docs/COMMUNICATIONS.md`.)
 
 ---
 
 ## 7b. Later: Full Core-System Audit + Production Hardening
 
-After the Communications module (15D–15E) completes, the final planned slice is an
+After the Communications module (15E) completes, the final planned slice is an
 end-to-end review
 and hardening pass across the completed core system — security/RBAC/tenant-isolation
 audit, input validation, error handling, performance and index review, dependency

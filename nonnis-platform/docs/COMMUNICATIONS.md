@@ -3,8 +3,9 @@
 A CRM-owned marketing/outreach system. **Nonnis PostgreSQL is the source of
 truth.** Brevo (email) and Twilio (SMS) are **future transport providers** — they
 never own contacts, lists, consent, or history. This document covers **Phase 15A**
-(the foundation), **Phase 15B** (outbound email), and **Phase 15C** (the email inbox,
-inbound replies, threading, and attachments), and names the future phases.
+(the foundation), **Phase 15B** (outbound email), **Phase 15C** (the email inbox,
+inbound replies, threading, and attachments) and **Phase 15D** (SMS templates,
+campaigns and two-way SMS), and names the remaining phase.
 
 > **PHI boundary:** the Communications contact database is deliberately separate
 > from `User` / `Patient` / `Provider`. It never references `Case`/`Patient`
@@ -17,7 +18,7 @@ inbound replies, threading, and attachments), and names the future phases.
 | **15A** | Foundation: contacts, lists, tags, consent, suppression, imports, transport ports + mocks | **Complete** |
 | **15B** | Email templates + visual builder + email campaigns (Brevo adapter) | **Complete** |
 | **15C** | Email inbox + inbound replies + full email threading + attachments | **Complete** |
-| 15D | SMS campaigns + two-way SMS (Twilio adapter) | Planned |
+| **15D** | SMS templates + campaigns + two-way SMS (Twilio adapter) | **Complete** |
 | 15E | Unified communications inbox + security + delivery hardening | Planned |
 
 ## 1. Access (RBAC)
@@ -139,7 +140,12 @@ adapters, and the inbound threading/idempotency/sender-check service. Frontend:
 consent/import labels, the client CSV sanitizer, and inbox formatting. Confirmed
 **absent** through 15C: SMS send/inbound, Gmail/IMAP/Graph mailbox sync,
 schedulers/cron/recurring sends, open/click tracking, analytics, AI, external email
-validation, patient import.
+validation, patient import. **15D adds**: the GSM-7/UCS-2 segment calculator, SMS
+merge fields, the Twilio transport + inbound adapters (signature validation exercised
+with real HMAC fixtures), the SMS dispatcher's send-time opt-out recheck, status
+callback ordering, and STOP/START/HELP handling. Confirmed **absent** through 15D:
+MMS send/fetch, scheduled or recurring SMS, link/click tracking, SMS analytics, AI,
+and any patient/clinical merge field.
 
 ---
 
@@ -355,3 +361,168 @@ replies with `npm run communications:simulate-email-reply -- --conversation <id>
 5. The inbound **webhook URL**: `https://<api-host>/api/v1/webhooks/communications/email/inbound?secret=<COMMUNICATIONS_INBOUND_EMAIL_SECRET>`.
 6. Set `COMMUNICATIONS_INBOUND_EMAIL_PROVIDER=brevo`, `COMMUNICATIONS_INBOUND_EMAIL_DOMAIN`, `COMMUNICATIONS_INBOUND_EMAIL_SECRET`.
 7. Real send → reply → CRM end-to-end test.
+
+---
+
+## Phase 15D — SMS templates, campaigns & two-way SMS
+
+Bulk and conversational SMS, managed entirely in the CRM. Twilio is only the SMS
+**transport + inbound provider** behind the 15A `SmsTransport` port — business logic
+never sees a Twilio object and never branches on the provider name.
+
+### Data model (additive migration `..._communications_sms`)
+
+- **`CommunicationSmsTemplate`** — plain-text `body` (no HTML, no Markdown, no page
+  builder), DRAFT/ACTIVE/ARCHIVED.
+- **`CommunicationSmsCampaign`** — status DRAFT→QUEUED→SENDING→COMPLETED/
+  PARTIALLY_FAILED/CANCELLED, immutable `bodySnapshot`, `audienceConfig`, and the
+  aggregate estimate (`estimatedSegmentCount`, GSM-7/UCS-2/multi-segment counts,
+  longest rendered body).
+- **`CommunicationSmsCampaignRecipient`** — per-recipient snapshots taken at queue
+  time (`phoneSnapshot`, name/org, the fully merge-rendered `bodySnapshot`,
+  `encodingSnapshot`, `estimatedSegmentCount`), provider-neutral `deliveryStatus`,
+  `providerMessageId`, the `actualFromNumber` Twilio chose, `providerSegmentCount`,
+  and the same claim/lease/attempt bookkeeping the email outbox uses.
+- **`CommunicationConversation`** (extended) — `businessNumber` (the Nonnis/Twilio
+  number a thread runs through) and `originSmsCampaignId`.
+- **`CommunicationMessage`** (extended) — `encoding`, `segmentCount`,
+  `providerSegmentCount`, `smsOptOutType`, `undeliveredAt`; statuses gain
+  `ACCEPTED` and `UNDELIVERED`.
+- The 15C inbound **review queue** gains a `channel` discriminator and SMS reasons
+  (`UNKNOWN_PHONE`, `PHONE_CONFLICT`, `UNKNOWN_BUSINESS_NUMBER`,
+  `INVALID_PROVIDER_PAYLOAD`) — one review system serves both channels.
+
+### Segment calculator
+
+Deterministic GSM 03.38 / UCS-2 calculation, never `Math.ceil(len / 160)`:
+GSM-7 **160** single / **153** concatenated, UCS-2 **70** / **67**. GSM extended
+characters (`^ { } \ [ ~ ] | €` and form-feed) cost **two** septets, and a two-unit
+character (an extended pair or an emoji surrogate pair) is never split across a
+segment boundary — so segments are packed, not divided. It returns encoding,
+character count, encoded units, segment count, remaining capacity and a
+multi-segment flag. A client-side mirror gives instant typing feedback and is pinned
+to the backend by parity tests; the **backend is authoritative** and re-renders every
+recipient at queue time, because `{{firstName}}` changes both length and encoding.
+This is an **estimate, not an invoice** — some sender types concatenate differently
+and carrier billing varies, so the UI always says "estimated billable segments".
+
+### Campaigns
+
+Merge fields reuse the SAME allow-list as email (`firstName`, `lastName`,
+`fullName`, `email`, `organizationName`); an unknown field is rejected loudly so
+`{{something}}` never reaches a handset, and patient/clinical fields do not exist.
+Audience eligibility reuses `evaluateChannelEligibility(contact, SMS)` — OPTED_IN
+required, UNKNOWN never eligible, plus not archived / valid E.164 / not suppressed —
+with a deduped union across lists. Queueing revalidates everything server-side and
+writes per-recipient snapshots; the HTTP request never sends messages.
+
+### Dispatch
+
+The SMS dispatcher mirrors the email one and **shares the exact same
+`classifySendResult` policy**: transient retry with backoff, `AMBIGUOUS` →
+`DELIVERY_UNKNOWN` (never a duplicate SMS), everything else permanent. Claiming uses
+Postgres `FOR UPDATE SKIP LOCKED` with bounded batch size and concurrency, so two
+instances never send the same recipient and Twilio is never hammered. Immediately
+before each provider call the recipient's **current** consent and suppression are
+re-checked — a contact who texts STOP after the campaign was queued is cancelled,
+never sent. The same worker drains direct 1:1 replies from the message outbox.
+
+### Two-way SMS
+
+Correlation is deterministic on **(contact normalized E.164, Nonnis business
+number)** — never message text — so a Messaging Service that later holds several
+senders stays correct. Unknown numbers are **quarantined for review** and a stranger
+is **never** auto-created as a contact. Inbound is idempotent on Twilio's
+`MessageSid`. Media is noted but never fetched or stored (MMS is out of scope).
+Replies are plain text to the conversation contact only — no arbitrary To, no
+CC/BCC, and the sender is always the configured Twilio identity.
+
+### Opt-out / opt-in
+
+Twilio Advanced Opt-Out sends an authoritative `OptOutType` (`STOP` / `START` /
+`HELP`) and has **already replied to the customer**, so the CRM never sends a
+duplicate and never returns TwiML. A conservative fallback classifies only a bare
+documented keyword (case-insensitive, whole message) — "please stop sending these"
+stays a normal conversation.
+
+- **STOP** → consent OPTED_OUT + an active `USER_OPT_OUT` SMS suppression. This
+  blocks bulk campaigns **and** direct staff replies immediately.
+- **START** → releases **only** the `USER_OPT_OUT` suppression (never ADMIN_BLOCK or
+  another reason), restores consent with `consentSource=TWILIO_START`, and writes an
+  audit event so re-opt-in is traceable.
+- **HELP** → recorded; consent untouched.
+- Twilio error **21610** on an outbound send means the carrier is blocking us because
+  the recipient opted out; that documented semantic justifies synchronizing CRM
+  suppression + consent. An admin removing a suppression never overrides a provider
+  STOP — the recipient must text START.
+- STOP/START/HELP never mark a thread as needing a staff reply.
+
+### Webhooks
+
+Two **separate** endpoints, both verified with the **official Twilio validator**
+(`validateRequest`, HMAC-SHA1 over the exact public URL plus the complete unmodified
+parameter set) before any parsing or persistence — no home-grown HMAC:
+
+```
+POST /api/v1/webhooks/communications/sms/inbound   # customer message content
+POST /api/v1/webhooks/communications/sms/status    # outbound delivery status
+```
+
+Validation uses the configured **public** base URL, not a proxy-rewritten request
+URL, and the Account **Auth Token** (API Keys do not work for webhook validation).
+Twilio does not guarantee callback ordering, so statuses are applied through a
+monotonic rank: a late `sent` can never regress `delivered`, a repeated callback is a
+no-op, and `DELIVERY_UNKNOWN` ranks low on purpose so a later authoritative callback
+resolves an ambiguous send. Both endpoints return 204 with no TwiML. In mock mode the
+webhook verifier refuses outright when `NODE_ENV=production`, so a mock deployment
+can never expose an unauthenticated inbound endpoint.
+
+### CRM UI
+
+**SMS Templates** (editor with merge-field chips, live character/encoding/segment
+readout, multi-segment and Unicode warnings, server-rendered preview, rate-limited
+test send) and **SMS Campaigns** (Details → Message → Audience → Review wizard with
+an eligibility + segment summary, and a detail page with delivery counts and a
+server-paginated recipient table). The existing **Inbox** gains All / Email / SMS
+channel filters, SMS conversation rows, an SMS thread, and a plain-text SMS composer
+with a live segment count. The contact detail lists both channels' threads.
+
+### Configuration
+
+```
+COMMUNICATIONS_SMS_PROVIDER=mock|twilio
+TWILIO_ACCOUNT_SID=
+TWILIO_API_KEY_SID=            # preferred send credentials
+TWILIO_API_KEY_SECRET=
+TWILIO_AUTH_TOKEN=             # webhook signature validation ONLY — server-only secret
+TWILIO_MESSAGING_SERVICE_SID=  # preferred sender
+TWILIO_PHONE_NUMBER=           # optional single-number fallback
+COMMUNICATIONS_TWILIO_WEBHOOK_BASE_URL=
+TWILIO_A2P_APPROVED=false
+SMS_DISPATCH_ENABLED=true
+SMS_DISPATCH_BATCH_SIZE=20
+SMS_DISPATCH_CONCURRENCY=3
+```
+
+Selecting `twilio` without complete configuration **fails at DI resolution** — it
+never silently falls back to the mock. Live **bulk campaign** sending additionally
+requires a Messaging Service (or number) and the operator A2P acknowledgement;
+conversational 1:1 replies are not gated on the A2P campaign flag, but STOP /
+suppression always blocks every outgoing message.
+
+Everything works in **mock mode** with no Twilio account. Simulate locally with
+`npm run communications:simulate-sms -- inbound --from +14155550161 --body "Yes"`,
+`… --body STOP --opt-out STOP`, and
+`npm run communications:simulate-sms -- status --sid <MessageSid> --status delivered`
+(the command refuses to run in production; there is no production simulation endpoint).
+
+**What the client must configure to go live:**
+1. Twilio account + an SMS-capable number.
+2. A **Messaging Service** containing that sender, with Advanced Opt-Out enabled.
+3. **A2P 10DLC** brand/campaign registration approved by Twilio/the carriers.
+4. Inbound webhook → `https://<api-host>/api/v1/webhooks/communications/sms/inbound`.
+5. Status callback → `https://<api-host>/api/v1/webhooks/communications/sms/status`
+   (set `COMMUNICATIONS_TWILIO_WEBHOOK_BASE_URL` to that exact public host).
+6. Set the Twilio env vars above, `TWILIO_A2P_APPROVED=true`, and switch
+   `COMMUNICATIONS_SMS_PROVIDER=twilio`.
+7. A real send → reply → STOP/START end-to-end test.

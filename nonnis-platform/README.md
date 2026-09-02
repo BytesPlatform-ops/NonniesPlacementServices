@@ -720,8 +720,9 @@ model, and this phase makes **no** live provider calls and sends nothing.
   No campaign/inbox pages yet.
 - **Demo data:** `npm run seed:communications-demo` (idempotent; `-- --clean`
   removes it) seeds ~16 clearly-fictional contacts (no PHI) covering email-only,
-  phone-only, both, varied consent, and suppressed cases — plus (15B) two demo email
-  templates and one **draft** campaign (never queued or sent).
+  phone-only, both, varied consent, and suppressed cases — plus two demo email
+  templates (15B) and two demo SMS templates (15D), each with one **draft** campaign
+  (never queued or sent).
 
 ## Communications — Email Templates & Campaigns (Phase 15B)
 
@@ -787,7 +788,48 @@ Brevo is only email transport + inbound provider (a provider-independent
   live is **configuration only** (reply subdomain, DNS/MX, Brevo inbound route, webhook
   secret) — see [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
-Future phases: 15D (SMS + two-way), 15E (unified inbox + hardening). Full details in
+## Communications — SMS Templates, Campaigns & Two-Way SMS (Phase 15D)
+
+Bulk and conversational SMS managed inside the CRM — no daily use of the Twilio
+Console. Twilio is only the SMS transport + inbound provider behind the 15A
+`SmsTransport` port.
+
+- **SMS templates:** plain text with the same safe contact merge fields as email
+  (patient/clinical fields don't exist). The editor shows a live **character count,
+  GSM-7 / UCS-2 encoding and estimated segments**, warns on Unicode and multi-segment
+  messages, previews with sample values, and supports a rate-limited **test SMS**.
+- **Accurate segmentation:** GSM 03.38 / UCS-2 rules (160/153 and 70/67), extended
+  characters costing two septets, and two-unit characters never split across a
+  segment — never `Math.ceil(len / 160)`. Always an **estimate, not an invoice**, and
+  recomputed **per recipient** because merge values change length and encoding.
+- **Campaigns:** Details → Message → Audience → Review wizard with an eligibility +
+  segment summary. Eligibility reuses the shared policy — **OPTED_IN required,
+  UNKNOWN never eligible**, opted-out/suppressed/invalid numbers excluded, duplicates
+  across lists messaged once. Queueing snapshots each recipient's rendered message.
+- **Safe dispatch:** the SMS worker reuses the **same** Postgres `FOR UPDATE SKIP
+  LOCKED` claiming and the **same** retry / ambiguous-timeout policy as email, with
+  bounded batch size and concurrency. Consent and suppression are re-checked
+  **immediately before each send**, so a contact who texts STOP after the campaign was
+  queued is never messaged. Campaigns can be cancelled.
+- **Two-way SMS:** signature-verified inbound and status-callback webhooks (official
+  Twilio validator, exact public URL, full parameter set). Replies land in the
+  **Inbox** — now with Email / SMS channel filters, an SMS thread and a plain-text
+  composer. Correlation is deterministic on the contact's number + the business
+  number; unknown numbers are quarantined for review and **never** auto-create a
+  contact. Repeated `MessageSid`s are idempotent; out-of-order callbacks never regress
+  `delivered`.
+- **STOP / START / HELP:** handled from Twilio's authoritative `OptOutType`. STOP
+  blocks bulk **and** direct sending immediately; START releases only the opt-out
+  suppression and re-opts in with an audit trail; HELP changes nothing. The CRM never
+  sends a duplicate acknowledgement. An admin cannot override a provider STOP.
+- **Live-send gates:** selecting `twilio` without complete credentials fails at
+  startup (never a silent mock). Live bulk campaigns additionally require a Messaging
+  Service and an explicit operator **A2P 10DLC** acknowledgement.
+- **Mock-first:** works fully offline; simulate with
+  `npm run communications:simulate-sms` (refuses to run in production). Going live is
+  configuration only — see [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+
+Future phase: 15E (unified inbox + security/delivery hardening). Full details in
 [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
 ## Relationship to the existing website
