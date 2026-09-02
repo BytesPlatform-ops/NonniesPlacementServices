@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Loader2, Send } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
 import { useToast } from "@/providers/toast-provider";
 import { calculateSegments, MAX_SMS_BODY_CHARS } from "@/lib/sms-segments";
 import { replyToConversation } from "@/services/communications-inbox.service";
+import { newIdempotencyKey } from "@/lib/idempotency";
 
 /**
  * SMS reply composer — plain text only (no rich-text toolbar, no attachments).
@@ -16,6 +17,8 @@ export function SmsComposer({ conversationId, disabled, disabledReason, onSent }
   const toast = useToast();
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  // Kept across retries of this submission; replaced only after a successful send.
+  const idempotencyKey = useRef(newIdempotencyKey());
   const info = useMemo(() => calculateSegments(body), [body]);
   const tooLong = body.length > MAX_SMS_BODY_CHARS;
 
@@ -23,7 +26,8 @@ export function SmsComposer({ conversationId, disabled, disabledReason, onSent }
     if (sending || !body.trim() || tooLong) return;
     setSending(true);
     try {
-      await replyToConversation(conversationId, body.trim(), []);
+      await replyToConversation(conversationId, body.trim(), [], idempotencyKey.current);
+      idempotencyKey.current = newIdempotencyKey();
       setBody("");
       toast.success("SMS reply queued");
       onSent();

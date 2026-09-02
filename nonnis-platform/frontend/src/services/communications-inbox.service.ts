@@ -42,8 +42,8 @@ export function archiveConversation(id: string): Promise<{ ok: true }> {
 export function restoreConversation(id: string): Promise<{ ok: true }> {
   return apiPost(`${BASE}/conversations/${id}/restore`);
 }
-export function replyToConversation(id: string, body: string, attachments: ReplyAttachmentRef[]): Promise<{ conversationId: string; message: MessageView }> {
-  return apiPost(`${BASE}/conversations/${id}/reply`, { body, attachments });
+export function replyToConversation(id: string, body: string, attachments: ReplyAttachmentRef[], idempotencyKey?: string): Promise<{ conversationId: string; message: MessageView }> {
+  return apiPost(`${BASE}/conversations/${id}/reply`, { body, attachments, idempotencyKey });
 }
 export function retryReply(conversationId: string, messageId: string): Promise<{ ok: true }> {
   return apiPost(`${BASE}/conversations/${conversationId}/messages/${messageId}/retry`);

@@ -5,6 +5,7 @@ import { Bold, Italic, Link2, List, ListOrdered, Paperclip, Send, X, Loader2 } f
 import { ApiError } from "@/lib/api-client";
 import { useToast } from "@/providers/toast-provider";
 import { replyToConversation, uploadReplyAttachment } from "@/services/communications-inbox.service";
+import { newIdempotencyKey } from "@/lib/idempotency";
 import type { ReplyAttachmentRef } from "@/types/communications-inbox";
 import { formatBytes } from "./inbox-format";
 
@@ -19,6 +20,8 @@ export function ReplyComposer({ conversationId, disabled, disabledReason, onSent
   const [attachments, setAttachments] = useState<ReplyAttachmentRef[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  // Kept across retries of this submission; replaced only after a successful send.
+  const idempotencyKey = useRef(newIdempotencyKey());
 
   const surround = (before: string, after: string, placeholder: string) => {
     const el = textareaRef.current;
@@ -84,7 +87,8 @@ export function ReplyComposer({ conversationId, disabled, disabledReason, onSent
     if (sending || !body.trim()) return;
     setSending(true);
     try {
-      await replyToConversation(conversationId, body.trim(), attachments);
+      await replyToConversation(conversationId, body.trim(), attachments, idempotencyKey.current);
+      idempotencyKey.current = newIdempotencyKey();
       setBody("");
       setAttachments([]);
       toast.success("Reply queued");
