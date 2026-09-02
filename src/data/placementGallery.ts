@@ -17,8 +17,6 @@ export type PlacementGalleryCard = {
   size?: "sm" | "md" | "lg";
 };
 
-const NEW = "/assets/new";
-
 export const placementGallery: PlacementGalleryCard[] = [
   { title: "Referral arrives", caption: "Care needs, memory & behavioral history captured clearly.", type: "document", size: "md" },
   { title: "RN review", caption: "Memory, behavioral & medication needs reviewed first.", type: "review", image: "/assets/nonnis/specialty-care/rn-tablet-care-review.jpg", size: "lg" },

@@ -19,7 +19,7 @@ import {
   scheduleProviderPlacement,
   type RespondBody,
 } from "@/services/provider-referrals.service";
-import { DECLINE_REASONS, SERVICE_START_FAILURE_REASONS, type ProviderReferralDetail as Detail } from "@/types/referrals";
+import { DECLINE_REASONS, SERVICE_START_FAILURE_REASONS } from "@/types/referrals";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { DescriptionList } from "@/components/ui/DescriptionList";
