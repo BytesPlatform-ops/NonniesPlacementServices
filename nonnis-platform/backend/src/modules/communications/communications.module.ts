@@ -29,13 +29,26 @@ import { InboundReviewService } from "./email/inbound-review.service";
 import { InboundEmailService } from "./email/inbound-email.service";
 import { EmailInboundWebhookController } from "./email/email-inbound-webhook.controller";
 import { AttachmentStorageService } from "./email/attachment-storage.service";
+import { SmsTemplatesController } from "./sms/sms-templates.controller";
+import { SmsTemplateService } from "./sms/sms-template.service";
+import { SmsCampaignsController } from "./sms/sms-campaigns.controller";
+import { SmsCampaignService } from "./sms/sms-campaign.service";
+import { SmsDispatcherService } from "./sms/sms-dispatcher.service";
+import { SmsConversationService } from "./sms/sms-conversation.service";
+import { SmsStatusService } from "./sms/sms-status.service";
+import { InboundSmsService } from "./sms/inbound-sms.service";
+import { SmsWebhookController } from "./sms/sms-webhook.controller";
+import { SmsStatusController } from "./sms/sms-status.controller";
 
 /**
  * Communications module. Phase 15A: contacts, lists, tags, consent, suppression,
  * imports, transport ports. Phase 15B: email templates + visual builder, campaigns,
  * recipient snapshots, a Postgres-backed delivery dispatcher, mock + Brevo email
- * transports, delivery-event webhook, and public unsubscribe. Still no inbox/inbound
- * (15C) or SMS (15D).
+ * transports, delivery-event webhook, and public unsubscribe. Phase 15C: the shared
+ * Communications Inbox, inbound email adapters, threading, replies and attachments.
+ * Phase 15D: SMS templates + segment calculator, SMS campaigns, the SMS dispatcher,
+ * mock + Twilio transports, two-way SMS with signature-verified webhooks, and
+ * STOP/START/HELP opt-out synchronization.
  */
 @Module({
   imports: [AuditModule],
@@ -53,6 +66,10 @@ import { AttachmentStorageService } from "./email/attachment-storage.service";
     ConversationsController,
     InboundReviewController,
     EmailInboundWebhookController,
+    SmsTemplatesController,
+    SmsCampaignsController,
+    SmsWebhookController,
+    SmsStatusController,
   ],
   providers: [
     ContactsService,
@@ -70,6 +87,12 @@ import { AttachmentStorageService } from "./email/attachment-storage.service";
     InboundReviewService,
     InboundEmailService,
     AttachmentStorageService,
+    SmsTemplateService,
+    SmsCampaignService,
+    SmsDispatcherService,
+    SmsConversationService,
+    SmsStatusService,
+    InboundSmsService,
     ...transportProviders,
   ],
 })
