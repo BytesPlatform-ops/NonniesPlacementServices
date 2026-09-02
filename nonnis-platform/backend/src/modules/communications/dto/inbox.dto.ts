@@ -11,6 +11,8 @@ export class ListConversationsDto extends PaginationQueryDto {
   @IsOptional() @IsIn(VIEWS) view: (typeof VIEWS)[number] = "all";
   /** Unified inbox channel filter — omitted means every channel. */
   @IsOptional() @IsIn(Object.values(CommunicationChannel)) channel?: CommunicationChannel;
+  /** Scope the list to a single contact (used by the contact detail history). */
+  @IsOptional() @IsUUID() contactId?: string;
   @IsOptional() @IsString() @MaxLength(200) search?: string;
 }
 

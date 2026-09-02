@@ -30,6 +30,8 @@ export interface ListConversationsInput {
   view: InboxView;
   /** Optional channel filter for the unified inbox (undefined = all channels). */
   channel?: "EMAIL" | "SMS";
+  /** Optional single-contact scope (contact detail communication history). */
+  contactId?: string;
   search?: string;
   page: number;
   pageSize: number;
@@ -144,8 +146,9 @@ export class ConversationService {
     const conds: Prisma.Sql[] = [];
     if (input.channel) conds.push(Prisma.sql`c.channel = ${input.channel}::"CommunicationChannel"`);
     else conds.push(Prisma.sql`c.channel IN ('EMAIL', 'SMS')`);
+    if (input.contactId) conds.push(Prisma.sql`c."contactId" = ${input.contactId}::uuid`);
     if (input.view === "archived") conds.push(Prisma.sql`c.status = 'ARCHIVED'`);
-    else conds.push(Prisma.sql`c.status <> 'ARCHIVED'`);
+    else if (!input.contactId) conds.push(Prisma.sql`c.status <> 'ARCHIVED'`);
 
     if (input.view === "unread") {
       conds.push(Prisma.sql`c."lastInboundAt" IS NOT NULL AND (rs."lastReadAt" IS NULL OR c."lastInboundAt" > rs."lastReadAt")`);

@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DescriptionList } from "@/components/ui/DescriptionList";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { assignTag, getContact, setContactConsent, unassignTag } from "@/services/communications.service";
+import { listConversations } from "@/services/communications-inbox.service";
 import type { Channel, ConsentStatus, ContactView } from "@/types/communications";
 import { channelConsent, contactName } from "./labels";
 
@@ -75,9 +76,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
         </div>
       </Panel>
 
-      <Panel title="Communication history">
-        <p className="py-6 text-center text-sm text-slate-500">No communications yet. Email and SMS threads will appear here in a later phase.</p>
-      </Panel>
+      <ContactConversations contactId={c.id} />
     </div>
   );
 }
@@ -178,5 +177,41 @@ function TagEditor({ contact, onChanged }: { contact: ContactView; onChanged: ()
         <button type="button" disabled={busy || !name.trim()} onClick={() => void add()} className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Add</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Links to this contact's email + SMS threads. Message content is NOT duplicated
+ * here — each row opens the real conversation in the Communications Inbox.
+ */
+function ContactConversations({ contactId }: { contactId: string }) {
+  const { data, loading } = useAsync(() => listConversations({ view: "all", contactId, pageSize: 25 }), [contactId]);
+  const items = data?.items ?? [];
+
+  return (
+    <Panel title="Communication history" description="Email and SMS threads with this contact.">
+      {loading && !data ? (
+        <p className="py-6 text-center text-sm text-slate-400">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="py-6 text-center text-sm text-slate-500">No communications yet. Email and SMS threads appear here once a campaign is sent or the contact replies.</p>
+      ) : (
+        <ul className="divide-y divide-sage/70">
+          {items.map((conv) => (
+            <li key={conv.id}>
+              <Link href={`/communications/inbox?c=${conv.id}`} className="flex items-start gap-2 py-2.5 hover:bg-ivory">
+                <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${conv.channel === "SMS" ? "bg-teal-100 text-teal-800" : "bg-slate-200 text-slate-700"}`}>
+                  {conv.channel === "SMS" ? "SMS" : "Email"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-umber">{conv.channel === "SMS" ? (conv.contactPhone ?? "SMS conversation") : (conv.subject ?? "(no subject)")}</span>
+                  <span className="block truncate text-xs text-slate-500">{conv.preview ?? ""}</span>
+                </span>
+                <span className="shrink-0 text-xs text-slate-400">{conv.lastMessageAt ? formatDateTime(conv.lastMessageAt) : ""}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

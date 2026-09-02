@@ -17,7 +17,7 @@ export class ConversationsController {
   @Get()
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
   list(@CurrentUser() user: RequestUser, @Query() query: ListConversationsDto) {
-    return this.conversations.list(user, { view: query.view, channel: query.channel, search: query.search, page: query.page, pageSize: query.pageSize });
+    return this.conversations.list(user, { view: query.view, channel: query.channel, contactId: query.contactId, search: query.search, page: query.page, pageSize: query.pageSize });
   }
 
   @Get("unread-count")

@@ -21,7 +21,7 @@ function qs(f: Record<string, string | number | undefined>): string {
 }
 
 // ---- Conversations ----
-export function listConversations(f: { view: InboxView; channel?: CommunicationChannel; search?: string; page?: number; pageSize?: number }): Promise<PaginatedResult<ConversationListItem>> {
+export function listConversations(f: { view: InboxView; channel?: CommunicationChannel; contactId?: string; search?: string; page?: number; pageSize?: number }): Promise<PaginatedResult<ConversationListItem>> {
   return apiGet(`${BASE}/conversations${qs(f)}`);
 }
 export function getConversation(id: string): Promise<ConversationDetail> {
