@@ -54,6 +54,8 @@ export interface AppConfig {
   communicationsInboundMaxBodyBytes: number;
   communicationsInboundMaxAttachmentBytes: number;
   communicationsInboundMaxAttachments: number;
+  /** Lifetime of a signed attachment download URL, in seconds (bounded 60s–15m). */
+  communicationsAttachmentUrlTtlSeconds: number;
   /** SMS / Twilio (15D). Everything defaults to mock — no live credentials needed. */
   twilioAccountSid: string | undefined;
   /** Preferred send credentials (API Key SID + Secret). */
@@ -110,6 +112,8 @@ export function loadConfiguration(): AppConfig {
     communicationsInboundMaxBodyBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_BODY_BYTES ?? "524288", 10) || 524288,
     communicationsInboundMaxAttachmentBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENT_BYTES ?? "10485760", 10) || 10485760,
     communicationsInboundMaxAttachments: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENTS ?? "5", 10) || 5,
+    // Clamped so a misconfiguration can never mint a long-lived attachment link.
+    communicationsAttachmentUrlTtlSeconds: Math.min(900, Math.max(60, Number.parseInt(process.env.COMMUNICATIONS_ATTACHMENT_URL_TTL_SECONDS ?? "300", 10) || 300)),
     twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
     twilioApiKeySid: process.env.TWILIO_API_KEY_SID,
     twilioApiKeySecret: process.env.TWILIO_API_KEY_SECRET,

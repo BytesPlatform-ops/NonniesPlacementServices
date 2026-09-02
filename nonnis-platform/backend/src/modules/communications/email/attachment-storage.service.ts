@@ -6,7 +6,16 @@ import type { AppConfig } from "../../../config/configuration";
 /** Dedicated PRIVATE bucket for communication attachments — never public-read. */
 export const COMMUNICATIONS_BUCKET = "nonnis-communications-private";
 
-const DOWNLOAD_URL_TTL_SECONDS = 60; // short-lived signed download links only
+/**
+ * Strip anything that could break out of a Content-Disposition header. Supabase
+ * echoes the download name into that header, so quotes, CR/LF and path separators
+ * must never survive — a malicious inbound filename cannot inject a response header.
+ */
+function headerSafeFilename(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  const cleaned = (name || "attachment").replace(/[\x00-\x1f\x7f]/g, "").replace(/["\\/]/g, "_").replace(/[\r\n;]/g, "").trim();
+  return cleaned.slice(0, 150) || "attachment";
+}
 
 /**
  * Private Supabase Storage for communication attachments. The service-role key
@@ -81,7 +90,9 @@ export class AttachmentStorageService implements OnModuleInit {
 
   /** Short-lived signed download URL — the only way staff retrieve an attachment. */
   async createSignedDownloadUrl(path: string, downloadName?: string): Promise<string> {
-    const { data, error } = await this.getClient().storage.from(COMMUNICATIONS_BUCKET).createSignedUrl(path, DOWNLOAD_URL_TTL_SECONDS, downloadName ? { download: downloadName } : undefined);
+    const ttl = this.config.get("communicationsAttachmentUrlTtlSeconds", { infer: true });
+    const safeName = downloadName ? headerSafeFilename(downloadName) : undefined;
+    const { data, error } = await this.getClient().storage.from(COMMUNICATIONS_BUCKET).createSignedUrl(path, ttl, safeName ? { download: safeName } : undefined);
     if (error || !data?.signedUrl) throw new ServiceUnavailableException(`Could not create a download URL: ${error?.message ?? "unknown error"}`);
     return data.signedUrl;
   }
