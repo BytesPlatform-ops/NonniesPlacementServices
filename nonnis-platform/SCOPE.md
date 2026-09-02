@@ -384,6 +384,29 @@ and do not let an in-scope feature evolve into them.
   replies, SMS, scheduled/recurring sends, or open/click tracking/analytics. See
   `docs/COMMUNICATIONS.md`.
 
+- **Slice 15C — Email Inbox + Inbound Replies + Full Email Threading + Attachments:**
+  two-way email managed entirely inside the CRM (no Gmail/IMAP/Graph). A provider-
+  independent `EmailInboundAdapter` port (mock + Brevo inbound parsing) feeds a
+  normalized inbound service; Brevo is only transport + inbound provider. Each
+  conversation gets a high-entropy **opaque thread token** backing a
+  `reply-<token>@<reply-subdomain>` address set as the outbound `Reply-To`, so a
+  recipient's normal Reply routes back. **Deterministic correlation** (opaque token →
+  In-Reply-To → References; **never** subject) plus a **sender-identity check** — a
+  mismatch or unmatched mail is safely **quarantined for review**, never appended to
+  the wrong thread and never auto-creating a contact. Inbound HTML is **sanitized**
+  (scripts/iframes/handlers stripped, remote images/tracking pixels removed); a text
+  part is always kept. CRM **replies** are authored in a controlled Markdown subset,
+  compiled server-side to safe HTML + text, and **reuse the 15B dispatcher** (a shared
+  claim/retry/ambiguous executor across campaign recipients and direct replies; From
+  fixed to the verified sender; proper `Message-Id`/`In-Reply-To`/bounded `References`
+  headers). **Per-user read state**, derived **needs-reply** (excluding delivery events
+  + auto-responders), **archive/restore** (new inbound reopens), and basic **attachments**
+  in a **private** bucket (MIME allowlist + size limits, short-lived signed downloads,
+  no public URLs). The delivery webhook now also updates reply messages; a **separate**
+  secret-guarded, idempotent, size-bounded inbound webhook receives content. Everything
+  works in **mock mode** (dev-only `communications:simulate-email-reply`). **No** SMS,
+  no Gmail/IMAP/Graph sync, no schedulers/analytics/AI. See `docs/COMMUNICATIONS.md`.
+
 ---
 
 ## 6. Remaining implementation sequence
@@ -407,10 +430,10 @@ COMPLETED
   13. Public Residential Provider Directory
   15A. Communications — Foundation + Contacts + Imports + Consent/Suppression
   15B. Email Templates + Visual Email Builder + Email Campaigns
+  15C. Email Inbox + Inbound Replies + Full Email Threading + Attachments
 
 NEXT (Communications module, remaining phases)
-  15C. Email Inbox + Inbound Replies + Full Email Threading   ← next slice
-  15D. SMS Campaigns + Two-Way SMS
+  15D. SMS Campaigns + Two-Way SMS   ← next slice
   15E. Unified Communications Inbox + Security + Delivery Hardening
 
 THEN
@@ -429,17 +452,17 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Communications 15C — Email Inbox + Inbound Replies + Full Email Threading:**
-build on the 15A/15B foundation — an internal email inbox, inbound-reply ingestion,
-and conversation threading (the `threadToken` correlation token and `Conversation`/
-`Message` records were laid down in 15B). No SMS yet (15D). Do NOT begin
-automatically. (Communications 15A + 15B are complete; see `docs/COMMUNICATIONS.md`.)
+**Communications 15D — SMS Campaigns + Two-Way SMS:** build on the 15A/15B/15C
+foundation — SMS campaigns and two-way SMS via the `SmsTransport` port (Twilio adapter
+introduced here), reusing the shared send/queue executor, eligibility policy, and the
+inbox/threading model. No new email work. Do NOT begin automatically. (Communications
+15A + 15B + 15C are complete; see `docs/COMMUNICATIONS.md`.)
 
 ---
 
 ## 7b. Later: Full Core-System Audit + Production Hardening
 
-After the Communications module (15B–15E) completes, the final planned slice is an
+After the Communications module (15D–15E) completes, the final planned slice is an
 end-to-end review
 and hardening pass across the completed core system — security/RBAC/tenant-isolation
 audit, input validation, error handling, performance and index review, dependency

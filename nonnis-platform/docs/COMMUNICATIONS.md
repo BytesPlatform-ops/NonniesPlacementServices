@@ -3,7 +3,8 @@
 A CRM-owned marketing/outreach system. **Nonnis PostgreSQL is the source of
 truth.** Brevo (email) and Twilio (SMS) are **future transport providers** — they
 never own contacts, lists, consent, or history. This document covers **Phase 15A**
-(the foundation) and **Phase 15B** (outbound email), and names the future phases.
+(the foundation), **Phase 15B** (outbound email), and **Phase 15C** (the email inbox,
+inbound replies, threading, and attachments), and names the future phases.
 
 > **PHI boundary:** the Communications contact database is deliberately separate
 > from `User` / `Patient` / `Provider`. It never references `Case`/`Patient`
@@ -15,7 +16,7 @@ never own contacts, lists, consent, or history. This document covers **Phase 15A
 | ----- | ----- | ------ |
 | **15A** | Foundation: contacts, lists, tags, consent, suppression, imports, transport ports + mocks | **Complete** |
 | **15B** | Email templates + visual builder + email campaigns (Brevo adapter) | **Complete** |
-| 15C | Email inbox + inbound replies + full email threading | Planned |
+| **15C** | Email inbox + inbound replies + full email threading + attachments | **Complete** |
 | 15D | SMS campaigns + two-way SMS (Twilio adapter) | Planned |
 | 15E | Unified communications inbox + security + delivery hardening | Planned |
 
@@ -131,10 +132,14 @@ parsing, import preview classification (in-batch dup, existing dup, suppressed,
 invalid, CSV mapping), contact conflict rules, RBAC, and mock-transport + fail-safe
 factory. **15B adds**: email compiler (MJML + merge escaping), campaign audience
 evaluation, delivery dispatcher, normalized delivery events + idempotency, unsubscribe
-flow, and the Brevo transport adapter (mocked HTTP). Frontend (86 total): consent/
-import labels + the client CSV sanitizer. Confirmed **absent** through 15B: SMS
-send, inbound webhooks/replies, inbox UI, schedulers/cron/recurring sends, open/click
-tracking, analytics, AI, external email validation, patient import.
+flow, and the Brevo transport adapter (mocked HTTP). **15C adds**: reply-address
+format/parse, thread-header helpers, reply Markdown compiler, inbound HTML
+sanitization, shared send-outcome policy, attachment policy, the Brevo/mock inbound
+adapters, and the inbound threading/idempotency/sender-check service. Frontend:
+consent/import labels, the client CSV sanitizer, and inbox formatting. Confirmed
+**absent** through 15C: SMS send/inbound, Gmail/IMAP/Graph mailbox sync,
+schedulers/cron/recurring sends, open/click tracking, analytics, AI, external email
+validation, patient import.
 
 ---
 
@@ -227,3 +232,126 @@ wizard with a recipient-eligibility preview, and a campaign detail page with cou
 cards, a filterable recipient table, live status polling while sending, and
 cancel/queue actions). A **mock-mode banner** shows when no live provider is
 configured. Warm Premium design system throughout.
+
+---
+
+## Phase 15C — Email inbox, inbound replies, threading & attachments
+
+The CRM becomes the source of truth for two-way email: staff manage the full
+campaign/reply workflow **inside Nonnis** without Gmail/IMAP. Brevo is only email
+**transport + inbound provider**. No Gmail OAuth, Google/Microsoft mailbox sync, or
+IMAP polling — inbound is push-only via Brevo inbound parsing → the CRM webhook.
+
+### Data model (additive migration `..._communications_email_inbox`)
+
+- **`CommunicationConversation`** (extended) — `threadToken` (unique opaque per-
+  conversation token backing the reply address), `lastInboundAt` / `lastOutboundAt`
+  (cheap `needsReply` derivation), `latestDirection`, `previewText`, `archivedAt`,
+  `originCampaignId` (SetNull), `status` gains `ARCHIVED`.
+- **`CommunicationMessage`** (extended) — threading (`messageId` = RFC/Internet
+  Message-ID, distinct from the provider API `providerMessageId`; `inReplyTo`,
+  `references`), addresses (`fromAddress/Name`, `toAddress`, `replyToAddress`),
+  `providerInboundId` (unique — inbound idempotency), `autoSubmitted`, sanitized
+  `htmlBody` + `previewText`, and a direct-reply **outbox** (claim/lease/attempt/
+  backoff/error fields). `status` gains `PROCESSING`, `BOUNCED`, `DELIVERY_UNKNOWN`.
+- **`CommunicationConversationReadState`** — per-user `lastReadAt` (unique
+  `conversationId+userId`) so unread is per staff member, not global.
+- **`CommunicationInboundEmailReview`** — safe quarantine for inbound that fails
+  correlation or a sender check (PENDING/LINKED/DISMISSED). Only review-relevant
+  fields are kept — never the raw provider payload.
+- **`CommunicationMessageAttachment`** — inbound/outbound attachment metadata; the
+  binary lives in a **private** bucket (only `storagePath` is stored, never a public URL).
+
+### Inbound provider abstraction
+
+`EmailInboundAdapter` port (DI token `INBOUND_EMAIL_ADAPTER`) with
+`MockEmailInboundAdapter` and `BrevoEmailInboundAdapter`, selected by
+`COMMUNICATIONS_INBOUND_EMAIL_PROVIDER` (fail-safe: `brevo` without domain+secret
+throws at DI resolution). Business services consume the **normalized** result only —
+no `if (provider === "brevo")` in conversation logic. Brevo parsing reads `items[]`
+(`From/To/Cc/Recipients/ReplyTo`, `MessageId/InReplyTo`, `RawTextBody/RawHtmlBody`,
+`Headers` for References/Auto-Submitted, `SentAtDate`, attachment `DownloadToken`s).
+
+### Opaque reply address & correlation
+
+One canonical formatter/parser produces `reply-<threadToken>@<inbound-domain>`
+(config-driven domain; mock uses `reply.mock.local`). The token is high-entropy and
+never encodes a contact/campaign id or email. Outbound campaign **and** reply email
+set `Reply-To` to the conversation address so a recipient's normal Reply routes back.
+Correlation is deterministic: **(1) opaque token → (2) In-Reply-To → (3) References**
+(newest first). **Subject text is never a correlation key.** After correlation, the
+inbound `From` is normalized and compared to the conversation contact's email; a
+mismatch is quarantined (`THREAD_SENDER_MISMATCH` / `HEADER_SENDER_MISMATCH`) — the
+message is **never** appended to the wrong person's thread, and a stranger is **never**
+auto-created as a contact.
+
+### Replies reuse the 15B send infrastructure
+
+A CRM reply is authored in a controlled **Markdown subset** (bold/italic/link/lists);
+the backend validates, sanitizes, compiles to email-safe HTML + a text fallback, and
+enqueues a **QUEUED outbound message**. The 15B dispatcher gained a second claim path
+(FOR UPDATE SKIP LOCKED over outbound messages) and both paths share **one**
+`classifySendResult` policy (transient retry + backoff, ambiguous→`DELIVERY_UNKNOWN`
+never blind-retried, permanent→FAILED with manual Retry). `From` is always the
+verified sender; the recipient is always the conversation contact (no arbitrary To,
+no CC/BCC). Threading headers (`Message-Id`, `In-Reply-To`, a **bounded** `References`
+chain) go through the transport as ordinary headers. The one delivery-event webhook
+now updates campaign recipients **and** reply messages.
+
+### Safety
+
+Inbound HTML is sanitized server-side (`sanitize-html`): scripts/iframes/forms/event
+handlers/unsafe URL schemes removed, inline styles stripped, and **`<img>` removed
+entirely** so remote tracking pixels never load when staff open a message. A plain-text
+part is always stored. Attachments use a conservative MIME allowlist + size limits
+(5 files, 10 MB each, 20 MB/message; executables blocked), server-generated storage
+paths (never the provider filename), a **private** Supabase bucket, and short-lived
+signed download URLs (`communications.read`). There is **no malware scanning** — MIME/
+size controls only (production-hardening item). `needsReply` excludes delivery events
+and auto-responders (`Auto-Submitted`/`Precedence`). Manual human reply is allowed even
+to an opted-out/suppressed contact (an inbound request deserves an answer) but a reply
+**never** clears marketing suppression or flips consent back to OPTED_IN.
+
+### Webhooks & RBAC
+
+The inbound-content webhook is **separate** from the delivery-event webhook, provider-
+authenticated by a high-entropy secret (`?secret=` or `x-inbound-secret` — Brevo inbound
+is not signed; documented limitation), body-size bounded, and idempotent (dedup on
+`providerInboundId`, else RFC Message-ID + conversation). Reads use `communications.read`;
+reply/retry use `communications.send`; archive/restore and review link/dismiss use
+`communications.manage`. Provider/discharge roles get none.
+
+### CRM UI
+
+`Communications → Inbox` (`/communications/inbox`): a shared inbox with All / Unread /
+Needs Reply / Archived / Needs Review tabs (server-side search + pagination + per-user
+unread + review badges), a conversation thread distinguishing inbound/outbound/status,
+a reply composer (B/I/link/lists toolbar, ⌘B/⌘I/⌘K, attachments, queued→sent states),
+contact context (consent/suppression/lists/tags — never PHI), a "Started from campaign"
+link, and a review queue to link (to an existing contact) or dismiss unmatched mail.
+
+### Configuration
+
+```
+COMMUNICATIONS_EMAIL_PROVIDER=mock|brevo
+COMMUNICATIONS_INBOUND_EMAIL_PROVIDER=mock|brevo
+COMMUNICATIONS_INBOUND_EMAIL_DOMAIN=reply.nonnis.com   # mock default: reply.mock.local
+COMMUNICATIONS_INBOUND_EMAIL_SECRET=<high-entropy secret>   # guards the inbound webhook
+COMMUNICATIONS_INBOUND_MAX_BODY_BYTES=524288
+COMMUNICATIONS_INBOUND_MAX_ATTACHMENT_BYTES=10485760
+COMMUNICATIONS_INBOUND_MAX_ATTACHMENTS=5
+# reused from 15B: BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME
+```
+
+Everything works locally in **mock mode** with no Brevo credentials. Simulate inbound
+replies with `npm run communications:simulate-email-reply -- --conversation <id> --text "…"`
+(refuses to run in production). Going live requires **configuration only, not a redesign**:
+
+**What the client must configure in Brevo/DNS (production):**
+1. A verified sender / sending domain (already needed for 15B).
+2. A dedicated inbound **reply subdomain** (e.g. `reply.nonnis.com`).
+3. DNS **MX** records pointing that subdomain at Brevo's inbound servers.
+4. A Brevo **Inbound Parsing** route for the subdomain.
+5. The inbound **webhook URL**: `https://<api-host>/api/v1/webhooks/communications/email/inbound?secret=<COMMUNICATIONS_INBOUND_EMAIL_SECRET>`.
+6. Set `COMMUNICATIONS_INBOUND_EMAIL_PROVIDER=brevo`, `COMMUNICATIONS_INBOUND_EMAIL_DOMAIN`, `COMMUNICATIONS_INBOUND_EMAIL_SECRET`.
+7. Real send → reply → CRM end-to-end test.

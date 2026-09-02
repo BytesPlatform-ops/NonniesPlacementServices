@@ -757,8 +757,38 @@ Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis A
   Campaigns** (wizard + detail page with count cards, filterable recipient table, and
   live status polling). A mock-mode banner shows when no live provider is configured.
 
-Future phases: 15C (email inbox + replies), 15D (SMS + two-way), 15E (unified inbox +
-hardening). Full details in [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+## Communications — Email Inbox & Two-Way Replies (Phase 15C)
+
+Two-way email managed entirely inside the CRM — **no Gmail, IMAP, or mailbox sync**.
+Brevo is only email transport + inbound provider (a provider-independent
+`EmailInboundAdapter` port keeps parsing out of business logic).
+
+- **Inbox** (`Communications → Inbox`): a shared inbox with All / Unread / Needs Reply
+  / Archived / Needs Review tabs (server-side search + pagination), **per-user** unread
+  state, derived **needs-reply**, and a conversation thread that distinguishes inbound
+  / outbound / delivery status. Contact context (consent, suppression, lists, tags) —
+  **never** PHI.
+- **Inbound routing:** each conversation has a high-entropy **opaque thread token**
+  backing a `reply-<token>@<reply-subdomain>` address used as the outbound `Reply-To`,
+  so a recipient's normal Reply comes back to the CRM. Correlation is deterministic
+  (**opaque token → In-Reply-To → References; never subject**), with a **sender-identity
+  check** — unmatched or mismatched mail is **quarantined for review**, never appended
+  to the wrong thread and **never** auto-creating a contact.
+- **Replies** reuse the 15B send infrastructure: authored in a controlled Markdown
+  subset, compiled server-side to safe HTML + text, queued to the **shared dispatcher**
+  (one retry/ambiguous policy for campaigns and replies), sent from the **verified
+  sender** with proper `Message-Id`/`In-Reply-To`/bounded `References` headers.
+- **Safety:** inbound HTML is sanitized (scripts/iframes/handlers stripped, remote
+  tracking images removed); attachments use a MIME allowlist + size limits in a
+  **private** bucket with short-lived signed downloads (no public URLs; no malware
+  scanning claimed). Manual replies never clear marketing suppression or flip consent.
+- **Mock-first:** works fully offline; simulate inbound with
+  `npm run communications:simulate-email-reply` (refuses to run in production). Going
+  live is **configuration only** (reply subdomain, DNS/MX, Brevo inbound route, webhook
+  secret) — see [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+
+Future phases: 15D (SMS + two-way), 15E (unified inbox + hardening). Full details in
+[`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
 ## Relationship to the existing website
 
