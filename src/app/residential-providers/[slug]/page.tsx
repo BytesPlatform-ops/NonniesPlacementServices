@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { jsonLdScript } from "@/lib/json-ld";
 import { ArrowLeft, Clock, Globe, Mail, MapPin, Phone } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
@@ -76,7 +77,7 @@ export default async function ResidentialProviderDetailPage({ params }: { params
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
 
       <header className="bg-ice pt-32 pb-10 sm:pt-36 sm:pb-12">
         <Container className="max-w-4xl">
