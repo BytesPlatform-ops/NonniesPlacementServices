@@ -54,6 +54,23 @@ export interface AppConfig {
   communicationsInboundMaxBodyBytes: number;
   communicationsInboundMaxAttachmentBytes: number;
   communicationsInboundMaxAttachments: number;
+  /** SMS / Twilio (15D). Everything defaults to mock — no live credentials needed. */
+  twilioAccountSid: string | undefined;
+  /** Preferred send credentials (API Key SID + Secret). */
+  twilioApiKeySid: string | undefined;
+  twilioApiKeySecret: string | undefined;
+  /** Account Auth Token — required ONLY for X-Twilio-Signature validation. Server-only. */
+  twilioAuthToken: string | undefined;
+  twilioMessagingServiceSid: string | undefined;
+  twilioPhoneNumber: string | undefined;
+  /** Public base URL Twilio calls back on (must match the externally requested URL). */
+  communicationsTwilioWebhookBaseUrl: string | undefined;
+  /** Explicit operator acknowledgement of A2P 10DLC registration — NOT verified with Twilio. */
+  twilioA2pApproved: boolean;
+  smsDispatchEnabled: boolean;
+  smsDispatchBatchSize: number;
+  smsDispatchConcurrency: number;
+  smsDispatchPollMs: number;
 }
 
 export function loadConfiguration(): AppConfig {
@@ -93,5 +110,17 @@ export function loadConfiguration(): AppConfig {
     communicationsInboundMaxBodyBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_BODY_BYTES ?? "524288", 10) || 524288,
     communicationsInboundMaxAttachmentBytes: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENT_BYTES ?? "10485760", 10) || 10485760,
     communicationsInboundMaxAttachments: Number.parseInt(process.env.COMMUNICATIONS_INBOUND_MAX_ATTACHMENTS ?? "5", 10) || 5,
+    twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+    twilioApiKeySid: process.env.TWILIO_API_KEY_SID,
+    twilioApiKeySecret: process.env.TWILIO_API_KEY_SECRET,
+    twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+    twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+    twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER,
+    communicationsTwilioWebhookBaseUrl: process.env.COMMUNICATIONS_TWILIO_WEBHOOK_BASE_URL?.replace(/\/$/, ""),
+    twilioA2pApproved: String(process.env.TWILIO_A2P_APPROVED ?? "false").toLowerCase() === "true",
+    smsDispatchEnabled: String(process.env.SMS_DISPATCH_ENABLED ?? "true").toLowerCase() === "true",
+    smsDispatchBatchSize: Number.parseInt(process.env.SMS_DISPATCH_BATCH_SIZE ?? "20", 10) || 20,
+    smsDispatchConcurrency: Number.parseInt(process.env.SMS_DISPATCH_CONCURRENCY ?? "3", 10) || 3,
+    smsDispatchPollMs: Number.parseInt(process.env.SMS_DISPATCH_POLL_MS ?? "3000", 10) || 3000,
   };
 }
