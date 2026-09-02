@@ -138,6 +138,18 @@ export class ReferralsService {
     if (duplicate) throw new ConflictException("An active referral to this provider already exists for this service request.");
 
     const created = await this.prisma.$transaction(async (tx) => {
+      // The check above is a fast path that gives a clean error before any work
+      // starts, but on its own it is check-then-act: two concurrent creates (a
+      // double submit, or a client retry) could both pass it. Locking the parent
+      // service request serialises referral creation for that request, so the
+      // re-check below always sees a concurrent sibling's committed row.
+      await tx.$executeRaw`SELECT id FROM service_requests WHERE id = ${serviceRequestId}::uuid FOR UPDATE`;
+      const raced = await tx.referral.findFirst({
+        where: { serviceRequestId, providerId: dto.providerId, status: { in: ACTIVE_REFERRAL_STATUSES } },
+        select: { id: true },
+      });
+      if (raced) throw new ConflictException("An active referral to this provider already exists for this service request.");
+
       const referral = await this.createWithUniqueReference(tx, {
         caseId,
         serviceRequestId,

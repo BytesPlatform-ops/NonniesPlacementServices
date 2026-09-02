@@ -44,4 +44,35 @@ describe("ReferralsService.create validation", () => {
     };
     await expect(build(prisma).create(user, "case-1", "sr-1", dto)).rejects.toBeInstanceOf(ConflictException);
   });
+
+  it("locks the service request and rejects a referral that raced past the pre-check", async () => {
+    // The pre-check sees nothing (concurrent sibling not committed yet); the
+    // in-transaction re-check, taken after the row lock, sees the committed row.
+    const executed: string[] = [];
+    let preCheck = true;
+    const tx = {
+      $executeRaw: async (strings: TemplateStringsArray) => {
+        executed.push(strings.join("?"));
+        return 1;
+      },
+      referral: { findFirst: async () => ({ id: "committed-by-concurrent-request" }) },
+    };
+    const prisma = {
+      serviceRequest: { findUnique: async () => ({ id: "sr-1", caseId: "case-1", status: "REQUESTED" }) },
+      provider: { findUnique: async () => ({ id: PROVIDER_ID, status: "ACTIVE" }) },
+      referral: {
+        findFirst: async () => {
+          if (preCheck) {
+            preCheck = false;
+            return null;
+          }
+          return { id: "existing" };
+        },
+      },
+      $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    };
+
+    await expect(build(prisma).create(user, "case-1", "sr-1", dto)).rejects.toBeInstanceOf(ConflictException);
+    expect(executed.join(" ")).toMatch(/service_requests[\s\S]*FOR UPDATE/);
+  });
 });
