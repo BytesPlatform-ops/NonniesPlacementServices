@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { json, urlencoded } from "express";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory, Reflector } from "@nestjs/core";
@@ -9,12 +10,23 @@ import { ResponseInterceptor } from "./common/interceptors/response.interceptor"
 import type { AppConfig } from "./config/configuration";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Body parsing is registered per route below so one giant application-wide
+  // allowance is never applied to public provider webhooks.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   const config = app.get(ConfigService<AppConfig, true>);
 
-  // Contact imports post their (bounded ≤5 MB) file text as JSON — raise the
-  // default 100kb body limit so those requests are not rejected.
-  app.useBodyParser("json", { limit: "6mb" });
+  // Route-scoped body limits, most specific first. body-parser marks a request once
+  // parsed, so later (broader) parsers skip it — the first match wins.
+  //
+  // Contact imports post their (bounded ≤5 MB) file text as JSON.
+  app.use("/api/v1/communications/imports", json({ limit: "6mb" }));
+  // Provider webhooks are public: keep them tightly bounded.
+  app.use("/api/v1/webhooks/communications/sms", urlencoded({ extended: false, limit: "128kb" }));
+  app.use("/api/v1/webhooks/communications/email", json({ limit: "1mb" }));
+  app.use("/api/v1/communications/email/webhook", json({ limit: "512kb" }));
+  // Ordinary authenticated CRM traffic.
+  app.use(json({ limit: "2mb" }));
+  app.use(urlencoded({ extended: true, limit: "2mb" }));
 
   // Versioned API routing; health stays unprefixed for infra checks.
   app.setGlobalPrefix("api/v1", { exclude: ["health"] });
