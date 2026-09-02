@@ -37,4 +37,35 @@ describe("htmlToPlainText + buildPreviewText", () => {
     expect(preview.length).toBeLessThanOrEqual(160);
     expect(preview.endsWith("…")).toBe(true);
   });
+
+  // Regression lock for the two published sanitize-html advisories that this
+  // configuration is NOT exposed to (GHSA: javascript: URIs via
+  // action/formaction/data/poster/background, and SVG SMIL scheme-policy
+  // bypass). Our allowlist grants attributes to <a> only and never allows the
+  // carrier tags at all, so the vectors cannot survive. These tests fail loudly
+  // if the allowlist is ever widened.
+  it("never lets advisory attribute vectors survive (action/formaction/poster/background/data)", () => {
+    const attacks = [
+      '<form action="javascript:alert(1)"><button formaction="javascript:alert(2)">x</button></form>',
+      '<video poster="javascript:alert(3)"></video>',
+      '<body background="javascript:alert(4)">x</body>',
+      '<object data="javascript:alert(5)"></object>',
+      '<td background="javascript:alert(6)">cell</td>',
+    ];
+    for (const attack of attacks) {
+      const out = sanitizeInboundHtml(attack);
+      expect(out.toLowerCase()).not.toContain("javascript:");
+      expect(out.toLowerCase()).not.toMatch(/\b(action|formaction|poster|background|data)=/);
+    }
+  });
+
+  it("never lets SVG or SMIL animation elements through", () => {
+    const out = sanitizeInboundHtml(
+      '<svg><animate attributeName="href" values="javascript:alert(1)" /><set attributeName="href" to="javascript:alert(2)" /></svg><p>kept</p>',
+    );
+    expect(out.toLowerCase()).not.toContain("svg");
+    expect(out.toLowerCase()).not.toContain("animate");
+    expect(out.toLowerCase()).not.toContain("javascript:");
+    expect(out).toContain("kept");
+  });
 });
