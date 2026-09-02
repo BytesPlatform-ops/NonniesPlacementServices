@@ -267,10 +267,35 @@ export class ConversationService {
 
   // --- reply -----------------------------------------------------------------
   /** Channel-aware reply for the unified inbox: routes to the email or SMS path. */
-  async replyToConversation(user: RequestUser, id: string, body: string, attachments: ReplyAttachmentInput[] = []): Promise<{ conversationId: string; message: MessageView }> {
+  async replyToConversation(user: RequestUser, id: string, body: string, attachments: ReplyAttachmentInput[] = [], idempotencyKey?: string): Promise<{ conversationId: string; message: MessageView }> {
     const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, select: { channel: true } });
     if (!conversation) throw new NotFoundException("Conversation not found");
-    return conversation.channel === "SMS" ? this.replySms(user, id, body) : this.reply(user, id, body, attachments);
+    // A repeated submit with the same key returns the original message instead of
+    // queueing a second one. Backend-enforced — the frontend is never trusted.
+    const existing = await this.findByIdempotencyKey(id, idempotencyKey);
+    if (existing) return { conversationId: id, message: existing };
+    return conversation.channel === "SMS" ? this.replySms(user, id, body, idempotencyKey) : this.reply(user, id, body, attachments, idempotencyKey);
+  }
+
+  /** Scope the client key to its conversation so keys can never collide across threads. */
+  private scopedKey(conversationId: string, idempotencyKey?: string): string | null {
+    return idempotencyKey?.trim() ? `${conversationId}:${idempotencyKey.trim()}` : null;
+  }
+
+  /**
+   * Two genuinely simultaneous submits can both miss the pre-check, so the unique
+   * index is the real guard: the loser gets P2002 and we return the winner's message.
+   */
+  private async resolveDuplicate(err: unknown, conversationId: string, idempotencyKey?: string): Promise<MessageView | null> {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== "P2002") return null;
+    return this.findByIdempotencyKey(conversationId, idempotencyKey);
+  }
+
+  private async findByIdempotencyKey(conversationId: string, idempotencyKey?: string): Promise<MessageView | null> {
+    const key = this.scopedKey(conversationId, idempotencyKey);
+    if (!key) return null;
+    const found = await this.prisma.communicationMessage.findUnique({ where: { idempotencyKey: key }, include: { attachments: true } });
+    return found ? toMessageView(found) : null;
   }
 
   /**
@@ -279,7 +304,7 @@ export class ConversationService {
    * configured Twilio identity. STOP / active SMS suppression blocks the send even
    * for a human reply, and replying never changes the contact's SMS consent.
    */
-  async replySms(user: RequestUser, id: string, body: string): Promise<{ conversationId: string; message: MessageView }> {
+  async replySms(user: RequestUser, id: string, body: string, idempotencyKey?: string): Promise<{ conversationId: string; message: MessageView }> {
     const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, include: { contact: { select: { phone: true, normalizedPhoneE164: true } } } });
     if (!conversation) throw new NotFoundException("Conversation not found");
     if (conversation.channel !== "SMS") throw new BadRequestException("This is not an SMS conversation.");
@@ -297,7 +322,9 @@ export class ConversationService {
 
     const info = calculateSegments(validated);
     const preview = validated.replace(/\s+/g, " ").trim().slice(0, 160);
-    const message = await this.prisma.$transaction(async (tx) => {
+    let message;
+    try {
+      message = await this.prisma.$transaction(async (tx) => {
       const created = await tx.communicationMessage.create({
         data: {
           conversationId: id,
@@ -311,21 +338,27 @@ export class ConversationService {
           encoding: info.encoding,
           segmentCount: info.segmentCount,
           nextAttemptAt: new Date(),
+          idempotencyKey: this.scopedKey(id, idempotencyKey),
         },
       });
       await tx.communicationConversation.update({
         where: { id },
         data: { lastMessageAt: new Date(), lastOutboundAt: new Date(), latestDirection: "OUTBOUND", previewText: preview, status: conversation.status === "ARCHIVED" ? "OPEN" : conversation.status, archivedAt: conversation.status === "ARCHIVED" ? null : conversation.archivedAt },
       });
-      await tx.communicationConversationReadState.upsert({ where: { conversationId_userId: { conversationId: id, userId: user.id } }, create: { conversationId: id, userId: user.id, lastReadAt: new Date() }, update: { lastReadAt: new Date() } });
-      return created;
-    });
+        await tx.communicationConversationReadState.upsert({ where: { conversationId_userId: { conversationId: id, userId: user.id } }, create: { conversationId: id, userId: user.id, lastReadAt: new Date() }, update: { lastReadAt: new Date() } });
+        return created;
+      });
+    } catch (err) {
+      const duplicate = await this.resolveDuplicate(err, id, idempotencyKey);
+      if (duplicate) return { conversationId: id, message: duplicate };
+      throw err;
+    }
 
     await this.audit.record({ action: "communication.sms_reply.queued", entityType: "CommunicationConversation", entityId: id, actorUserId: user.id, metadata: { messageId: message.id, segments: info.segmentCount } });
     return { conversationId: id, message: toMessageView(message) };
   }
 
-  async reply(user: RequestUser, id: string, markdown: string, attachments: ReplyAttachmentInput[] = []): Promise<{ conversationId: string; message: MessageView }> {
+  async reply(user: RequestUser, id: string, markdown: string, attachments: ReplyAttachmentInput[] = [], idempotencyKey?: string): Promise<{ conversationId: string; message: MessageView }> {
     const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, include: { contact: { select: { email: true, normalizedEmail: true } } } });
     if (!conversation) throw new NotFoundException("Conversation not found");
     if (conversation.channel !== "EMAIL") throw new BadRequestException("Only email conversations can be replied to here.");
@@ -353,7 +386,9 @@ export class ConversationService {
     const validated = this.validateReplyAttachments(attachments);
     await this.assertAttachmentsPresent(validated);
 
-    const message = await this.prisma.$transaction(async (tx) => {
+    let message;
+    try {
+      message = await this.prisma.$transaction(async (tx) => {
       const created = await tx.communicationMessage.create({
         data: {
           conversationId: id,
@@ -371,6 +406,7 @@ export class ConversationService {
           inReplyTo,
           references,
           nextAttemptAt: new Date(),
+          idempotencyKey: this.scopedKey(id, idempotencyKey),
         },
       });
       if (validated.length) {
@@ -379,8 +415,13 @@ export class ConversationService {
       // Replying clears needsReply, keeps the thread open, and marks it read for the sender.
       await tx.communicationConversation.update({ where: { id }, data: { lastMessageAt: new Date(), lastOutboundAt: new Date(), latestDirection: "OUTBOUND", previewText: preview, status: conversation.status === "ARCHIVED" ? "OPEN" : conversation.status, archivedAt: conversation.status === "ARCHIVED" ? null : conversation.archivedAt } });
       await tx.communicationConversationReadState.upsert({ where: { conversationId_userId: { conversationId: id, userId: user.id } }, create: { conversationId: id, userId: user.id, lastReadAt: new Date() }, update: { lastReadAt: new Date() } });
-      return created;
-    });
+        return created;
+      });
+    } catch (err) {
+      const duplicate = await this.resolveDuplicate(err, id, idempotencyKey);
+      if (duplicate) return { conversationId: id, message: duplicate };
+      throw err;
+    }
 
     await this.audit.record({ action: "communication.email_reply.queued", entityType: "CommunicationConversation", entityId: id, actorUserId: user.id, metadata: { messageId: message.id, attachmentCount: validated.length } });
 
@@ -393,7 +434,7 @@ export class ConversationService {
     const message = await this.prisma.communicationMessage.findFirst({ where: { id: messageId, conversationId, direction: "OUTBOUND" }, select: { id: true, status: true } });
     if (!message) throw new NotFoundException("Message not found");
     if (message.status !== "FAILED" && message.status !== "DELIVERY_UNKNOWN") throw new BadRequestException("Only a failed reply can be retried.");
-    await this.prisma.communicationMessage.update({ where: { id: message.id }, data: { status: "QUEUED", nextAttemptAt: new Date(), claimToken: null, leaseExpiresAt: null } });
+    await this.prisma.communicationMessage.update({ where: { id: message.id }, data: { status: "QUEUED", nextAttemptAt: new Date(), claimToken: null, leaseExpiresAt: null, dispatchedAt: null } });
     await this.audit.record({ action: "communication.email_reply.retried", entityType: "CommunicationConversation", entityId: conversationId, actorUserId: user.id, metadata: { messageId } });
     return { ok: true };
   }

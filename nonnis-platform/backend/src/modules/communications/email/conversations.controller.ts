@@ -65,7 +65,7 @@ export class ConversationsController {
   @Post(":id/reply")
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_SEND)
   reply(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: ReplyDto) {
-    return this.conversations.replyToConversation(user, id, dto.body, dto.attachments ?? []);
+    return this.conversations.replyToConversation(user, id, dto.body, dto.attachments ?? [], dto.idempotencyKey);
   }
 
   @Post(":id/messages/:messageId/retry")

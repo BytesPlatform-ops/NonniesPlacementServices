@@ -25,6 +25,8 @@ export class ReplyAttachmentDto {
 
 export class ReplyDto {
   @IsString() @MaxLength(REPLY_LIMIT) body!: string;
+  /** Client-generated key making a repeated submit (double-click, retry) a no-op. */
+  @IsOptional() @IsString() @MaxLength(64) idempotencyKey?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_ATTACHMENTS) @ValidateNested({ each: true }) @Type(() => ReplyAttachmentDto) attachments?: ReplyAttachmentDto[];
 }
 
