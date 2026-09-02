@@ -59,6 +59,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // body-parser rejections (oversized or malformed request bodies). Without this
+    // an over-limit provider webhook or import would surface as a 500.
+    const parseError = exception as { type?: string; status?: number; statusCode?: number };
+    if (parseError && typeof parseError.type === "string" && parseError.type.startsWith("entity.")) {
+      if (parseError.type === "entity.too.large") {
+        return { status: HttpStatus.PAYLOAD_TOO_LARGE, code: "PAYLOAD_TOO_LARGE", message: "The request body is too large." };
+      }
+      return { status: HttpStatus.BAD_REQUEST, code: "INVALID_BODY", message: "The request body could not be parsed." };
+    }
+
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       switch (exception.code) {
         case "P2025":
