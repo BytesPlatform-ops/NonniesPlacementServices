@@ -40,6 +40,9 @@ import { InboundSmsService } from "./sms/inbound-sms.service";
 import { SmsWebhookController } from "./sms/sms-webhook.controller";
 import { SmsStatusController } from "./sms/sms-status.controller";
 import { DeliveryMaintenanceService } from "./dispatch/delivery-maintenance.service";
+import { DeliveryOperationsService } from "./operations/delivery-operations.service";
+import { CommunicationsStatusService } from "./operations/communications-status.service";
+import { CommunicationsOperationsController } from "./operations/communications-operations.controller";
 
 /**
  * Communications module. Phase 15A: contacts, lists, tags, consent, suppression,
@@ -71,6 +74,7 @@ import { DeliveryMaintenanceService } from "./dispatch/delivery-maintenance.serv
     SmsCampaignsController,
     SmsWebhookController,
     SmsStatusController,
+    CommunicationsOperationsController,
   ],
   providers: [
     ContactsService,
@@ -95,6 +99,8 @@ import { DeliveryMaintenanceService } from "./dispatch/delivery-maintenance.serv
     SmsStatusService,
     InboundSmsService,
     DeliveryMaintenanceService,
+    DeliveryOperationsService,
+    CommunicationsStatusService,
     ...transportProviders,
   ],
 })
