@@ -25,6 +25,15 @@ export function useReportQueryState(defaults: Record<string, string> = {}): Repo
   const appliedDefaults = useRef(false);
 
   const values = useMemo(() => {
+    // On the very first render the defaults have not been written to the URL
+    // yet. Presenting them as the effective values here means the first query
+    // already uses the default range, instead of firing one unfiltered request
+    // and then immediately re-firing the same (expensive) report with dates.
+    // Once the defaults have been applied, an empty query string is a genuine
+    // "no filters" state and is reported as such.
+    if (!appliedDefaults.current && searchParams.toString() === "") {
+      return { ...defaultsRef.current };
+    }
     const obj: Record<string, string> = {};
     searchParams.forEach((v, k) => {
       obj[k] = v;

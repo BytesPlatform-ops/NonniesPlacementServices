@@ -72,8 +72,17 @@ export function ReportView<Row, Summary, Groups>({
   const { values, page, setValue, setPage, reset } = useReportQueryState(defaults);
   const { data: options } = useAsync(() => getReportFilterOptions(), []);
 
-  const query: ReportQuery = useMemo(() => ({ ...values, page, pageSize: PAGE_SIZE }), [values, page]);
-  const { data, loading, error, reload } = useAsync(() => fetcher(query), [query]);
+  const query: ReportQuery = { ...values, page, pageSize: PAGE_SIZE };
+  // Report filters live in the URL, so `values` takes a fresh object identity
+  // every time the query string is rewritten — even when the effective filters
+  // are identical. Keying the fetch on the serialized query (with stable key
+  // order) means an unchanged filter set never re-fires the same expensive
+  // report request.
+  const queryKey = useMemo(() => {
+    const merged: Record<string, string> = { ...values, page: String(page), pageSize: String(PAGE_SIZE) };
+    return JSON.stringify(Object.keys(merged).sort().map((k) => [k, merged[k]]));
+  }, [values, page]);
+  const { data, loading, error, reload } = useAsync(() => fetcher(query), [queryKey]);
   const totalPages = data?.totalPages ?? 0;
 
   const optionsFor = (source?: OptionSource): Array<{ value: string; label: string }> => {
