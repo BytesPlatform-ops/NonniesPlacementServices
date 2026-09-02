@@ -7,13 +7,18 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
-import type { AppConfig } from "./config/configuration";
+import { loadConfiguration, type AppConfig } from "./config/configuration";
+import { assertProductionConfig } from "./config/validate-config";
 
 async function bootstrap(): Promise<void> {
   // Body parsing is registered per route below so one giant application-wide
   // allowance is never applied to public provider webhooks.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   const config = app.get(ConfigService<AppConfig, true>);
+
+  // Refuse to serve traffic with unsafe production configuration (localhost
+  // unsubscribe links, mock reply domains, missing secrets). No-op elsewhere.
+  assertProductionConfig(loadConfiguration());
 
   // Route-scoped body limits, most specific first. body-parser marks a request once
   // parsed, so later (broader) parsers skip it — the first match wins.
@@ -27,6 +32,17 @@ async function bootstrap(): Promise<void> {
   // Ordinary authenticated CRM traffic.
   app.use(json({ limit: "2mb" }));
   app.use(urlencoded({ extended: true, limit: "2mb" }));
+
+  // Baseline response hardening. The API serves JSON only: it is never framed,
+  // never sniffed, and must not advertise its stack.
+  app.disable("x-powered-by");
+  app.use((_req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+    next();
+  });
 
   // Versioned API routing; health stays unprefixed for infra checks.
   app.setGlobalPrefix("api/v1", { exclude: ["health"] });
