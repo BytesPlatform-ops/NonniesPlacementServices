@@ -829,8 +829,43 @@ Console. Twilio is only the SMS transport + inbound provider behind the 15A
   `npm run communications:simulate-sms` (refuses to run in production). Going live is
   configuration only — see [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
-Future phase: 15E (unified inbox + security/delivery hardening). Full details in
-[`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
+## Communications — Unified Inbox & Hardening (Phase 15E) — module complete
+
+The final Communications phase. It adds no marketing features; it makes the existing
+Email + SMS system coherent, safe, recoverable and observable.
+
+- **One inbox.** `Communications → Inbox` carries **All / Email / SMS** channel filters
+  beside Unread / Needs Reply / Archived / Needs Review, one consistent row structure
+  (subject for email, phone identity for SMS — never a fake subject), cross-channel
+  sorting and search, and channel/filter/search/page kept in the URL so refresh and
+  back navigation behave. Inbound review is one queue with **provider-neutral** reason
+  codes, so Brevo/Twilio wording never reaches the UI.
+- **Recoverable delivery.** `dispatchedAt` is stamped immediately before every provider
+  call, so a crashed worker is unambiguous: never-dispatched work is safely re-queued,
+  while possibly-dispatched work becomes `DELIVERY_UNKNOWN` and is **never** resent
+  automatically. Campaigns whose recipients are all terminal are reconciled, so none can
+  stick in `SENDING`. All four outboxes share one retry/ambiguity policy.
+- **Idempotent sending.** Campaign queueing atomically claims the DRAFT→QUEUED
+  transition with deterministic recipient keys, and direct replies use a client
+  idempotency key enforced by a unique index — a double-click can never send twice.
+- **Delivery Operations** (`/communications/delivery`) lists only messages that need a
+  human, with an honest retry policy: an ambiguous send requires explicit
+  acknowledgement that it may duplicate, and a permanently-bad recipient cannot be
+  retried at all.
+- **Configuration** (`/communications/configuration`) shows per-channel readiness
+  (Mock / Ready for live / Missing X) and exactly what is still required — derived from
+  configuration alone, never calling a provider, never sending a probe message, and
+  never returning a credential.
+- **Security hardening.** Per-route request-body limits (with correct 413/400
+  responses) instead of one application-wide allowance, audited webhook verification
+  against the configured public URL, idempotency on every provider path, short-lived
+  configurable attachment URLs with header-safe filenames, and a structural test that
+  fails if any communications endpoint is left unauthorized.
+- **Consent invariants audited.** Email and SMS consent/suppression are fully
+  independent, and SMS `START` releases only the `USER_OPT_OUT` suppression.
+
+The Communications module (15A–15E) is **complete**. Full details, live-provider setup
+and known residual risks: [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
 ## Relationship to the existing website
 

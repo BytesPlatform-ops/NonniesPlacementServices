@@ -2,10 +2,12 @@
 
 A CRM-owned marketing/outreach system. **Nonnis PostgreSQL is the source of
 truth.** Brevo (email) and Twilio (SMS) are **future transport providers** — they
-never own contacts, lists, consent, or history. This document covers **Phase 15A**
-(the foundation), **Phase 15B** (outbound email), **Phase 15C** (the email inbox,
-inbound replies, threading, and attachments) and **Phase 15D** (SMS templates,
-campaigns and two-way SMS), and names the remaining phase.
+never own contacts, lists, consent, or history.
+
+**The Communications module is COMPLETE** across phases 15A–15E: the foundation
+(15A), outbound email (15B), the email inbox and inbound replies (15C), SMS and
+two-way messaging (15D), and the unified inbox plus security/delivery/operations
+hardening (15E).
 
 > **PHI boundary:** the Communications contact database is deliberately separate
 > from `User` / `Patient` / `Provider`. It never references `Case`/`Patient`
@@ -19,7 +21,7 @@ campaigns and two-way SMS), and names the remaining phase.
 | **15B** | Email templates + visual builder + email campaigns (Brevo adapter) | **Complete** |
 | **15C** | Email inbox + inbound replies + full email threading + attachments | **Complete** |
 | **15D** | SMS templates + campaigns + two-way SMS (Twilio adapter) | **Complete** |
-| 15E | Unified communications inbox + security + delivery hardening | Planned |
+| **15E** | Unified inbox + security, delivery and operations hardening | **Complete** |
 
 ## 1. Access (RBAC)
 
@@ -526,3 +528,152 @@ Everything works in **mock mode** with no Twilio account. Simulate locally with
 6. Set the Twilio env vars above, `TWILIO_A2P_APPROVED=true`, and switch
    `COMMUNICATIONS_SMS_PROVIDER=twilio`.
 7. A real send → reply → STOP/START end-to-end test.
+
+---
+
+## Phase 15E — Unified inbox, security, delivery & operations hardening
+
+The final Communications phase. It adds no marketing features: it makes the existing
+Email + SMS system coherent, safe, recoverable, observable and production-ready.
+
+### Unified inbox
+
+`/communications/inbox` is the single inbox for both channels — there is deliberately
+no separate "SMS inbox" product. Channel filters (**All / Email / SMS**) sit above the
+operational filters (**Unread / Needs Reply / Archived / Needs Review**), and channel,
+filter, search and page are all mirrored into the URL so refresh, deep links and
+browser-back restore the same view. Rows share one structure (contact, channel badge
+with icon **and** text, preview, direction, time, unread, needs-reply, campaign
+origin); email rows show a subject, SMS rows show the phone identity instead of a fake
+one. Sorting is by latest activity across channels, never grouped by channel. Search
+covers contact name, email, phone, organization and email subject — never a full
+message-body scan.
+
+Inbound review is one queue for both channels, and its reasons are **normalized to
+provider-neutral codes** (`UNKNOWN_CONTACT`, `AMBIGUOUS_CONTACT`,
+`SENDER_IDENTITY_MISMATCH`, `UNKNOWN_THREAD`, `UNKNOWN_BUSINESS_DESTINATION`,
+`INVALID_PROVIDER_PAYLOAD`) so Brevo/Twilio wording never reaches the UI. The stored
+enum keeps the channel-specific detail for support.
+
+### Shared delivery core
+
+All four outboxes — email campaign, email reply, SMS campaign, SMS reply — share one
+`classifySendResult` policy: transient retry with bounded backoff and a bounded
+attempt cap, **AMBIGUOUS → `DELIVERY_UNKNOWN` with no automatic retry**, and everything
+else (permanent, configuration, provider opt-out block) terminal. Claiming is Postgres
+`FOR UPDATE SKIP LOCKED` with bounded batch size and concurrency, so multiple
+instances never send the same row and a cancelled campaign's work is never newly
+claimed.
+
+**Crash recovery.** `dispatchedAt` is stamped immediately BEFORE the provider call,
+which makes an expired lease unambiguous:
+
+| Expired lease | Meaning | Action |
+| --- | --- | --- |
+| `dispatchedAt` is NULL | the worker died before the provider saw anything | safely re-queued (attempt counted, so it cannot loop) |
+| `dispatchedAt` is set | the provider may already have accepted it | `DELIVERY_UNKNOWN` — **never** resent automatically |
+
+A row already in `DELIVERY_UNKNOWN` is never reclaimed, and repeated crashes exhaust
+the shared attempt cap into a terminal `FAILED` rather than looping. The same
+maintenance pass finalizes campaigns whose recipients are all terminal, so a campaign
+can never be stuck in `SENDING` after a worker restart. This is delivery-queue
+recovery, not workflow automation, and it runs inside the existing dispatcher ticks —
+no new scheduler was introduced.
+
+**Residual risk (documented, not hidden).** Neither provider exposes a true
+idempotency key for message creation, so a crash in the narrow window between the
+provider accepting a message and our database recording it cannot be distinguished
+from a crash before sending. The system therefore always prefers
+`DELIVERY_UNKNOWN` + human review over a possible duplicate delivery.
+
+### Send idempotency
+
+Campaign queueing atomically CLAIMS the `DRAFT → QUEUED` transition inside the same
+transaction that writes recipient snapshots; a concurrent duplicate request updates
+zero rows and the whole transaction rolls back. Recipient rows additionally use a
+deterministic `campaignId:contactId` key, so a retried queue can never duplicate a
+recipient. Direct replies accept a client `idempotencyKey`, scoped per conversation
+and enforced by a unique index — a double-click, a browser retry or a genuine race all
+return the original message instead of sending twice.
+
+### Delivery operations
+
+`/communications/delivery` lists only **actionable** deliveries (`FAILED`,
+`DELIVERY_UNKNOWN`, `BOUNCED`, `UNDELIVERED`) across all four outboxes in one
+server-paginated query, filterable by channel, type and status. Retry is deliberately
+honest rather than convenient:
+
+- **Ambiguous** — retry is offered but demands an explicit acknowledgement that the
+  message may already have been delivered. Never a quiet one-click resend.
+- **Bounced / undelivered / permanently invalid / provider opt-out** — retry is
+  disabled, with the reason shown.
+- **Configuration failure or exhausted transient** — retry is offered plainly, because
+  nothing ever reached the recipient.
+
+The same rules are re-evaluated server-side; the frontend is never trusted. Retrying a
+recipient of a finalized campaign reopens that campaign so the dispatcher can actually
+claim the row again.
+
+### Configuration & health
+
+`/communications/configuration` shows per-channel provider, readiness
+(**Mock / Ready for live / Missing configuration**), an explicit list of what is still
+missing, and display-safe details. Readiness is derived purely from configuration — no
+provider API is called and **no probe message is ever sent**. The endpoint never
+returns `BREVO_API_KEY`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SECRET`, the unsubscribe
+or webhook secrets, or the storage service-role key (asserted by tests across every
+provider combination). Mixed mode is fully supported — live email with mock SMS, or the
+reverse. `GET /communications/health` (manage permission) reports current queue counts,
+stale claims, failures and pending reviews — operational counts only, no trends or
+scores.
+
+### Security hardening
+
+- **Body limits are per route**, replacing a single application-wide allowance:
+  6 MB only for contact imports, 512 KB for Brevo delivery events, 1 MB for Brevo
+  inbound email, 128 KB for Twilio webhooks, 2 MB for ordinary CRM traffic. Oversized
+  and malformed bodies now return **413 / 400** instead of 500.
+- **Webhook authentication** is unchanged in mechanism but audited: Twilio uses the
+  official validator against the **configured public URL** (never a proxy-rewritten
+  one) with the full unmodified parameter set; Brevo, which publishes no signature
+  scheme, uses constant-time high-entropy secret comparison. In mock mode the SMS
+  webhook verifier refuses outright when `NODE_ENV=production`.
+- **Idempotency** is enforced on every provider path: delivery events by dedup key,
+  inbound email by provider id / RFC Message-ID, inbound SMS and status callbacks by
+  `MessageSid`, with monotonic status ranking so out-of-order callbacks never regress
+  `delivered`. No raw provider payloads are retained.
+- **Attachments**: private bucket, MIME allowlist, size limits, server-generated
+  paths, authorization on download, and a **configurable signed-URL TTL** (default 5
+  minutes, clamped to 60s–15m). Download filenames are sanitized so a malicious
+  inbound filename cannot inject a `Content-Disposition` response header.
+- **Content**: inbound email stays sanitized (no scripts/iframes/forms/handlers/
+  `javascript:` URLs, and images stripped so tracking pixels never load); email
+  previews render in a sandboxed frame; the reply composer accepts only a controlled
+  Markdown subset; SMS is never interpreted as HTML.
+- **Authorization** is asserted structurally: a test walks every communications
+  controller and fails if any endpoint is neither explicitly public (provider webhooks,
+  public unsubscribe) nor gated by a communications permission — navigation is not
+  authorization.
+
+### Consent invariants (audited)
+
+Email and SMS consent and suppression are fully independent: an email unsubscribe
+never affects SMS eligibility, and an SMS STOP never changes email consent or
+suppression. Bulk sending on either channel requires an active contact, a valid
+address, `OPTED_IN` consent and no suppression — `UNKNOWN` is never treated as
+consent. `START` releases only the `USER_OPT_OUT` SMS suppression and never clears an
+`ADMIN_BLOCK` or any unrelated reason. A direct human email reply remains permitted
+under the 15C policy without clearing suppression or flipping consent; a direct SMS
+reply is always blocked by STOP/suppression.
+
+### Data retention
+
+No automatic deletion is implemented and no purge job was added. Retention for
+contacts, campaign history, messages, attachments, provider dedup records, inbound
+review items and audit events should be agreed with the client (and any legal
+requirement) before production, then implemented deliberately.
+
+### Post-15E next step
+
+**Full Core-System Audit + Production Hardening** — a platform-wide pass beyond
+Communications. It is not started automatically.

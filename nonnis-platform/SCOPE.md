@@ -441,6 +441,35 @@ and do not let an in-scope feature evolve into them.
   `communications:simulate-sms`). **No** MMS, scheduled/recurring SMS, link tracking,
   SMS analytics or AI. See `docs/COMMUNICATIONS.md`.
 
+- **Slice 15E — Unified Inbox + Security / Delivery / Operations Hardening
+  (Communications COMPLETE):** the final Communications phase, adding no marketing
+  features. The Inbox becomes genuinely unified — All/Email/SMS channel filters beside
+  the operational filters, one consistent row structure (subject for email, phone
+  identity for SMS), cross-channel sorting and search, and channel/filter/search/page
+  persisted in the URL; inbound review is one queue whose reasons are **normalized to
+  provider-neutral codes**. The four outboxes share one delivery policy, and delivery
+  becomes **recoverable**: `dispatchedAt` is stamped immediately before each provider
+  call so an expired lease is unambiguous — never dispatched is safely re-queued, while
+  possibly-dispatched becomes `DELIVERY_UNKNOWN` and is **never** resent automatically;
+  campaigns whose recipients are all terminal are reconciled so none can stick in
+  SENDING. Sending is made **idempotent**: campaign queueing atomically claims the
+  DRAFT→QUEUED transition (with deterministic recipient keys) and direct replies accept
+  a client idempotency key enforced by a unique index, so a double-click can never send
+  twice. New operational surfaces: **Delivery Operations** (only actionable failures,
+  with an honest retry policy — ambiguous sends require explicit duplicate-risk
+  acknowledgement and permanently-bad recipients cannot be retried) and
+  **Configuration** (per-channel readiness and exactly what is missing, derived from
+  configuration alone, never returning a credential and never probing a provider), plus
+  a manage-gated health endpoint. Security hardening: **per-route body limits**
+  replacing one application-wide allowance (with correct 413/400 responses), audited
+  webhook signature/secret verification against the configured public URL, verified
+  idempotency on every provider path, configurable short-lived attachment URLs with
+  header-safe filenames, and a structural test asserting **every** communications
+  endpoint is either explicitly public or permission-gated. Consent invariants are
+  audited: email and SMS remain fully independent, and START clears only the SMS
+  `USER_OPT_OUT`. **No** new channels, scheduling, automation, analytics or tracking.
+  See `docs/COMMUNICATIONS.md`.
+
 ---
 
 ## 6. Remaining implementation sequence
@@ -466,9 +495,8 @@ COMPLETED
   15B. Email Templates + Visual Email Builder + Email Campaigns
   15C. Email Inbox + Inbound Replies + Full Email Threading + Attachments
   15D. SMS Templates + SMS Campaigns + Two-Way SMS
-
-NEXT (Communications module, remaining phase)
-  15E. Unified Communications Inbox + Security + Delivery Hardening   ← next slice
+  15E. Unified Inbox + Security / Delivery / Operations Hardening
+       (Communications module COMPLETE)
 
 THEN
   14. Full Core-System Audit + Production Hardening
@@ -486,17 +514,18 @@ Architecture. They are out of scope unless the client explicitly expands it.
 
 ## 7. Next recommended implementation step
 
-**Communications 15E — Unified Communications Inbox + Security / Delivery Hardening:**
-the final Communications phase — consolidate the email + SMS inbox UX (routes are still
-email-scoped aliases from 15C/15D), and harden communications security and delivery
-across both channels. Do NOT begin automatically. (Communications 15A–15D are complete;
-see `docs/COMMUNICATIONS.md`.)
+**Full Core-System Audit + Production Hardening:** the Communications module is now
+complete (15A–15E). The final planned slice is a platform-wide review and hardening
+pass across the whole system — security/RBAC/tenant isolation, data integrity,
+performance, error handling, accessibility and production readiness — beyond
+Communications. Do NOT begin automatically. (See `docs/COMMUNICATIONS.md` for the
+finished Communications architecture.)
 
 ---
 
 ## 7b. Later: Full Core-System Audit + Production Hardening
 
-After the Communications module (15E) completes, the final planned slice is an
+With the Communications module complete, the final planned slice is an
 end-to-end review
 and hardening pass across the completed core system — security/RBAC/tenant-isolation
 audit, input validation, error handling, performance and index review, dependency
