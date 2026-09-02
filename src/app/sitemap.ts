@@ -1,9 +1,6 @@
 import type { MetadataRoute } from "next";
 import { fetchBlogPosts, fetchResidentialProviders } from "@/lib/platform/content";
-
-// Mirrors the metadataBase placeholder in `layout.tsx`. Update both when the
-// production domain is finalized.
-const SITE_URL = "https://nonnisplacement.example";
+import { SITE_URL } from "@/lib/site-url";
 
 export const revalidate = 300;
 

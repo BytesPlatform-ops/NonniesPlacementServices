@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SITE_URL } from "@/lib/site-url";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { SmoothScrollProvider } from "@/components/animation/SmoothScrollProvider";
@@ -20,8 +21,6 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
 });
-
-const SITE_URL = "https://nonnisplacement.example";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

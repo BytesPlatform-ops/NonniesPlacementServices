@@ -131,8 +131,9 @@ fails, the page keeps its last good render rather than caching an empty result.
   auth) power storage; the service-role key must remain backend-only.
 - Both Next apps allow Supabase Storage images narrowly via `images.remotePatterns`
   (`*.supabase.co`, path `/storage/v1/object/public/**`).
-- Set the real production domain in `layout.tsx` / `sitemap.ts` / `robots.ts`
-  (currently the `nonnisplacement.example` placeholder).
+- `NEXT_PUBLIC_SITE_URL` — canonical public origin, single source of truth in
+  `src/lib/site-url.ts` and consumed by `layout.tsx` / `sitemap.ts` / `robots.ts`.
+  Confirm the exact live host (apex vs. `www`) before launch.
 
 ## 13. Runtime smoke test
 
