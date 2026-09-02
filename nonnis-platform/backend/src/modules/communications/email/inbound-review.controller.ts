@@ -5,14 +5,14 @@ import type { RequestUser } from "../../auth/request-user";
 import { InboundReviewService } from "./inbound-review.service";
 import { LinkReviewDto, ListReviewDto } from "../dto/inbox.dto";
 
-@Controller("communications/email/inbound-review")
+@Controller(["communications/inbound-review", "communications/email/inbound-review"])
 export class InboundReviewController {
   constructor(private readonly review: InboundReviewService) {}
 
   @Get()
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
   list(@Query() query: ListReviewDto) {
-    return this.review.list(query.status, query.page, query.pageSize);
+    return this.review.list(query.status, query.page, query.pageSize, query.channel);
   }
 
   @Get("count")

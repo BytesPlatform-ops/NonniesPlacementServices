@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../../database/prisma.service";
@@ -12,6 +12,10 @@ import { generateInternetMessageId, normalizeReplySubject, buildReferencesChain 
 import { compileReply } from "./reply-format";
 import { buildPreviewText } from "./inbound-sanitize";
 import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, buildAttachmentPath, validateAttachment } from "./attachment-policy";
+import { SMS_TRANSPORT, type SmsTransport } from "../providers/sms-transport";
+import { validateSmsBody } from "../sms/sms-merge";
+import { calculateSegments } from "../sms/sms-segments";
+import { smsReadiness } from "../sms/sms-config";
 import {
   type ConversationDetail,
   type ConversationListItem,
@@ -24,6 +28,8 @@ export type InboxView = "all" | "unread" | "needs_reply" | "archived";
 
 export interface ListConversationsInput {
   view: InboxView;
+  /** Optional channel filter for the unified inbox (undefined = all channels). */
+  channel?: "EMAIL" | "SMS";
   search?: string;
   page: number;
   pageSize: number;
@@ -53,6 +59,7 @@ export class ConversationService {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly audit: AuditService,
     private readonly attachments: AttachmentStorageService,
+    @Inject(SMS_TRANSPORT) private readonly smsTransport: SmsTransport,
   ) {}
 
   // --- list (per-user unread + derived needsReply, no N+1) -------------------
@@ -64,8 +71,10 @@ export class ConversationService {
       Array<{
         id: string;
         contactId: string;
+        channel: "EMAIL" | "SMS";
         contactName: string | null;
         contactEmail: string | null;
+        contactPhone: string | null;
         contactOrg: string | null;
         subject: string | null;
         preview: string | null;
@@ -78,17 +87,19 @@ export class ConversationService {
         originCampaignName: string | null;
       }>
     >(Prisma.sql`
-      SELECT c.id, c."contactId",
+      SELECT c.id, c."contactId", c.channel,
         NULLIF(TRIM(CONCAT(COALESCE(ct."firstName", ''), ' ', COALESCE(ct."lastName", ''))), '') AS "contactName",
-        ct.email AS "contactEmail", ct."organizationName" AS "contactOrg",
+        ct.email AS "contactEmail", ct.phone AS "contactPhone", ct."organizationName" AS "contactOrg",
         c.subject, c."previewText" AS preview, c."latestDirection", c."lastMessageAt", c.status,
         (c."lastInboundAt" IS NOT NULL AND (rs."lastReadAt" IS NULL OR c."lastInboundAt" > rs."lastReadAt")) AS unread,
         (c.status <> 'ARCHIVED' AND c."lastInboundAt" IS NOT NULL AND (c."lastOutboundAt" IS NULL OR c."lastInboundAt" > c."lastOutboundAt")) AS "needsReply",
-        c."originCampaignId", cam.name AS "originCampaignName"
+        COALESCE(c."originCampaignId", c."originSmsCampaignId") AS "originCampaignId",
+        COALESCE(cam.name, scam.name) AS "originCampaignName"
       FROM "communication_conversations" c
       JOIN "communication_contacts" ct ON ct.id = c."contactId"
       LEFT JOIN "communication_conversation_read_states" rs ON rs."conversationId" = c.id AND rs."userId" = ${user.id}::uuid
       LEFT JOIN "communication_email_campaigns" cam ON cam.id = c."originCampaignId"
+      LEFT JOIN "communication_sms_campaigns" scam ON scam.id = c."originSmsCampaignId"
       WHERE ${where}
       ORDER BY c."lastMessageAt" DESC NULLS LAST
       LIMIT ${input.pageSize} OFFSET ${offset}
@@ -107,8 +118,10 @@ export class ConversationService {
       items: rows.map((r) => ({
         id: r.id,
         contactId: r.contactId,
+        channel: r.channel,
         contactName: r.contactName,
         contactEmail: r.contactEmail,
+        contactPhone: r.contactPhone,
         contactOrganization: r.contactOrg,
         subject: r.subject,
         preview: r.preview,
@@ -128,7 +141,9 @@ export class ConversationService {
   }
 
   private buildListWhere(userId: string, input: ListConversationsInput): Prisma.Sql {
-    const conds: Prisma.Sql[] = [Prisma.sql`c.channel = 'EMAIL'`];
+    const conds: Prisma.Sql[] = [];
+    if (input.channel) conds.push(Prisma.sql`c.channel = ${input.channel}::"CommunicationChannel"`);
+    else conds.push(Prisma.sql`c.channel IN ('EMAIL', 'SMS')`);
     if (input.view === "archived") conds.push(Prisma.sql`c.status = 'ARCHIVED'`);
     else conds.push(Prisma.sql`c.status <> 'ARCHIVED'`);
 
@@ -140,7 +155,7 @@ export class ConversationService {
     }
     if (input.search && input.search.trim()) {
       const q = `%${input.search.trim().toLowerCase()}%`;
-      conds.push(Prisma.sql`(LOWER(COALESCE(ct.email,'')) LIKE ${q} OR LOWER(COALESCE(ct."firstName",'') || ' ' || COALESCE(ct."lastName",'')) LIKE ${q} OR LOWER(COALESCE(c.subject,'')) LIKE ${q})`);
+      conds.push(Prisma.sql`(LOWER(COALESCE(ct.email,'')) LIKE ${q} OR COALESCE(ct.phone,'') LIKE ${q} OR COALESCE(ct."normalizedPhoneE164",'') LIKE ${q} OR LOWER(COALESCE(ct."firstName",'') || ' ' || COALESCE(ct."lastName",'')) LIKE ${q} OR LOWER(COALESCE(c.subject,'')) LIKE ${q})`);
     }
     return conds.reduce((acc, cur, i) => (i === 0 ? cur : Prisma.sql`${acc} AND ${cur}`));
   }
@@ -151,7 +166,7 @@ export class ConversationService {
       SELECT COUNT(*)::bigint AS count
       FROM "communication_conversations" c
       LEFT JOIN "communication_conversation_read_states" rs ON rs."conversationId" = c.id AND rs."userId" = ${user.id}::uuid
-      WHERE c.channel = 'EMAIL' AND c.status <> 'ARCHIVED'
+      WHERE c.channel IN ('EMAIL', 'SMS') AND c.status <> 'ARCHIVED'
         AND c."lastInboundAt" IS NOT NULL AND (rs."lastReadAt" IS NULL OR c."lastInboundAt" > rs."lastReadAt")
     `);
     return Number(rows[0]?.count ?? 0n);
@@ -162,8 +177,9 @@ export class ConversationService {
     const conversation = await this.prisma.communicationConversation.findUnique({
       where: { id },
       include: {
-        contact: { include: { preferences: { where: { channel: "EMAIL" }, select: { consentStatus: true } }, listMemberships: { include: { list: { select: { name: true } } } }, tagAssignments: { include: { tag: { select: { name: true } } } } } },
+        contact: { include: { preferences: { select: { channel: true, consentStatus: true } }, listMemberships: { include: { list: { select: { name: true } } } }, tagAssignments: { include: { tag: { select: { name: true } } } } } },
         originCampaign: { select: { name: true } },
+        originSmsCampaign: { select: { name: true } },
         messages: { orderBy: { createdAt: "asc" }, take: THREAD_MESSAGE_LIMIT, include: { attachments: true } },
       },
     });
@@ -172,28 +188,39 @@ export class ConversationService {
     // Opening the conversation marks it read for THIS user only.
     await this.markRead(user, id);
 
-    const suppressed = conversation.contact.normalizedEmail
-      ? !!(await this.prisma.communicationSuppression.findFirst({ where: { channel: "EMAIL", normalizedAddress: conversation.contact.normalizedEmail, active: true }, select: { id: true } }))
-      : false;
+    const [emailSuppression, smsSuppression] = await Promise.all([
+      conversation.contact.normalizedEmail
+        ? this.prisma.communicationSuppression.findFirst({ where: { channel: "EMAIL", normalizedAddress: conversation.contact.normalizedEmail, active: true }, select: { id: true } })
+        : Promise.resolve(null),
+      conversation.contact.normalizedPhoneE164
+        ? this.prisma.communicationSuppression.findFirst({ where: { channel: "SMS", normalizedAddress: conversation.contact.normalizedPhoneE164, active: true }, select: { id: true } })
+        : Promise.resolve(null),
+    ]);
+    const consentFor = (ch: "EMAIL" | "SMS") => conversation.contact.preferences.find((p) => p.channel === ch)?.consentStatus ?? null;
 
     return {
       id: conversation.id,
+      channel: conversation.channel,
       contact: {
         id: conversation.contact.id,
         name: [conversation.contact.firstName, conversation.contact.lastName].filter(Boolean).join(" ") || null,
         email: conversation.contact.email,
+        phone: conversation.contact.phone,
         organization: conversation.contact.organizationName,
-        emailConsent: conversation.contact.preferences[0]?.consentStatus ?? null,
-        suppressed,
+        emailConsent: consentFor("EMAIL"),
+        smsConsent: consentFor("SMS"),
+        suppressed: !!emailSuppression,
+        smsSuppressed: !!smsSuppression,
         lists: conversation.contact.listMemberships.map((m) => m.list.name),
         tags: conversation.contact.tagAssignments.map((t) => t.tag.name),
       },
       subject: conversation.subject,
+      businessNumber: conversation.businessNumber,
       status: conversation.status,
       needsReply: deriveNeedsReply(conversation),
-      replyAddress: conversation.threadToken ? formatReplyAddress(this.config, conversation.threadToken) : null,
-      originCampaignId: conversation.originCampaignId,
-      originCampaignName: conversation.originCampaign?.name ?? null,
+      replyAddress: conversation.channel === "EMAIL" && conversation.threadToken ? formatReplyAddress(this.config, conversation.threadToken) : null,
+      originCampaignId: conversation.originCampaignId ?? conversation.originSmsCampaignId,
+      originCampaignName: conversation.originCampaign?.name ?? conversation.originSmsCampaign?.name ?? null,
       createdAt: conversation.createdAt.toISOString(),
       messages: conversation.messages.map(toMessageView),
     };
@@ -236,6 +263,65 @@ export class ConversationService {
   }
 
   // --- reply -----------------------------------------------------------------
+  /** Channel-aware reply for the unified inbox: routes to the email or SMS path. */
+  async replyToConversation(user: RequestUser, id: string, body: string, attachments: ReplyAttachmentInput[] = []): Promise<{ conversationId: string; message: MessageView }> {
+    const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, select: { channel: true } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+    return conversation.channel === "SMS" ? this.replySms(user, id, body) : this.reply(user, id, body, attachments);
+  }
+
+  /**
+   * Send a 1:1 SMS reply. The recipient is ALWAYS the conversation contact's
+   * validated number — never an arbitrary To — and the sender is always the
+   * configured Twilio identity. STOP / active SMS suppression blocks the send even
+   * for a human reply, and replying never changes the contact's SMS consent.
+   */
+  async replySms(user: RequestUser, id: string, body: string): Promise<{ conversationId: string; message: MessageView }> {
+    const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, include: { contact: { select: { phone: true, normalizedPhoneE164: true } } } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+    if (conversation.channel !== "SMS") throw new BadRequestException("This is not an SMS conversation.");
+    const to = conversation.contact.normalizedPhoneE164;
+    if (!to) throw new BadRequestException("This contact has no valid phone number to reply to.");
+
+    const validated = validateSmsBody(body);
+    // Provider readiness (mock always passes; A2P is not required for 1:1 replies).
+    const readiness = smsReadiness(this.config, this.smsTransport);
+    if (!readiness.directReplyAllowed) throw new ForbiddenException(readiness.directReplyBlockedReason ?? "SMS sending is not available.");
+
+    // STOP / provider block / suppression always wins, even over a manual reply.
+    const suppressed = await this.prisma.communicationSuppression.findFirst({ where: { channel: "SMS", normalizedAddress: to, active: true }, select: { reason: true } });
+    if (suppressed) throw new ForbiddenException("This number has opted out of SMS and cannot be messaged until they text START.");
+
+    const info = calculateSegments(validated);
+    const preview = validated.replace(/\s+/g, " ").trim().slice(0, 160);
+    const message = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.communicationMessage.create({
+        data: {
+          conversationId: id,
+          channel: "SMS",
+          direction: "OUTBOUND",
+          status: "QUEUED",
+          textBody: validated,
+          previewText: preview,
+          toAddress: to,
+          fromAddress: conversation.businessNumber,
+          encoding: info.encoding,
+          segmentCount: info.segmentCount,
+          nextAttemptAt: new Date(),
+        },
+      });
+      await tx.communicationConversation.update({
+        where: { id },
+        data: { lastMessageAt: new Date(), lastOutboundAt: new Date(), latestDirection: "OUTBOUND", previewText: preview, status: conversation.status === "ARCHIVED" ? "OPEN" : conversation.status, archivedAt: conversation.status === "ARCHIVED" ? null : conversation.archivedAt },
+      });
+      await tx.communicationConversationReadState.upsert({ where: { conversationId_userId: { conversationId: id, userId: user.id } }, create: { conversationId: id, userId: user.id, lastReadAt: new Date() }, update: { lastReadAt: new Date() } });
+      return created;
+    });
+
+    await this.audit.record({ action: "communication.sms_reply.queued", entityType: "CommunicationConversation", entityId: id, actorUserId: user.id, metadata: { messageId: message.id, segments: info.segmentCount } });
+    return { conversationId: id, message: toMessageView(message) };
+  }
+
   async reply(user: RequestUser, id: string, markdown: string, attachments: ReplyAttachmentInput[] = []): Promise<{ conversationId: string; message: MessageView }> {
     const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, include: { contact: { select: { email: true, normalizedEmail: true } } } });
     if (!conversation) throw new NotFoundException("Conversation not found");

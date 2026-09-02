@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, type CommunicationChannel } from "@prisma/client";
+import { Prisma, type CommunicationChannel, type CommunicationSuppressionReason } from "@prisma/client";
 import { PrismaService } from "../../../database/prisma.service";
 import type { PaginatedResult } from "../../../common/types/api-response";
 import { AuditService } from "../../audit/audit.service";
@@ -128,6 +128,29 @@ export class SuppressionsService {
       actorRef: `system:${source}`,
       metadata: { channel, reason },
     });
+  }
+
+  /**
+   * System-initiated RELEASE of a suppression, restricted to specific reasons.
+   * Used by a provider-authoritative opt-in (Twilio START): it clears the
+   * USER_OPT_OUT block only, and never touches an ADMIN_BLOCK, HARD_BOUNCE,
+   * INVALID_ADDRESS or SPAM_COMPLAINT suppression put there for another reason.
+   */
+  async releaseSystem(channel: CommunicationChannel, normalizedAddress: string, reasons: CommunicationSuppressionReason[], source: string): Promise<boolean> {
+    const existing = await this.prisma.communicationSuppression.findUnique({
+      where: { channel_normalizedAddress: { channel, normalizedAddress } },
+      select: { id: true, active: true, reason: true },
+    });
+    if (!existing || !existing.active || !reasons.includes(existing.reason)) return false;
+    await this.prisma.communicationSuppression.update({ where: { id: existing.id }, data: { active: false, source } });
+    await this.audit.record({
+      action: "communication.suppression.removed",
+      entityType: "CommunicationSuppression",
+      entityId: existing.id,
+      actorRef: `system:${source}`,
+      metadata: { channel, reason: existing.reason },
+    });
+    return true;
   }
 
   /** Active-suppression flags for a batch of normalized addresses (no N+1). */

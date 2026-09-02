@@ -1,4 +1,5 @@
 import type {
+  CommunicationChannel,
   CommunicationConversation,
   CommunicationConversationStatus,
   CommunicationInboundEmailReview,
@@ -15,8 +16,10 @@ const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 export interface ConversationListItem {
   id: string;
   contactId: string;
+  channel: CommunicationChannel;
   contactName: string | null;
   contactEmail: string | null;
+  contactPhone: string | null;
   contactOrganization: string | null;
   subject: string | null;
   preview: string | null;
@@ -52,6 +55,10 @@ export interface MessageView {
   fromName: string | null;
   toAddress: string | null;
   autoSubmitted: boolean;
+  /** Provider-classified SMS keyword (STOP/START/HELP) — never a staff-reply task. */
+  smsOptOutType: string | null;
+  encoding: string | null;
+  segmentCount: number | null;
   errorMessage: string | null;
   sentAt: string | null;
   receivedAt: string | null;
@@ -73,6 +80,9 @@ export function toMessageView(m: CommunicationMessage & { attachments?: Communic
     fromName: m.fromName,
     toAddress: m.toAddress,
     autoSubmitted: m.autoSubmitted,
+    smsOptOutType: m.smsOptOutType,
+    encoding: m.encoding,
+    segmentCount: m.segmentCount,
     errorMessage: m.lastErrorMessageSafe,
     sentAt: iso(m.sentAt),
     receivedAt: iso(m.receivedAt),
@@ -86,17 +96,23 @@ export interface ContactContext {
   id: string;
   name: string | null;
   email: string | null;
+  phone: string | null;
   organization: string | null;
   emailConsent: string | null;
+  smsConsent: string | null;
   suppressed: boolean;
+  smsSuppressed: boolean;
   lists: string[];
   tags: string[];
 }
 
 export interface ConversationDetail {
   id: string;
+  channel: CommunicationChannel;
   contact: ContactContext;
   subject: string | null;
+  /** The Nonnis/Twilio business number backing an SMS conversation. */
+  businessNumber: string | null;
   status: CommunicationConversationStatus;
   needsReply: boolean;
   replyAddress: string | null;
@@ -109,6 +125,8 @@ export interface ConversationDetail {
 export interface InboundReviewView {
   id: string;
   provider: string;
+  channel: CommunicationChannel;
+  /** Email address, or E.164 phone number for an SMS review item. */
   fromEmail: string;
   fromName: string | null;
   toAddress: string | null;
@@ -126,6 +144,7 @@ export function toInboundReviewView(r: CommunicationInboundEmailReview): Inbound
   return {
     id: r.id,
     provider: r.provider,
+    channel: r.channel,
     fromEmail: r.fromEmail,
     fromName: r.fromName,
     toAddress: r.toAddress,

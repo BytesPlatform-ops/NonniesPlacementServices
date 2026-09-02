@@ -1,6 +1,6 @@
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsMimeType, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from "class-validator";
-import { CommunicationInboundReviewStatus } from "@prisma/client";
+import { CommunicationChannel, CommunicationInboundReviewStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
 import { MAX_ATTACHMENTS } from "../email/attachment-policy";
 import { MAX_REPLY_CHARS as REPLY_LIMIT } from "../email/reply-format";
@@ -9,6 +9,8 @@ const VIEWS = ["all", "unread", "needs_reply", "archived"] as const;
 
 export class ListConversationsDto extends PaginationQueryDto {
   @IsOptional() @IsIn(VIEWS) view: (typeof VIEWS)[number] = "all";
+  /** Unified inbox channel filter — omitted means every channel. */
+  @IsOptional() @IsIn(Object.values(CommunicationChannel)) channel?: CommunicationChannel;
   @IsOptional() @IsString() @MaxLength(200) search?: string;
 }
 
@@ -32,6 +34,7 @@ export class AttachmentUploadUrlDto {
 
 export class ListReviewDto extends PaginationQueryDto {
   @IsOptional() @IsIn(Object.values(CommunicationInboundReviewStatus)) status?: CommunicationInboundReviewStatus;
+  @IsOptional() @IsIn(Object.values(CommunicationChannel)) channel?: CommunicationChannel;
 }
 
 export class LinkReviewDto {
