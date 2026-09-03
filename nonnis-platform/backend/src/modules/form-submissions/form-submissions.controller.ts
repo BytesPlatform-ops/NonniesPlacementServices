@@ -45,8 +45,9 @@ export class FormSubmissionsController {
   download(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Param("attachmentId", new ParseUUIDPipe()) attachmentId: string,
-  ): Promise<{ url: string; fileName: string }> {
-    return this.attachments.downloadUrl(id, attachmentId);
+    @Query("mode") mode?: string,
+  ): Promise<{ url: string; fileName: string; contentType: string; previewable: boolean }> {
+    return this.attachments.downloadUrl(id, attachmentId, mode === "preview" ? "preview" : "download");
   }
 
   @Patch(":id")

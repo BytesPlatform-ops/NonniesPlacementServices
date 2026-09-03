@@ -21,6 +21,17 @@ export const FORM_SUBMISSIONS_BUCKET = "nonnis-form-submissions-private";
 /** Website submissions may carry the generated PDF plus a few uploads. */
 export const MAX_SUBMISSION_FILES = 6;
 
+/**
+ * Types a browser renders safely inline. Deliberately narrow: HTML and SVG are
+ * excluded because serving them inline would execute their script in the
+ * storage origin's context. Everything else is download-only.
+ */
+const PREVIEWABLE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"]);
+
+export function isPreviewableType(contentType: string): boolean {
+  return PREVIEWABLE_TYPES.has(contentType.toLowerCase());
+}
+
 export interface IncomingFile {
   kind: FormSubmissionFileKind;
   fileName: string;
@@ -35,6 +46,8 @@ export interface SubmissionAttachmentView {
   contentType: string;
   sizeBytes: number;
   createdAt: string;
+  /** Whether the CRM can show this inline instead of only offering a download. */
+  previewable: boolean;
 }
 
 @Injectable()
@@ -102,22 +115,40 @@ export class SubmissionAttachmentsService {
       orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
       select: { id: true, kind: true, fileName: true, contentType: true, sizeBytes: true, createdAt: true },
     });
-    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), previewable: isPreviewableType(r.contentType) }));
   }
 
   /**
    * Mint a short-lived signed URL for one attachment. The storage path is never
    * exposed; the attachment is addressed by its id and must belong to the given
    * submission, so an id from another submission cannot be fetched through it.
+   *
+   * `mode` picks the Content-Disposition: "download" saves the file, "preview"
+   * serves it inline so staff can read a PDF or view an image without first
+   * downloading it. Preview is only offered for types a browser renders safely
+   * — never for arbitrary types, which would let a stored file be served inline
+   * on a real origin.
    */
-  async downloadUrl(submissionId: string, attachmentId: string): Promise<{ url: string; fileName: string }> {
+  async downloadUrl(
+    submissionId: string,
+    attachmentId: string,
+    mode: "download" | "preview" = "download",
+  ): Promise<{ url: string; fileName: string; contentType: string; previewable: boolean }> {
     const row = await this.prisma.websiteFormSubmissionAttachment.findFirst({
       where: { id: attachmentId, submissionId },
-      select: { storagePath: true, fileName: true },
+      select: { storagePath: true, fileName: true, contentType: true },
     });
     if (!row) throw new NotFoundException("Attachment not found");
+
+    const previewable = isPreviewableType(row.contentType);
+    const inline = mode === "preview" && previewable;
     const ttl = this.config.get("communicationsAttachmentUrlTtlSeconds", { infer: true });
-    const url = await this.storage.createSignedDownloadUrl(FORM_SUBMISSIONS_BUCKET, row.storagePath, ttl, row.fileName);
-    return { url, fileName: row.fileName };
+    const url = await this.storage.createSignedDownloadUrl(
+      FORM_SUBMISSIONS_BUCKET,
+      row.storagePath,
+      ttl,
+      inline ? undefined : row.fileName,
+    );
+    return { url, fileName: row.fileName, contentType: row.contentType, previewable };
   }
 }

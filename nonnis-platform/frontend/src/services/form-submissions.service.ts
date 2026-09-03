@@ -38,7 +38,16 @@ export function updateFormSubmission(
   return apiPatch<FormSubmissionDetail>(`/api/v1/form-submissions/${id}`, body);
 }
 
-/** Mint a short-lived signed URL for one stored submission file. */
-export function getSubmissionAttachmentUrl(submissionId: string, attachmentId: string): Promise<{ url: string; fileName: string }> {
-  return apiGet(`/api/v1/form-submissions/${submissionId}/attachments/${attachmentId}/download`);
+/**
+ * Mint a short-lived signed URL for one stored submission file.
+ *
+ * "preview" serves the file inline so it can be shown in the app; "download"
+ * sets an attachment disposition so the browser saves it.
+ */
+export function getSubmissionAttachmentUrl(
+  submissionId: string,
+  attachmentId: string,
+  mode: "download" | "preview" = "download",
+): Promise<{ url: string; fileName: string; contentType: string; previewable: boolean }> {
+  return apiGet(`/api/v1/form-submissions/${submissionId}/attachments/${attachmentId}/download?mode=${mode}`);
 }

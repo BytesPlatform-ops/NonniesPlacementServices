@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Download, FileText, X } from "lucide-react";
+import { Archive, ArchiveRestore, Download, Eye, FileText, X } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { submissionStatusLabel, submissionStatusTone } from "@/lib/form-submission-status";
 import { ApiError } from "@/lib/api-client";
@@ -301,12 +301,14 @@ function fileSize(bytes: number): string {
 function AttachmentList({ detail }: { detail: FormSubmissionDetail }) {
   const toast = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; fileName: string; contentType: string } | null>(null);
 
-  const open = async (attachmentId: string) => {
+  const run = async (attachmentId: string, mode: "download" | "preview") => {
     setBusyId(attachmentId);
     try {
-      const { url } = await getSubmissionAttachmentUrl(detail.id, attachmentId);
-      window.open(url, "_blank", "noopener,noreferrer");
+      const file = await getSubmissionAttachmentUrl(detail.id, attachmentId, mode);
+      if (mode === "preview") setPreview({ url: file.url, fileName: file.fileName, contentType: file.contentType });
+      else window.open(file.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not open the file.");
     } finally {
@@ -326,30 +328,93 @@ function AttachmentList({ detail }: { detail: FormSubmissionDetail }) {
     );
   }
 
+  const actionCls =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+
   return (
-    <ul className="divide-y divide-sage">
-      {detail.attachments.map((a) => (
-        <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
-          <span className="flex min-w-0 items-center gap-2">
-            <FileText className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-            <span className="min-w-0">
-              <span className="block truncate text-sm text-slate-800">{a.fileName}</span>
-              <span className="text-xs text-slate-400">
-                {a.kind === "REPORT" ? "PDF record" : "Uploaded document"} · {fileSize(a.sizeBytes)}
+    <>
+      <ul className="divide-y divide-sage">
+        {detail.attachments.map((a) => (
+          <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+            <span className="flex min-w-0 items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-slate-800">{a.fileName}</span>
+                <span className="text-xs text-slate-400">
+                  {a.kind === "REPORT" ? "PDF record" : "Uploaded document"} · {fileSize(a.sizeBytes)}
+                </span>
               </span>
             </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {a.previewable ? (
+                <button type="button" onClick={() => void run(a.id, "preview")} disabled={busyId === a.id} className={actionCls}>
+                  <Eye className="h-4 w-4" aria-hidden /> Preview
+                </button>
+              ) : null}
+              <button type="button" onClick={() => void run(a.id, "download")} disabled={busyId === a.id} className={actionCls}>
+                <Download className="h-4 w-4" aria-hidden /> {busyId === a.id ? "Opening…" : "Download"}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {preview ? <AttachmentPreview file={preview} onClose={() => setPreview(null)} /> : null}
+    </>
+  );
+}
+
+/**
+ * In-app viewer for a stored file. PDFs and text render in a sandboxed iframe
+ * and images in an `img` tag; the signed URL is served inline for this and
+ * expires shortly, so nothing here creates a lasting public link.
+ */
+function AttachmentPreview({
+  file,
+  onClose,
+}: {
+  file: { url: string; fileName: string; contentType: string };
+  onClose: () => void;
+}) {
+  const isImage = file.contentType.startsWith("image/");
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex flex-col bg-slate-900/70 p-4 sm:p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Preview of ${file.fileName}`}
+      onClick={onClose}
+    >
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-card" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-sage bg-ivory px-4 py-2.5">
+          <span className="min-w-0 truncate text-sm font-medium text-umber">{file.fileName}</span>
+          <span className="flex shrink-0 items-center gap-3">
+            <a
+              href={file.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-brand-700 hover:underline"
+            >
+              Open in new tab
+            </a>
+            <button type="button" onClick={onClose} aria-label="Close preview" className="text-slate-400 hover:text-slate-600">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
           </span>
-          <button
-            type="button"
-            onClick={() => void open(a.id)}
-            disabled={busyId === a.id}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" aria-hidden /> {busyId === a.id ? "Opening…" : "Open"}
-          </button>
-        </li>
-      ))}
-    </ul>
+        </div>
+        <div className="flex-1 overflow-auto bg-slate-100">
+          {isImage ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- a short-lived
+               signed URL cannot be run through the image optimizer, which would
+               need a stable, allow-listed host. */
+            <img src={file.url} alt={file.fileName} className="mx-auto max-h-full max-w-full object-contain" />
+          ) : (
+            <iframe src={file.url} title={file.fileName} className="h-full w-full border-0" sandbox="" />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

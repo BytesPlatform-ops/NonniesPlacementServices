@@ -36,6 +36,8 @@ export interface SubmissionAttachment {
   contentType: string;
   sizeBytes: number;
   createdAt: string;
+  /** True when the CRM can render this inline instead of only downloading it. */
+  previewable: boolean;
 }
 
 export interface FormSubmissionDetail extends FormSubmissionSummary {

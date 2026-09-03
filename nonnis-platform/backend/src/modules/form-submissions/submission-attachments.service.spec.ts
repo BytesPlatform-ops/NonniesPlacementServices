@@ -68,10 +68,35 @@ describe("SubmissionAttachmentsService.storeMany", () => {
 });
 
 describe("SubmissionAttachmentsService.downloadUrl", () => {
+  const pdfRow = { storagePath: "submissions/s/a.pdf", fileName: "Record.pdf", contentType: "application/pdf" };
+
   it("mints a short-lived signed url scoped to the submission", async () => {
-    const { svc, createSignedDownloadUrl } = build({ row: { storagePath: "submissions/s/a.pdf", fileName: "Record.pdf" } });
-    await expect(svc.downloadUrl("sub-1", "att-1")).resolves.toEqual({ url: "https://signed.example/x", fileName: "Record.pdf" });
+    const { svc, createSignedDownloadUrl } = build({ row: pdfRow });
+    await expect(svc.downloadUrl("sub-1", "att-1")).resolves.toEqual({
+      url: "https://signed.example/x",
+      fileName: "Record.pdf",
+      contentType: "application/pdf",
+      previewable: true,
+    });
+    // Download mode passes a filename, which sets an attachment disposition.
     expect(createSignedDownloadUrl).toHaveBeenCalledWith(FORM_SUBMISSIONS_BUCKET, "submissions/s/a.pdf", 300, "Record.pdf");
+  });
+
+  it("serves a previewable file inline, without an attachment disposition", async () => {
+    const { svc, createSignedDownloadUrl } = build({ row: pdfRow });
+    await svc.downloadUrl("sub-1", "att-1", "preview");
+    expect(createSignedDownloadUrl).toHaveBeenCalledWith(FORM_SUBMISSIONS_BUCKET, "submissions/s/a.pdf", 300, undefined);
+  });
+
+  it("refuses to serve a non-previewable type inline even when preview is asked for", async () => {
+    // Serving e.g. a Word document inline gains nothing, and the allowlist is
+    // what keeps script-bearing types from ever being rendered by the browser.
+    const { svc, createSignedDownloadUrl } = build({
+      row: { storagePath: "submissions/s/a.docx", fileName: "Notes.docx", contentType: "application/msword" },
+    });
+    const result = await svc.downloadUrl("sub-1", "att-1", "preview");
+    expect(result.previewable).toBe(false);
+    expect(createSignedDownloadUrl).toHaveBeenCalledWith(FORM_SUBMISSIONS_BUCKET, "submissions/s/a.docx", 300, "Notes.docx");
   });
 
   it("404s an attachment that belongs to a different submission", async () => {

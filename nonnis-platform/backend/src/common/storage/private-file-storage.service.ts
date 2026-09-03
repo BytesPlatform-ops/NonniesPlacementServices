@@ -63,7 +63,13 @@ export class PrivateFileStorageService {
     if (error) throw new ServiceUnavailableException(`Could not store the file: ${error.message}`);
   }
 
-  /** Short-lived signed download URL — the only way a stored file is reachable. */
+  /**
+   * Short-lived signed URL — the only way a stored file is reachable.
+   *
+   * Passing `downloadName` sets Content-Disposition to attachment, so the
+   * browser saves the file. Omit it to serve the object inline, which is what
+   * makes an in-app preview possible instead of forcing a download first.
+   */
   async createSignedDownloadUrl(bucket: string, path: string, ttlSeconds: number, downloadName?: string): Promise<string> {
     const safeName = downloadName ? PrivateFileStorageService.headerSafeFilename(downloadName) : undefined;
     const { data, error } = await this.getClient()
