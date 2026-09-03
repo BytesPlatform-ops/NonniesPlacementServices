@@ -7,6 +7,7 @@ import { SkipTransform } from "../../../common/decorators/skip-transform.decorat
 import { INBOUND_EMAIL_ADAPTER, type EmailInboundAdapter } from "../providers/email-inbound-adapter";
 import { InboundEmailService } from "./inbound-email.service";
 import { verifyInboundSecret } from "./email-config";
+import { isTransientInfrastructureError } from "../transient-error";
 
 /**
  * Provider INBOUND-content webhook (separate from the delivery-event webhook). Brevo
@@ -47,9 +48,21 @@ export class EmailInboundWebhookController {
       const duplicate = results.filter((r) => r.status === "duplicate").length;
       res.status(200).json({ ok: true, processed: results.length, linked, review, duplicate });
     } catch (err) {
-      // Acknowledge so the provider does not retry-storm, but never fail silently:
-      // record a safe, content-free trace so an operator can see it happened.
-      this.logger.error(`Inbound email processing failed: ${err instanceof Error ? err.message : "unknown"}`);
+      const detail = err instanceof Error ? err.message : "unknown";
+
+      // A database blip must NOT be acknowledged. Answering 200 tells the
+      // provider the reply was handled and it is never redelivered, so a
+      // transient outage silently destroys a real customer reply. Answering
+      // 5xx lets the provider's own retry schedule recover it.
+      if (isTransientInfrastructureError(err)) {
+        this.logger.error(`Inbound email temporarily unprocessable, asking the provider to retry: ${detail}`);
+        res.status(503).json({ ok: false, retry: true });
+        return;
+      }
+
+      // A payload we cannot parse will fail identically on every retry, so it is
+      // acknowledged to avoid a retry storm — but never silently.
+      this.logger.error(`Inbound email processing failed permanently: ${detail}`);
       res.status(200).json({ ok: true, processed: 0 });
     }
   }

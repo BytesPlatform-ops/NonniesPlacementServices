@@ -8,6 +8,7 @@ import { SMS_INBOUND_ADAPTER, type SmsInboundAdapter } from "../providers/sms-in
 import { InboundSmsService } from "./inbound-sms.service";
 import { SmsStatusService, normalizeTwilioStatus } from "./sms-status.service";
 import { inboundWebhookUrl, statusCallbackUrl } from "./sms-config";
+import { isTransientInfrastructureError } from "../transient-error";
 
 /**
  * Twilio SMS webhooks. Two SEPARATE endpoints:
@@ -64,7 +65,16 @@ export class SmsWebhookController {
       await this.inbound.ingest(normalized);
     } catch (err) {
       // Never echo message content or provider payloads into logs.
-      this.logger.error(`Inbound SMS processing failed: ${err instanceof Error ? err.message : "unknown"}`);
+      const detail = err instanceof Error ? err.message : "unknown";
+      // A database blip must not be acknowledged: a 2xx tells the provider the
+      // message was handled and it is never redelivered, so a transient outage
+      // would silently destroy a real inbound message.
+      if (isTransientInfrastructureError(err)) {
+        this.logger.error(`Inbound SMS temporarily unprocessable, asking the provider to retry: ${detail}`);
+        res.status(503).send();
+        return;
+      }
+      this.logger.error(`Inbound SMS processing failed permanently: ${detail}`);
     }
     res.status(204).send(); // no TwiML — the CRM never auto-replies
   }
@@ -84,7 +94,13 @@ export class SmsWebhookController {
       try {
         await this.status.apply({ providerMessageId: parsed.providerMessageId, status: mapped, errorCode: parsed.errorCode, errorMessageSafe: parsed.errorMessageSafe });
       } catch (err) {
-        this.logger.error(`SMS status callback failed: ${err instanceof Error ? err.message : "unknown"}`);
+        const detail = err instanceof Error ? err.message : "unknown";
+        if (isTransientInfrastructureError(err)) {
+          this.logger.error(`SMS status callback temporarily unprocessable, asking the provider to retry: ${detail}`);
+          res.status(503).send();
+          return;
+        }
+        this.logger.error(`SMS status callback failed permanently: ${detail}`);
       }
     }
     res.status(204).send();
