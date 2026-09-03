@@ -37,8 +37,14 @@ export interface DeliveryFailureFilters {
   pageSize: number;
 }
 
-/** Provider-neutral error codes that mean "the recipient/message is permanently bad". */
-const PERMANENT_CODES = new Set(["HARD_BOUNCE", "PROVIDER_FAILED", "MOCK_BOUNCE", "MOCK_INVALID", "21610", "SMS_SUPPRESSED", "NO_RECIPIENT", "NO_CONVERSATION", "ATTACHMENT_UNAVAILABLE"]);
+/**
+ * Provider-neutral error codes that mean "the recipient/message is permanently bad".
+ *
+ * ATTACHMENT_UNAVAILABLE is deliberately NOT here: a file can be unreadable
+ * because object storage was briefly unavailable, and blocking the retry left an
+ * operator with a dead message and no way to recover it.
+ */
+const PERMANENT_CODES = new Set(["HARD_BOUNCE", "PROVIDER_FAILED", "MOCK_BOUNCE", "MOCK_INVALID", "21610", "SMS_SUPPRESSED", "NO_RECIPIENT", "NO_CONVERSATION"]);
 /** Codes that mean nothing was ever sent because the provider was misconfigured. */
 const CONFIGURATION_CODES = new Set(["AUTH", "NOT_CONFIGURED", "CONFIGURATION", "HTTP_401", "HTTP_403"]);
 

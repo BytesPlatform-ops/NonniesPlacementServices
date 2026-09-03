@@ -80,3 +80,19 @@ describe("DeliveryOperationsService.retry", () => {
     await expect(svc.retry(user, "EMAIL_REPLY", "m1", true)).rejects.toThrow(/not found/i);
   });
 });
+
+describe("retry policy for attachment failures", () => {
+  const { svc } = build(null);
+
+  it("allows a retry when a file could not be read", () => {
+    // Object storage can be briefly unavailable. Refusing the retry left the
+    // operator holding a dead message with no way to recover it.
+    expect(eligibility(svc, "FAILED", "ATTACHMENT_UNAVAILABLE").allowed).toBe(true);
+  });
+
+  it("still refuses a retry for a genuinely dead recipient", () => {
+    expect(eligibility(svc, "FAILED", "HARD_BOUNCE").allowed).toBe(false);
+    expect(eligibility(svc, "FAILED", "NO_RECIPIENT").allowed).toBe(false);
+    expect(eligibility(svc, "BOUNCED", null).allowed).toBe(false);
+  });
+});
