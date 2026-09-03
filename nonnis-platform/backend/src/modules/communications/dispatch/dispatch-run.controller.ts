@@ -35,12 +35,23 @@ export class DispatchRunController {
     private readonly sms: SmsDispatcherService,
   ) {}
 
-  private authorized(provided: string | undefined): boolean {
+  /**
+   * Accepts the secret as a bearer token, a header, or a query parameter.
+   *
+   * The bearer form exists so a platform scheduler can authenticate without the
+   * secret ever appearing in a committed config file or a request URL (Vercel
+   * Cron sends `Authorization: Bearer $CRON_SECRET`). Comparison is constant
+   * time and length-checked first.
+   */
+  private authorized(candidates: Array<string | undefined>): boolean {
     const expected = this.config.get("communicationsWebhookSecret", { infer: true });
-    if (!expected || !provided) return false;
-    const a = Buffer.from(provided);
+    if (!expected) return false;
     const b = Buffer.from(expected);
-    return a.length === b.length && timingSafeEqual(a, b);
+    return candidates.some((provided) => {
+      if (!provided) return false;
+      const a = Buffer.from(provided);
+      return a.length === b.length && timingSafeEqual(a, b);
+    });
   }
 
   @Post("run")
@@ -49,9 +60,11 @@ export class DispatchRunController {
   async run(
     @Query("secret") secret: string | undefined,
     @Headers("x-dispatch-secret") headerSecret: string | undefined,
+    @Headers("authorization") authorization: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    if (!this.authorized(secret ?? headerSecret)) {
+    const bearer = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : undefined;
+    if (!this.authorized([bearer, headerSecret, secret])) {
       res.status(401).json({ ok: false });
       return;
     }
