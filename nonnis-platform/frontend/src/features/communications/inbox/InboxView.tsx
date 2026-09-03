@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Inbox as InboxIcon, Search } from "lucide-react";
 import { useAsync } from "@/hooks/use-async";
+import { useUnreadMessages } from "@/providers/unread-messages-provider";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { listConversations, reviewPendingCount, unreadCount } from "@/services/communications-inbox.service";
@@ -67,17 +68,20 @@ export function InboxView() {
     [tab, debounced, page, channel],
   );
   const list = useAsync(() => (isReview ? Promise.resolve(null) : listConversations(filters)), [isReview, filters]);
+  const { refresh: refreshUnread } = useUnreadMessages();
   const counts = useAsync(() => Promise.all([unreadCount(), reviewPendingCount()]).then(([u, r]) => ({ unread: u.count, review: r.count })), []);
 
   // Light inbox polling; reloading the list/badges without disrupting the open thread.
   useEffect(() => {
-    const id = setInterval(() => { if (!isReview) list.reload(); counts.reload(); }, LIST_POLL_MS);
+    const id = setInterval(() => { if (!isReview) list.reload(); counts.reload(); refreshUnread(); }, LIST_POLL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReview, filters]);
 
   const select = (id: string) => setSelectedId(id);
-  const refreshLists = () => { if (!isReview) list.reload(); counts.reload(); };
+  // Reading a conversation changes the unread count, so the app-wide badge is
+  // refreshed with the page's own lists rather than waiting for its next poll.
+  const refreshLists = () => { if (!isReview) list.reload(); counts.reload(); refreshUnread(); };
 
   const badge = (n: number) => (n > 0 ? <span className="ml-1 rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{n}</span> : null);
 

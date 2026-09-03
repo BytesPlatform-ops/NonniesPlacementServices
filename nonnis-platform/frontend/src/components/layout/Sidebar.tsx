@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUnreadMessages } from "@/providers/unread-messages-provider";
 import {
   Activity,
   List,
@@ -78,6 +79,7 @@ const ICONS: Record<string, LucideIcon> = {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { count: unread } = useUnreadMessages();
   const { permissions, me, activeOrganizationId } = useAuth();
   const isProvider = activeOrgIsProvider(me, activeOrganizationId);
   const groups = isProvider ? visibleProviderNav(permissions) : visibleNav(permissions);
@@ -118,7 +120,17 @@ export function Sidebar() {
                       )}
                     >
                       <Icon className="h-4 w-4" aria-hidden />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {/* A persistent count answers "is anything waiting?" at a
+                          glance; the toast only fires at the moment of arrival. */}
+                      {item.href === "/communications/inbox" && unread !== null && unread > 0 ? (
+                        <span
+                          aria-label={`${unread} unread conversation${unread === 1 ? "" : "s"}`}
+                          className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                        >
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 );
