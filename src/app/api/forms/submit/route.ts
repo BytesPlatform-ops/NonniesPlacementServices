@@ -46,14 +46,17 @@ export async function POST(req: Request) {
     const submittedAt = body.submittedAt ? new Date(body.submittedAt) : new Date();
     const referenceId = makeReferenceId(body.formName, submittedAt);
 
-    await sendFormEmail({ ...body, referenceId });
+    // The PDF is rendered once, inside the email step, and reused for storage —
+    // it is never generated twice, and a failed render is reported as absent
+    // rather than silently claimed.
+    const { pdf } = await sendFormEmail({ ...body, referenceId });
 
     // Additive: also persist the normalized submission to the Nonni's platform
     // admin panel. Best-effort — a persistence failure must never affect the
     // already-completed email/PDF flow or the user's success response. Only the
     // reference id is logged (never the submission contents).
     try {
-      await persistSubmission({ ...body, referenceId });
+      await persistSubmission({ ...body, referenceId }, pdf);
     } catch (persistErr) {
       console.error(
         `[api/forms/submit] platform persistence failed for ${referenceId}:`,

@@ -73,7 +73,13 @@ function getTransporter(): Transporter {
   return cached;
 }
 
-export async function sendFormEmail(sub: FormSubmission): Promise<void> {
+/**
+ * Sends the submission email and returns the generated PDF so the caller can
+ * store it without rendering it a second time. `pdf` is null when generation
+ * failed — the email still goes out, and the caller must not claim a report
+ * exists.
+ */
+export async function sendFormEmail(sub: FormSubmission): Promise<{ pdf: Buffer | null }> {
   const to = process.env.FORM_TO || process.env.SMTP_USER;
   const from = process.env.SMTP_USER; // Gmail requires the authenticated user as From
   if (!to || !from) throw new Error("Missing FORM_TO / SMTP_USER.");
@@ -186,6 +192,7 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
   };
   const attachments: MailAttachment[] = [];
 
+  let generatedPdf: Buffer | null = null;
   try {
     const pdf = await renderSubmissionPdf({
       formName: sub.formName,
@@ -195,6 +202,7 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
       sections: sub.sections,
       files: sub.files,
     });
+    generatedPdf = pdf;
     attachments.push({
       filename: `Submission-${sub.referenceId || "record"}.pdf`,
       content: pdf,
@@ -223,4 +231,6 @@ export async function sendFormEmail(sub: FormSubmission): Promise<void> {
     html,
     attachments: attachments.length ? attachments : undefined,
   });
+
+  return { pdf: generatedPdf };
 }

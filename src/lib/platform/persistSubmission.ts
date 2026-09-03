@@ -1,5 +1,5 @@
 import "server-only";
-import type { EmailSection, FormSubmission } from "@/lib/email/sendFormEmail";
+import type { EmailFile, EmailSection, FormSubmission } from "@/lib/email/sendFormEmail";
 
 /**
  * Server-only, best-effort persistence of a website form submission into the
@@ -41,7 +41,56 @@ function findValue(sections: EmailSection[], needle: string): string | undefined
   return undefined;
 }
 
-export async function persistSubmission(sub: FormSubmission & { referenceId: string }): Promise<void> {
+/**
+ * Files are forwarded base64-encoded inside the ingest request, so the whole
+ * submission must stay within one modest request body — serverless platforms
+ * cap request sizes well below the website's own 30 MB allowance. The PDF
+ * record is always sent first because it is small and is the thing staff
+ * actually need in the CRM; uploaded documents follow while they fit.
+ *
+ * Anything that does not fit is simply not forwarded. It is still attached to
+ * the submission email, which remains the complete record.
+ */
+const INGEST_FILE_BUDGET_BYTES = 3 * 1024 * 1024; // base64 bytes across all files
+
+type IngestFile = { kind: "REPORT" | "UPLOAD"; fileName: string; contentType: string; contentBase64: string };
+
+function selectFilesWithinBudget(pdf: Buffer | null, referenceId: string, files: EmailFile[]): IngestFile[] {
+  const selected: IngestFile[] = [];
+  let used = 0;
+
+  if (pdf) {
+    const contentBase64 = pdf.toString("base64");
+    if (contentBase64.length <= INGEST_FILE_BUDGET_BYTES) {
+      selected.push({
+        kind: "REPORT",
+        fileName: `Submission-${referenceId}.pdf`,
+        contentType: "application/pdf",
+        contentBase64,
+      });
+      used += contentBase64.length;
+    }
+  }
+
+  for (const file of files) {
+    if (!file.content) continue; // metadata-only entry: nothing to store
+    if (selected.length >= 6) break;
+    if (used + file.content.length > INGEST_FILE_BUDGET_BYTES) continue;
+    selected.push({
+      kind: "UPLOAD",
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      contentBase64: file.content,
+    });
+    used += file.content.length;
+  }
+  return selected;
+}
+
+export async function persistSubmission(
+  sub: FormSubmission & { referenceId: string },
+  pdf: Buffer | null = null,
+): Promise<void> {
   const apiUrl = process.env.NONNIS_PLATFORM_API_URL;
   const token = process.env.NONNIS_INGEST_TOKEN;
   if (!apiUrl || !token) return; // Platform ingestion not configured — skip.
@@ -57,10 +106,12 @@ export async function persistSubmission(sub: FormSubmission & { referenceId: str
     submitterPhone: findValue(sub.sections, "phone") || findValue(sub.sections, "pager"),
     submittedData: { sections: sub.sections },
     emailStatus: "SENT",
-    reportGenerated: true,
+    // Reported honestly: a PDF is only claimed when one was actually rendered.
+    reportGenerated: pdf !== null,
     documentGenerated: files.length > 0,
     attachmentsCount: files.length,
     submittedAt: sub.submittedAt,
+    files: selectFilesWithinBudget(pdf, sub.referenceId, files),
   };
 
   const controller = new AbortController();

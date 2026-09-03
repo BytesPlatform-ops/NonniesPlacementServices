@@ -7,11 +7,13 @@ import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from "../auth/decorators";
 import type { RequestUser } from "../auth/request-user";
 import type { AppConfig } from "../../config/configuration";
 import { FormSubmissionsService } from "./form-submissions.service";
+import type { SubmissionAttachmentsService } from "./submission-attachments.service";
 import { FormSubmissionsController } from "./form-submissions.controller";
 import { IngestTokenGuard } from "./ingest-token.guard";
 import type { IngestFormSubmissionDto } from "./dto/form-submissions.dto";
 
 const audit = { record: async () => undefined } as unknown as AuditService;
+const attachments = { storeMany: async () => 0, listFor: async () => [], downloadUrl: async () => ({ url: "", fileName: "" }) } as unknown as SubmissionAttachmentsService;
 const user = { id: "user-1" } as unknown as RequestUser;
 
 function baseIngest(over: Partial<IngestFormSubmissionDto> = {}): IngestFormSubmissionDto {
@@ -32,7 +34,7 @@ describe("FormSubmissionsService.ingest", () => {
         create: async () => ({ id: "sub-1", reference: "HR-20260829-ABCDEF" }),
       },
     } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     const r = await svc.ingest(baseIngest());
     expect(r).toEqual({ id: "sub-1", reference: "HR-20260829-ABCDEF", duplicate: false });
   });
@@ -41,14 +43,14 @@ describe("FormSubmissionsService.ingest", () => {
     const prisma = {
       websiteFormSubmission: { findUnique: async () => ({ id: "sub-1", reference: "HR-20260829-ABCDEF" }) },
     } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     const r = await svc.ingest(baseIngest());
     expect(r.duplicate).toBe(true);
   });
 
   it("rejects an oversized payload", async () => {
     const prisma = { websiteFormSubmission: { findUnique: async () => null } } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     await expect(svc.ingest(baseIngest({ submittedData: { blob: "x".repeat(600 * 1024) } }))).rejects.toBeInstanceOf(
       BadRequestException,
     );
@@ -58,7 +60,7 @@ describe("FormSubmissionsService.ingest", () => {
 describe("FormSubmissionsService.update", () => {
   it("404s an unknown submission", async () => {
     const prisma = { websiteFormSubmission: { findUnique: async () => null } } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     await expect(svc.update(user, "missing", { status: "RESOLVED" })).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -67,7 +69,7 @@ describe("FormSubmissionsService.update", () => {
       websiteFormSubmission: { findUnique: async () => ({ id: "sub-1", status: "NEW" }) },
       case: { findUnique: async () => null },
     } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     await expect(
       svc.update(user, "sub-1", { relatedCaseId: "11111111-1111-1111-1111-111111111111" }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -108,7 +110,7 @@ describe("FormSubmissionsService.update", () => {
       },
       user: { findUnique: async () => ({ displayName: "Ops User", firstName: null, lastName: null, email: "o@x.com" }) },
     } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     const r = await svc.update(user, "sub-1", { status: "RESOLVED" });
     expect(r.status).toBe("RESOLVED");
     expect(r.reviewedByName).toBe("Ops User");
@@ -157,7 +159,7 @@ describe("FormSubmissionsService.list archived visibility", () => {
       websiteFormSubmission: { findMany, count: jest.fn().mockResolvedValue(0) },
       $transaction: (ops: unknown[]) => Promise.all(ops),
     } as unknown as PrismaService;
-    const svc = new FormSubmissionsService(prisma, audit);
+    const svc = new FormSubmissionsService(prisma, audit, attachments);
     return { svc, findMany };
   }
   const whereOf = (findMany: jest.Mock) => (findMany.mock.calls[0]?.[0] as { where?: { AND?: unknown[] } })?.where ?? {};

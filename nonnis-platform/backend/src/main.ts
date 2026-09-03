@@ -25,6 +25,10 @@ async function bootstrap(): Promise<void> {
   //
   // Contact imports post their (bounded ≤5 MB) file text as JSON.
   app.use("/api/v1/communications/imports", json({ limit: "6mb" }));
+  // Website submissions carry the generated PDF plus any uploads, base64-encoded.
+  // Kept deliberately modest: serverless platforms cap request bodies well below
+  // this, and the website only forwards what fits its own budget.
+  app.use("/api/v1/form-submissions/ingest", json({ limit: "4mb" }));
   // Provider webhooks are public: keep them tightly bounded.
   app.use("/api/v1/webhooks/communications/sms", urlencoded({ extended: false, limit: "128kb" }));
   app.use("/api/v1/webhooks/communications/email", json({ limit: "1mb" }));

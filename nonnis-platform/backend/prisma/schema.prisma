@@ -887,6 +887,13 @@ model ProviderCapacity {
 // ---------------------------------------------------------------------------
 
 /// Manual internal review state for a website form submission.
+/// What a stored website-submission file is: the generated PDF record, or a
+/// document the submitter uploaded with the form.
+enum FormSubmissionFileKind {
+  REPORT
+  UPLOAD
+}
+
 enum FormSubmissionStatus {
   NEW
   IN_REVIEW
@@ -930,6 +937,8 @@ model WebsiteFormSubmission {
   relatedCaseId     String? @db.Uuid
   relatedProviderId String? @db.Uuid
 
+  attachments WebsiteFormSubmissionAttachment[]
+
   submittedAt DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -939,6 +948,26 @@ model WebsiteFormSubmission {
   @@index([submittedAt])
   @@index([submitterEmail])
   @@map("website_form_submissions")
+}
+
+/// A file belonging to a website form submission, stored in a PRIVATE bucket.
+/// Only the storage path is kept — the bytes are never in the database, and no
+/// public URL exists. Staff download through a short-lived signed URL.
+model WebsiteFormSubmissionAttachment {
+  id           String                 @id @default(uuid()) @db.Uuid
+  submissionId String                 @db.Uuid
+  kind         FormSubmissionFileKind
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  /// Object key inside the private bucket. Never returned to a browser.
+  storagePath  String
+  createdAt    DateTime               @default(now())
+
+  submission WebsiteFormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("website_form_submission_attachments")
 }
 
 // ---------------------------------------------------------------------------

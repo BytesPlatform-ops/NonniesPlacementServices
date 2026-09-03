@@ -13,11 +13,37 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsIn, ValidateNested } from "class-validator";
 import { FormSubmissionStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
 
 const toBool = () =>
   Transform(({ value }) => (typeof value === "string" ? value === "true" : Boolean(value)), { toClassOnly: true });
+
+/**
+ * One file arriving with a submission: the generated PDF record, or a document
+ * the submitter uploaded. Bytes travel base64-encoded; the decoded size and the
+ * MIME type are validated server-side before anything is stored.
+ */
+export class IngestSubmissionFileDto {
+  @IsIn(["REPORT", "UPLOAD"])
+  kind!: "REPORT" | "UPLOAD";
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  fileName!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(160)
+  contentType!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  contentBase64!: string;
+}
 
 /** Payload the public website's server-side handler sends to the ingest endpoint. */
 export class IngestFormSubmissionDto {
@@ -82,6 +108,14 @@ export class IngestFormSubmissionDto {
   @IsOptional()
   @IsString()
   submittedAt?: string;
+
+  /** Files to store privately alongside the record (PDF report and uploads). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => IngestSubmissionFileDto)
+  files?: IngestSubmissionFileDto[];
 }
 
 export class ListFormSubmissionsDto extends PaginationQueryDto {

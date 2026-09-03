@@ -1,4 +1,5 @@
 import type { FormSubmissionStatus, WebsiteFormSubmission } from "@prisma/client";
+import type { SubmissionAttachmentView } from "./submission-attachments.service";
 
 export interface FormSubmissionSummary {
   id: string;
@@ -28,6 +29,8 @@ export interface FormSubmissionDetail extends FormSubmissionSummary {
   relatedProviderId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Stored files (PDF record + uploads). Storage paths are never included. */
+  attachments: SubmissionAttachmentView[];
 }
 
 export function toFormSubmissionSummary(row: WebsiteFormSubmission): FormSubmissionSummary {
@@ -47,7 +50,11 @@ export function toFormSubmissionSummary(row: WebsiteFormSubmission): FormSubmiss
   };
 }
 
-export function toFormSubmissionDetail(row: WebsiteFormSubmission, reviewedByName: string | null): FormSubmissionDetail {
+export function toFormSubmissionDetail(
+  row: WebsiteFormSubmission,
+  reviewedByName: string | null,
+  attachments: SubmissionAttachmentView[] = [],
+): FormSubmissionDetail {
   return {
     ...toFormSubmissionSummary(row),
     submittedData: row.submittedData,
@@ -62,5 +69,6 @@ export function toFormSubmissionDetail(row: WebsiteFormSubmission, reviewedByNam
     relatedProviderId: row.relatedProviderId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    attachments,
   };
 }

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
+import { SubmissionAttachmentsService } from "./submission-attachments.service";
 import type { RequestUser } from "../auth/request-user";
 import {
   toFormSubmissionDetail,
@@ -35,6 +36,7 @@ export class FormSubmissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly attachments: SubmissionAttachmentsService,
   ) {}
 
   async ingest(dto: IngestFormSubmissionDto): Promise<IngestResult> {
@@ -68,6 +70,25 @@ export class FormSubmissionsService {
         },
         select: { id: true, reference: true },
       });
+
+      // Store the PDF record and any uploaded documents privately. `storeMany`
+      // never throws for a storage failure, so a file problem cannot turn a
+      // successful submission into a failed one — the counters below therefore
+      // report what was actually stored rather than what was claimed.
+      const files = dto.files ?? [];
+      const stored = await this.attachments.storeMany(created.id, created.reference, files);
+      if (files.length > 0) {
+        const uploads = files.filter((f) => f.kind === "UPLOAD").length;
+        await this.prisma.websiteFormSubmission.update({
+          where: { id: created.id },
+          data: {
+            reportGenerated: files.some((f) => f.kind === "REPORT") && stored > 0,
+            documentGenerated: uploads > 0,
+            attachmentsCount: uploads,
+          },
+        });
+      }
+
       return { id: created.id, reference: created.reference, duplicate: false };
     } catch (error) {
       // Unique-violation race: another concurrent ingest of the same reference won.
@@ -133,7 +154,7 @@ export class FormSubmissionsService {
     const row = await this.prisma.websiteFormSubmission.findUnique({ where: { id } });
     if (!row) throw new NotFoundException(`Submission ${id} not found`);
     const reviewerName = await this.resolveReviewerName(row.reviewedByUserId);
-    return toFormSubmissionDetail(row, reviewerName);
+    return toFormSubmissionDetail(row, reviewerName, await this.attachments.listFor(row.id));
   }
 
   async update(user: RequestUser, id: string, dto: UpdateFormSubmissionDto): Promise<FormSubmissionDetail> {
@@ -173,7 +194,7 @@ export class FormSubmissionsService {
     });
 
     const reviewerName = await this.resolveReviewerName(updated.reviewedByUserId);
-    return toFormSubmissionDetail(updated, reviewerName);
+    return toFormSubmissionDetail(updated, reviewerName, await this.attachments.listFor(updated.id));
   }
 
   private async resolveReviewerName(userId: string | null): Promise<string | null> {

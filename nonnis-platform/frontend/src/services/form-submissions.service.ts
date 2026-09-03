@@ -37,3 +37,8 @@ export function updateFormSubmission(
 ): Promise<FormSubmissionDetail> {
   return apiPatch<FormSubmissionDetail>(`/api/v1/form-submissions/${id}`, body);
 }
+
+/** Mint a short-lived signed URL for one stored submission file. */
+export function getSubmissionAttachmentUrl(submissionId: string, attachmentId: string): Promise<{ url: string; fileName: string }> {
+  return apiGet(`/api/v1/form-submissions/${submissionId}/attachments/${attachmentId}/download`);
+}

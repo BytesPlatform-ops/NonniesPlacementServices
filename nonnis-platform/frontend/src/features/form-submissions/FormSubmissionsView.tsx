@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, X } from "lucide-react";
+import { Archive, ArchiveRestore, Download, FileText, X } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { submissionStatusLabel, submissionStatusTone } from "@/lib/form-submission-status";
 import { ApiError } from "@/lib/api-client";
@@ -11,6 +11,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   getFormSubmission,
+  getSubmissionAttachmentUrl,
   listFormSubmissions,
   updateFormSubmission,
   type FormSubmissionFilters,
@@ -267,19 +268,88 @@ function DrawerBody({ detail, canManage, onSaved }: { detail: FormSubmissionDeta
         </Panel>
       ) : null}
 
+      <Panel title="Files">
+        <AttachmentList detail={detail} />
+      </Panel>
+
       <Panel title="Processing">
         <DescriptionList
           items={[
             { label: "Email", value: detail.emailStatus ?? "—" },
-            { label: "PDF report", value: detail.reportGenerated ? "Generated" : "—" },
-            { label: "Attachments", value: String(detail.attachmentsCount) },
-            { label: "Documents attached", value: detail.documentGenerated ? "Yes" : "No" },
+            { label: "Documents uploaded", value: String(detail.attachmentsCount) },
           ]}
         />
       </Panel>
 
       <ReviewPanel detail={detail} canManage={canManage} onSaved={onSaved} />
     </>
+  );
+}
+
+
+/** Human-readable byte size for a file row. */
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Stored submission files. Downloads open a freshly minted, short-lived signed
+ * URL — there is no permanent link, and the storage path is never exposed.
+ */
+function AttachmentList({ detail }: { detail: FormSubmissionDetail }) {
+  const toast = useToast();
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const open = async (attachmentId: string) => {
+    setBusyId(attachmentId);
+    try {
+      const { url } = await getSubmissionAttachmentUrl(detail.id, attachmentId);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not open the file.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (detail.attachments.length === 0) {
+    // Older submissions predate file storage, and very large uploads are not
+    // forwarded — in both cases the email remains the complete record.
+    return (
+      <p className="text-sm text-slate-500">
+        No files were stored for this submission. {detail.attachmentsCount > 0
+          ? `${detail.attachmentsCount} document${detail.attachmentsCount === 1 ? " was" : "s were"} attached to the submission email.`
+          : "Any PDF record and uploads remain on the submission email."}
+      </p>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-sage">
+      {detail.attachments.map((a) => (
+        <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+          <span className="flex min-w-0 items-center gap-2">
+            <FileText className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+            <span className="min-w-0">
+              <span className="block truncate text-sm text-slate-800">{a.fileName}</span>
+              <span className="text-xs text-slate-400">
+                {a.kind === "REPORT" ? "PDF record" : "Uploaded document"} · {fileSize(a.sizeBytes)}
+              </span>
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => void open(a.id)}
+            disabled={busyId === a.id}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden /> {busyId === a.id ? "Opening…" : "Open"}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

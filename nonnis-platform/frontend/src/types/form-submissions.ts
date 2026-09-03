@@ -27,6 +27,17 @@ export interface SubmissionSection {
   fields: SubmissionField[];
 }
 
+/** A stored file. The storage path is never exposed — downloads go through a
+ *  short-lived signed URL minted on demand. */
+export interface SubmissionAttachment {
+  id: string;
+  kind: "REPORT" | "UPLOAD";
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface FormSubmissionDetail extends FormSubmissionSummary {
   submittedData: { sections?: SubmissionSection[] } | unknown;
   emailStatus: string | null;
@@ -40,4 +51,5 @@ export interface FormSubmissionDetail extends FormSubmissionSummary {
   relatedProviderId: string | null;
   createdAt: string;
   updatedAt: string;
+  attachments: SubmissionAttachment[];
 }
