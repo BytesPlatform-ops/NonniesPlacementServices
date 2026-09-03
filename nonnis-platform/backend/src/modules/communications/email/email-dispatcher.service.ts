@@ -10,6 +10,7 @@ import { renderForRecipient } from "./email-compiler";
 import { generateUnsubscribeToken, resolveSender, unsubscribeUrl } from "./email-config";
 import { formatReplyAddress, inboundDomain } from "./reply-address";
 import { generateInternetMessageId } from "./thread-headers";
+import { isTransientInfrastructureError } from "../transient-error";
 import { classifySendResult } from "../dispatch/send-outcome";
 import { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { AttachmentStorageService } from "./attachment-storage.service";
@@ -264,8 +265,18 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
     let attachments: OutboundEmailAttachment[] | undefined;
     try {
       attachments = await this.loadOutboundAttachments(message.id);
-    } catch {
-      await this.applyReplyFailure(message.id, { kind: "failed", attempt: message.attemptCount + 1, code: "ATTACHMENT_UNAVAILABLE", message: "An attachment could not be retrieved." });
+    } catch (err) {
+      // Reading attachment rows starts with a database query, so a connection
+      // blip surfaces here too. Treating that as a missing attachment kills the
+      // reply permanently for a fault that would pass on the next attempt — and
+      // reports a cause that has nothing to do with what went wrong.
+      const action = isTransientInfrastructureError(err)
+        ? classifySendResult(
+            { ok: false, classification: "TEMPORARY", code: "ATTACHMENT_LOOKUP_UNAVAILABLE", message: "Attachments could not be read; retrying." },
+            message.attemptCount,
+          )
+        : ({ kind: "failed", attempt: message.attemptCount + 1, code: "ATTACHMENT_UNAVAILABLE", message: "An attachment could not be retrieved." } as const);
+      await this.applyReplyFailure(message.id, action as Exclude<ReturnType<typeof classifySendResult>, { kind: "sent" }>);
       return;
     }
 

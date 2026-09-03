@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { PrismaService } from "../../../database/prisma.service";
 import type { ConfigService } from "@nestjs/config";
 import type { EmailTransport } from "../providers/email-transport";
@@ -83,5 +84,46 @@ describe("EmailDispatcher Reply-To (threading contract)", () => {
     const sent = (transport.sendEmail as jest.Mock).mock.calls[0]![0] as { replyTo?: string; senderEmail?: string };
     expect(sent.replyTo).not.toBe(sent.senderEmail);
     expect(sent.senderEmail).toBe("s@nonnis.test"); // From is unchanged
+  });
+});
+
+describe("EmailDispatcher reply attachment lookup", () => {
+  /** Drive the direct-reply path with a controllable attachment lookup. */
+  function makeReplyDispatcher(lookupError: unknown) {
+    const messageUpdate = jest.fn().mockResolvedValue({});
+    const prisma = {
+      communicationConversation: { findUnique: jest.fn().mockResolvedValue({ id: "conv1", contactId: "c1", threadToken: "tok" }) },
+      communicationContact: { findUnique: jest.fn().mockResolvedValue({ email: "p@x.com", normalizedEmail: "p@x.com" }) },
+      communicationMessageAttachment: { findMany: jest.fn().mockRejectedValue(lookupError) },
+      communicationMessage: { update: messageUpdate },
+    } as unknown as PrismaService;
+    const config = { get: (n: string) => (n === "communicationsInboundEmailDomain" ? "reply.mock.local" : n === "brevoSenderEmail" ? "s@nonnis.test" : undefined) } as unknown as ConfigService;
+    const transport = { name: "mock", configured: true, sendEmail: jest.fn() } as unknown as EmailTransport;
+    const attachments = { downloadBuffer: jest.fn() } as unknown as AttachmentStorageService;
+    const maintenance = { runMaintenance: jest.fn() } as unknown as DeliveryMaintenanceService;
+    const svc = new EmailDispatcherService(prisma, config as never, transport, attachments, maintenance);
+    const message = { id: "m1", conversationId: "conv1", attemptCount: 0, toAddress: "p@x.com", subject: "Re: hi", htmlBody: "<p>h</p>", textBody: "h" };
+    const run = () => (svc as unknown as { processReply: (m: unknown) => Promise<void> }).processReply(message);
+    return { run, messageUpdate, transport };
+  }
+
+  it("retries when the attachment lookup fails because the database blipped", async () => {
+    // The lookup begins with a database query, so a pool timeout surfaces here.
+    // Marking the reply permanently failed for that loses a real message and
+    // blames an attachment that was never the problem.
+    const { run, messageUpdate, transport } = makeReplyDispatcher(
+      new Prisma.PrismaClientKnownRequestError("Timed out fetching a new connection from the connection pool", { code: "P2024", clientVersion: "6.0.0" }),
+    );
+    await run();
+    expect(transport.sendEmail).not.toHaveBeenCalled();
+    expect(messageUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "QUEUED" }) }));
+  });
+
+  it("still fails permanently when an attachment genuinely cannot be retrieved", async () => {
+    const { run, messageUpdate } = makeReplyDispatcher(new Error("attachment report.pdf unavailable"));
+    await run();
+    expect(messageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "FAILED", lastErrorCode: "ATTACHMENT_UNAVAILABLE" }) }),
+    );
   });
 });
