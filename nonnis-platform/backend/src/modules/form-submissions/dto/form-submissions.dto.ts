@@ -109,6 +109,12 @@ export class ListFormSubmissionsDto extends PaginationQueryDto {
   @IsBoolean()
   reviewed?: boolean;
 
+  /** Archived submissions are hidden by default; set this to include them. */
+  @IsOptional()
+  @toBool()
+  @IsBoolean()
+  includeArchived?: boolean;
+
   @IsOptional()
   @IsString()
   dateFrom?: string;

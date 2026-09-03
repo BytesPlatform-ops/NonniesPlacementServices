@@ -87,6 +87,10 @@ export class FormSubmissionsService {
     const and: Prisma.WebsiteFormSubmissionWhereInput[] = [];
     if (formKey) and.push({ formKey });
     if (status) and.push({ status });
+    // Archiving only means something if it removes the item from the working
+    // list. An explicit status filter (including status=ARCHIVED) always wins,
+    // so archived submissions remain reachable — they are never deleted.
+    if (!status && !query.includeArchived) and.push({ status: { not: "ARCHIVED" } });
     if (sourcePage) and.push({ sourcePage: { contains: sourcePage, mode: "insensitive" } });
     if (reviewed !== undefined) and.push(reviewed ? { reviewedAt: { not: null } } : { reviewedAt: null });
     if (dateFrom) and.push({ submittedAt: { gte: new Date(dateFrom) } });

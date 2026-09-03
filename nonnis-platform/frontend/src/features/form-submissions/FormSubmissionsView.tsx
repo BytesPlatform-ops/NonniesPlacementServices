@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { Archive, ArchiveRestore, X } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { submissionStatusLabel, submissionStatusTone } from "@/lib/form-submission-status";
 import { ApiError } from "@/lib/api-client";
@@ -22,6 +22,7 @@ import { Panel } from "@/components/ui/Panel";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { DescriptionList } from "@/components/ui/DescriptionList";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 
 const FORM_OPTIONS = [
@@ -108,7 +109,7 @@ export function FormSubmissionsView() {
           <label className="block">
             <span className="text-xs font-medium text-slate-600">Status</span>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputCls} bg-white`}>
-              <option value="">Any status</option>
+              <option value="">All except archived</option>
               {FORM_SUBMISSION_STATUSES.map((s) => (<option key={s} value={s}>{submissionStatusLabel(s)}</option>))}
             </select>
           </label>
@@ -174,9 +175,44 @@ function SubmissionDrawer({ id, onClose, onUpdated }: { id: string; onClose: () 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40" role="dialog" aria-modal="true" aria-label="Submission detail" onClick={onClose}>
       <div className="h-full w-full max-w-2xl overflow-y-auto bg-porcelain shadow-card" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-sage bg-ivory px-5 py-3">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-sage bg-ivory px-5 py-3">
           <h2 className="font-mono text-sm font-semibold text-umber">{data?.reference ?? "Submission"}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" aria-hidden /></button>
+          <div className="flex items-center gap-3">
+            {/* Submissions are never destroyed — archiving is how staff clear spam
+                and finished items out of the working list. It used to be reachable
+                only as one option inside the review Status dropdown, which is why
+                it read as "view only". */}
+            {data && canManage ? (
+              data.status === "ARCHIVED" ? (
+                <MutationButton
+                  variant="secondary"
+                  action={() => updateFormSubmission(data.id, { status: "NEW" })}
+                  successToast="Submission restored"
+                  errorToast="Could not restore the submission."
+                  onSuccess={() => { reload(); onUpdated(); }}
+                >
+                  <ArchiveRestore className="mr-1.5 h-4 w-4" aria-hidden /> Restore
+                </MutationButton>
+              ) : (
+                <MutationButton
+                  variant="secondary"
+                  action={() => updateFormSubmission(data.id, { status: "ARCHIVED" })}
+                  confirm={{
+                    title: "Archive this submission?",
+                    description:
+                      "It is hidden from the default list but never deleted — the email and PDF record are unaffected. You can restore it at any time.",
+                    confirmLabel: "Archive",
+                  }}
+                  successToast="Submission archived"
+                  errorToast="Could not archive the submission."
+                  onSuccess={() => { reload(); onUpdated(); }}
+                >
+                  <Archive className="mr-1.5 h-4 w-4" aria-hidden /> Archive
+                </MutationButton>
+              )
+            ) : null}
+            <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" aria-hidden /></button>
+          </div>
         </div>
         <div className="space-y-5 p-5">
           {loading ? (

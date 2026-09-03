@@ -148,3 +148,37 @@ describe("FormSubmissionsController access", () => {
     expect(Reflect.getMetadata(PERMISSIONS_KEY, proto.update)).toContain(PERMISSIONS.FORM_SUBMISSIONS_MANAGE);
   });
 });
+
+describe("FormSubmissionsService.list archived visibility", () => {
+  /** Capture the `where` Prisma is queried with, without running a real query. */
+  function capture() {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      websiteFormSubmission: { findMany, count: jest.fn().mockResolvedValue(0) },
+      $transaction: (ops: unknown[]) => Promise.all(ops),
+    } as unknown as PrismaService;
+    const svc = new FormSubmissionsService(prisma, audit);
+    return { svc, findMany };
+  }
+  const whereOf = (findMany: jest.Mock) => (findMany.mock.calls[0]?.[0] as { where?: { AND?: unknown[] } })?.where ?? {};
+
+  it("hides archived submissions by default so archiving clears the working list", async () => {
+    const { svc, findMany } = capture();
+    await svc.list({ page: 1, pageSize: 20 } as never);
+    expect(JSON.stringify(whereOf(findMany))).toContain('"not":"ARCHIVED"');
+  });
+
+  it("includes them when explicitly requested", async () => {
+    const { svc, findMany } = capture();
+    await svc.list({ page: 1, pageSize: 20, includeArchived: true } as never);
+    expect(JSON.stringify(whereOf(findMany))).not.toContain("ARCHIVED");
+  });
+
+  it("lets an explicit ARCHIVED filter through so archived items stay reachable", async () => {
+    const { svc, findMany } = capture();
+    await svc.list({ page: 1, pageSize: 20, status: "ARCHIVED" } as never);
+    const json = JSON.stringify(whereOf(findMany));
+    expect(json).toContain('"status":"ARCHIVED"');
+    expect(json).not.toContain('"not":"ARCHIVED"');
+  });
+});
