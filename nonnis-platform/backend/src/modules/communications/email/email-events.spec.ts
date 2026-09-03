@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaService } from "../../../database/prisma.service";
 import type { SuppressionsService } from "../suppressions/suppressions.service";
-import { EmailEventsService, normalizeBrevoEvent } from "./email-events.service";
+import { EmailEventsService, normalizeBrevoEvent, parseEventTimestamp } from "./email-events.service";
 
 function makeService(recipient: Record<string, unknown> | null, opts: { eventCreateThrows?: boolean } = {}) {
   const recipientUpdate = jest.fn().mockResolvedValue({});
@@ -75,5 +75,43 @@ describe("EmailEventsService.apply", () => {
     const events = svc.buildFromBrevo([{ event: "delivered", "message-id": "<abc>", date: "2026-09-02T00:00:00Z" }, { event: "junk", "message-id": "<abc>" }]);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ providerMessageId: "<abc>", type: "DELIVERED" });
+  });
+});
+
+describe("provider event timestamps", () => {
+  it("prefers the unambiguous epoch over Brevo's timezone-less date string", () => {
+    // Both fields describe the same event. `date` carries no offset and is in
+    // the Brevo account's timezone, so trusting it shifts the instant by the
+    // account offset — which is how a delivery once landed hours before its send.
+    const [event] = new EmailEventsService(
+      {} as never,
+      {} as never,
+    ).buildFromBrevo({
+      event: "delivered",
+      "message-id": "<pm-1@smtp-relay.mailin.fr>",
+      date: "2026-09-03 14:12:14",
+      ts_event: 1788469934, // 2026-09-03T21:12:14Z
+    });
+    expect(event!.occurredAt?.toISOString()).toBe("2026-09-03T21:12:14.000Z");
+  });
+
+  it("reads a bare date string as UTC so the result does not depend on the server timezone", () => {
+    expect(parseEventTimestamp("2026-09-03 14:12:14")?.toISOString()).toBe("2026-09-03T14:12:14.000Z");
+  });
+
+  it("respects an explicit offset when the provider sends one", () => {
+    expect(parseEventTimestamp("2026-09-03T14:12:14+05:00")?.toISOString()).toBe("2026-09-03T09:12:14.000Z");
+  });
+
+  it("treats numbers as epoch seconds, and large numbers as milliseconds", () => {
+    expect(parseEventTimestamp(1788469934)?.toISOString()).toBe("2026-09-03T21:12:14.000Z");
+    expect(parseEventTimestamp(1788469934000)?.toISOString()).toBe("2026-09-03T21:12:14.000Z");
+    expect(parseEventTimestamp("1788469934")?.toISOString()).toBe("2026-09-03T21:12:14.000Z");
+  });
+
+  it("returns undefined for missing or unparseable values rather than an invalid date", () => {
+    for (const bad of [undefined, null, "", "not-a-date"]) {
+      expect(parseEventTimestamp(bad)).toBeUndefined();
+    }
   });
 });

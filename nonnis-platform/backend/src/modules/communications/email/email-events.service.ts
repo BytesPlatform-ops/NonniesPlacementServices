@@ -39,6 +39,32 @@ export interface NormalizedEventInput {
   dedupKey: string;
 }
 
+/**
+ * Convert a provider timestamp into a Date, or undefined when it is unusable.
+ *
+ * Numbers are epoch seconds, unless they are large enough to only make sense as
+ * milliseconds. Strings that already carry a timezone are trusted as-is; a bare
+ * "YYYY-MM-DD HH:MM:SS" is read as UTC so the parsed instant does not depend on
+ * the server's local timezone.
+ */
+export function parseEventTimestamp(value: unknown): Date | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    // Anything past ~2001 in milliseconds is far beyond a plausible seconds value.
+    const date = new Date(value > 1e11 ? value : value * 1000);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+
+  const text = String(value).trim();
+  if (/^\d+$/.test(text)) return parseEventTimestamp(Number(text));
+
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+  const normalized = hasZone ? text : `${text.replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 @Injectable()
 export class EmailEventsService {
   private readonly logger = new Logger("EmailEvents");
@@ -122,7 +148,17 @@ export class EmailEventsService {
     });
   }
 
-  /** Parse + normalize a Brevo webhook body (single event or array). */
+  /**
+   * Resolve a provider event timestamp to a real instant.
+   *
+   * Epoch fields are preferred because they are unambiguous. Brevo's `date` is
+   * a bare "YYYY-MM-DD HH:MM:SS" in the *account's* timezone with no offset, so
+   * parsing it yields an instant that is wrong by the account's UTC offset —
+   * which is how a delivery could be recorded as happening hours before the
+   * send. It is kept only as a last resort, and an offset-less string is
+   * treated as UTC rather than as the server's local time, so the result at
+   * least does not change with where the process runs.
+   */
   buildFromBrevo(body: unknown): NormalizedEventInput[] {
     const events = Array.isArray(body) ? body : [body];
     const out: NormalizedEventInput[] = [];
@@ -132,9 +168,9 @@ export class EmailEventsService {
       const type = normalizeBrevoEvent(String(rec.event ?? ""));
       const providerMessageId = String(rec["message-id"] ?? rec.messageId ?? "");
       if (!type || !providerMessageId) continue;
-      const ts = rec.date ?? rec.ts ?? rec.tsEvent;
-      const occurredAt = ts ? new Date(typeof ts === "number" ? ts * 1000 : String(ts)) : undefined;
-      out.push({ providerMessageId, type, occurredAt: occurredAt && !Number.isNaN(occurredAt.getTime()) ? occurredAt : undefined, dedupKey: `${providerMessageId}:${type}:${String(ts ?? "")}` });
+      const ts = rec.ts_epoch ?? rec.ts_event ?? rec.tsEvent ?? rec.ts ?? rec.date;
+      const occurredAt = parseEventTimestamp(ts);
+      out.push({ providerMessageId, type, occurredAt, dedupKey: `${providerMessageId}:${type}:${String(ts ?? "")}` });
     }
     return out;
   }
