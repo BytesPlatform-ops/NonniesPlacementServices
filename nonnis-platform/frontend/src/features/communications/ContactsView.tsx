@@ -16,6 +16,7 @@ import { archiveContact, getContactCounts, listContacts, listLists, listTags, ty
 import type { ContactView } from "@/types/communications";
 import { channelConsent, contactName, contactStatusTone } from "./labels";
 import { ContactForm } from "./ContactForm";
+import { TagManager } from "./TagManager";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const CONSENT_OPTS = [
@@ -34,6 +35,7 @@ export function ContactsView() {
   const [smsConsent, setSmsConsent] = useState("");
   const [listId, setListId] = useState("");
   const [tagId, setTagId] = useState("");
+  const [managingTags, setManagingTags] = useState(false);
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ContactView | null>(null);
@@ -69,6 +71,9 @@ export function ContactsView() {
   const refreshAll = () => {
     reload();
     counts.reload();
+    // Tags feed the filter dropdown and the tag manager, so a create/delete has
+    // to refresh them too or a removed tag lingers in the list.
+    tags.reload();
   };
 
   const columns: Column<ContactView>[] = [
@@ -187,7 +192,16 @@ export function ContactsView() {
             </select>
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-slate-600">Tag</span>
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-600">Tag</span>
+              <button
+                type="button"
+                onClick={() => setManagingTags(true)}
+                className="text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
+              >
+                Manage
+              </button>
+            </span>
             <select value={tagId} onChange={(e) => setTagId(e.target.value)} className={`${inputCls} bg-white`}>
               <option value="">Any tag</option>
               {(tags.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -234,6 +248,13 @@ export function ContactsView() {
 
       {creating ? <ContactForm onClose={() => setCreating(false)} onSaved={() => { setCreating(false); refreshAll(); }} /> : null}
       {editing ? <ContactForm contact={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refreshAll(); }} /> : null}
+      {managingTags ? (
+        <TagManager
+          tags={tags.data ?? []}
+          onClose={() => setManagingTags(false)}
+          onChanged={() => { setTagId(""); refreshAll(); }}
+        />
+      ) : null}
     </div>
   );
 }

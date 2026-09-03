@@ -43,6 +43,22 @@ export class TagsService {
     return { ...tag, contactCount: 0 };
   }
 
+  /**
+   * Delete a tag. Assignments are removed with it (the join row cascades on the
+   * tag relation), so the tag disappears from every contact it was applied to.
+   * Contacts themselves are never touched. The removed-assignment count is
+   * returned so the caller can tell the user what the delete actually affected.
+   */
+  async remove(id: string): Promise<{ id: string; name: string; removedAssignments: number }> {
+    const tag = await this.prisma.communicationTag.findUnique({
+      where: { id },
+      select: { id: true, name: true, _count: { select: { assignments: true } } },
+    });
+    if (!tag) throw new NotFoundException("Tag not found");
+    await this.prisma.communicationTag.delete({ where: { id } });
+    return { id: tag.id, name: tag.name, removedAssignments: tag._count.assignments };
+  }
+
   async assign(_user: RequestUser, contactId: string, name: string): Promise<{ id: string; name: string }> {
     const contact = await this.prisma.communicationContact.findUnique({ where: { id: contactId }, select: { id: true } });
     if (!contact) throw new NotFoundException("Contact not found");

@@ -87,6 +87,10 @@ export function assignTag(contactId: string, name: string): Promise<{ id: string
 export function unassignTag(contactId: string, tagId: string): Promise<{ removed: boolean }> {
   return apiPost(`/api/v1/communications/tags/unassign`, { contactId, tagId });
 }
+/** Deletes the tag everywhere. Contacts are untouched; only the tag is removed from them. */
+export function deleteTag(tagId: string): Promise<{ id: string; name: string; removedAssignments: number }> {
+  return apiDelete(`/api/v1/communications/tags/${tagId}`);
+}
 
 // ---- Suppressions ----
 

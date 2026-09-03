@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from "@nestjs/common";
 import { IsString, IsUUID, MaxLength } from "class-validator";
 import { PERMISSIONS } from "../../../common/rbac";
 import { CurrentUser, RequirePermissions } from "../../auth/decorators";
@@ -41,5 +41,11 @@ export class TagsController {
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
   unassign(@CurrentUser() user: RequestUser, @Body() body: UnassignTagBody) {
     return this.tags.unassign(user, body.contactId, body.tagId);
+  }
+
+  @Delete(":id")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
+  remove(@Param("id", new ParseUUIDPipe()) id: string) {
+    return this.tags.remove(id);
   }
 }
