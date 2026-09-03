@@ -6,7 +6,7 @@ import type { DeliveryMaintenanceService } from "../dispatch/delivery-maintenanc
 import { EmailDispatcherService } from "./email-dispatcher.service";
 
 const CAMPAIGN = { id: "c1", status: "SENDING", htmlSnapshot: "<p>Hi {{firstName}}</p>", textSnapshot: "Hi {{firstName}} {{unsubscribeUrl}}", subjectSnapshot: "Subject", senderEmail: "s@nonnis.test", senderName: "Nonni's" };
-const RECIPIENT = { id: "r1", campaignId: "c1", contactId: "contact-1", emailSnapshot: "p@x.com", internalMessageId: "im1", firstNameSnapshot: "Ada", lastNameSnapshot: "B", attemptCount: 0 };
+const RECIPIENT = { id: "r1", threadToken: "tt-1", campaignId: "c1", contactId: "contact-1", emailSnapshot: "p@x.com", internalMessageId: "im1", firstNameSnapshot: "Ada", lastNameSnapshot: "B", attemptCount: 0 };
 
 function makeDispatcher(opts: { consent?: string; outcome?: unknown } = {}) {
   const recipientUpdate = jest.fn().mockResolvedValue({});
@@ -64,5 +64,24 @@ describe("EmailDispatcher.processRecipient", () => {
     const { svc, recipientUpdate } = makeDispatcher({ outcome: { ok: false, classification: "PERMANENT", code: "BOUNCE", message: "t" } });
     await run(svc);
     expect(recipientUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ deliveryStatus: "FAILED" }) }));
+  });
+});
+
+describe("EmailDispatcher Reply-To (threading contract)", () => {
+  it("always sends a conversation-specific reply address derived from the thread token", async () => {
+    // Without this the recipient's reply goes to the From mailbox and never
+    // reaches the CRM, so a campaign send that omits it is a broken send.
+    const { svc, transport } = makeDispatcher();
+    await run(svc);
+    const sent = (transport.sendEmail as jest.Mock).mock.calls[0]![0] as { replyTo?: string; senderEmail?: string };
+    expect(sent.replyTo).toBe("reply-tt-1@reply.mock.local");
+  });
+
+  it("does not use the sender address as the reply address", async () => {
+    const { svc, transport } = makeDispatcher();
+    await run(svc);
+    const sent = (transport.sendEmail as jest.Mock).mock.calls[0]![0] as { replyTo?: string; senderEmail?: string };
+    expect(sent.replyTo).not.toBe(sent.senderEmail);
+    expect(sent.senderEmail).toBe("s@nonnis.test"); // From is unchanged
   });
 });

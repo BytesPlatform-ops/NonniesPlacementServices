@@ -31,6 +31,13 @@ export class BrevoEmailTransport implements EmailTransport {
     const key = this.apiKey;
     if (!key) return { ok: false, classification: "PERMANENT", code: "NOT_CONFIGURED", message: "Brevo API key is not configured." };
 
+    // Reply-To is what routes a recipient's reply back into the CRM, so it is
+    // sent twice on purpose: through Brevo's documented `replyTo` field AND as
+    // an explicit header. The field alone was observed to produce messages with
+    // no Reply-To header at all, which silently broke every inbound reply —
+    // the header is the belt to that braces. Brevo emits a single header.
+    const replyToHeader = message.replyTo ? { "Reply-To": message.replyTo } : {};
+
     const body = {
       sender: { email: message.senderEmail, name: message.senderName },
       to: [{ email: message.to, name: message.toName }],
@@ -38,7 +45,7 @@ export class BrevoEmailTransport implements EmailTransport {
       subject: message.subject,
       htmlContent: message.html,
       textContent: message.text,
-      headers: { "X-Nonnis-Message-Id": message.internalMessageId, ...(message.headers ?? {}) },
+      headers: { "X-Nonnis-Message-Id": message.internalMessageId, ...replyToHeader, ...(message.headers ?? {}) },
       ...(message.tags && message.tags.length ? { tags: message.tags } : {}),
       ...(message.attachments && message.attachments.length
         ? { attachment: message.attachments.map((a) => ({ name: a.fileName, content: a.contentBase64 })) }

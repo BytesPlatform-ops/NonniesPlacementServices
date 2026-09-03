@@ -54,3 +54,52 @@ describe("BrevoEmailTransport", () => {
     expect((await makeBrevo("").sendEmail(msg))).toMatchObject({ ok: false, code: "NOT_CONFIGURED" });
   });
 });
+
+describe("BrevoEmailTransport Reply-To", () => {
+  const REPLY = "reply-0123456789abcdef0123456789abcdef@reply.nonnisplacement.com";
+
+  /** Capture the JSON body actually posted to Brevo. */
+  async function sentBody(message: OutboundEmailMessage): Promise<Record<string, unknown>> {
+    const fetchMock = jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue({ status: 201, headers: new Headers(), json: async () => ({ messageId: "<brevo-1>" }) } as Response);
+    await makeBrevo().sendEmail(message);
+    return JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<string, unknown>;
+  }
+
+  it("sends the reply address in Brevo's replyTo field", async () => {
+    const body = await sentBody({ ...msg, replyTo: REPLY });
+    expect(body.replyTo).toEqual({ email: REPLY });
+  });
+
+  it("ALSO sends an explicit Reply-To header", async () => {
+    // Brevo's replyTo field alone was observed to produce delivered mail with no
+    // Reply-To header, which silently broke every inbound reply. The explicit
+    // header is what guarantees the address is physically on the message.
+    const body = await sentBody({ ...msg, replyTo: REPLY });
+    expect((body.headers as Record<string, string>)["Reply-To"]).toBe(REPLY);
+  });
+
+  it("keeps the reply address even alongside the caller's own headers", async () => {
+    const body = await sentBody({
+      ...msg,
+      replyTo: REPLY,
+      headers: { "Message-Id": "<mid@x>", "List-Unsubscribe": "<https://x/u>" },
+    });
+    const headers = body.headers as Record<string, string>;
+    expect(headers["Reply-To"]).toBe(REPLY);
+    expect(headers["Message-Id"]).toBe("<mid@x>");
+    expect(headers["List-Unsubscribe"]).toBe("<https://x/u>");
+  });
+
+  it("never changes the From/sender when a reply address is set", async () => {
+    const body = await sentBody({ ...msg, replyTo: REPLY });
+    expect(body.sender).toEqual({ email: "sender@nonnis.test", name: undefined });
+  });
+
+  it("omits Reply-To entirely for a message that has no reply address", async () => {
+    const body = await sentBody(msg);
+    expect(body.replyTo).toBeUndefined();
+    expect((body.headers as Record<string, string>)["Reply-To"]).toBeUndefined();
+  });
+});
