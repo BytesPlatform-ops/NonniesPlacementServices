@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet } from "@/lib/api-client";
+import { ApiError, apiGet } from "@/lib/api-client";
 import { getActiveOrg, setActiveOrg as persistActiveOrg } from "@/lib/active-org";
 import { resolveActiveOrg } from "@/lib/resolve-active-org";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -17,6 +17,25 @@ interface AuthContextValue {
   switchOrganization: (id: string) => Promise<void>;
   reload: () => Promise<void>;
   signOut: () => Promise<void>;
+}
+
+/**
+ * Drop the stored Supabase session. Attempts a server-side revoke first, then
+ * always falls back to a local-only sign-out so browser storage is cleared even
+ * when the token is already invalid, the network is down, or the call throws.
+ */
+async function discardSession(supabase: ReturnType<typeof supabaseBrowser>): Promise<void> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (!error) return;
+  } catch {
+    // fall through to the local clear below
+  }
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    // Storage is already gone or unavailable — nothing further to clean up.
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -57,8 +76,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.session) {
         try {
           await loadMe();
-        } catch {
-          /* surfaced elsewhere */
+        } catch (err) {
+          // A stored session that the API rejects is dead: the token expired, or
+          // it belongs to an identity the backend can no longer resolve. Clearing
+          // it and sending the user to sign in is the only recovery. Without
+          // this the shell renders "No organization access", which misdescribes
+          // an expired session as a missing membership.
+          if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+            await discardSession(supabase);
+            if (!mounted) return;
+            setMe(null);
+            persistActiveOrg(null);
+            setActiveOrganizationId(null);
+            setLoading(false);
+            router.replace("/login");
+            return;
+          }
         }
       }
       setLoading(false);
@@ -76,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [loadMe]);
+  }, [loadMe, router]);
 
   const switchOrganization = useCallback(
     async (id: string) => {
@@ -88,7 +121,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    await supabaseBrowser().auth.signOut();
+    // Revoking the token server-side is best effort. It is a network call made
+    // with the very credential that may already be rejected, so it must never
+    // be able to block the local sign-out — otherwise the one escape hatch on
+    // the "no access" screen is the one thing a broken session prevents.
+    await discardSession(supabaseBrowser());
     setMe(null);
     persistActiveOrg(null);
     setActiveOrganizationId(null);

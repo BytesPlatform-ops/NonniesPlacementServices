@@ -17,7 +17,7 @@ acted on:
 
 | Class | Action | Count |
 | --- | --- | --- |
-| A — Bug | Fixed | 2 |
+| A — Bug | Fixed | 3 |
 | B — Security / data integrity | Fixed | 5 |
 | C — Agreed core requirement missing | Implement minimum | 0 |
 | D — Optional / nice-to-have / new idea | Documented, **not** implemented | 4 |
@@ -87,7 +87,7 @@ limitation · **FAIL** broken · **N/A** deliberately out of scope.
 | 3.2 | Pagination is bounded | `@Min(1) @Max(100)` on every paging DTO | No paging DTO lacks `@Max` | PASS |
 | 3.3 | Sort fields cannot be injected | Every dynamic `orderBy` key is checked against a whitelist with a safe fallback | 10 call sites verified | PASS |
 | 3.4 | Request bodies are bounded per route | Per-route limits: imports 6 MB, email inbound 1 MB, email webhook 512 KB, SMS webhooks 128 KB, everything else 2 MB | Oversized bodies → 413, malformed → 400 | PASS |
-| 3.5 | Errors never fail silently | No empty `catch` blocks exist in application code | Repository-wide sweep | PASS |
+| 3.5 | Errors never fail silently | No empty `catch` blocks exist in application code | Repository-wide sweep. **Note:** this sweep matched only *empty* catch blocks and missed one that swallowed a 401 behind a comment — found later and fixed as F8 | PARTIAL |
 | 3.6 | Secrets never reach logs | Log statements name environment variables, never their values | Sweep of all `logger.*` / `console.*` calls | PASS |
 | 3.7 | Public responses leak nothing internal | Public serializers are explicit view projections, not row spreads | No ids, status, timestamps, notes, capacity or PHI in the public directory | PASS |
 | 3.8 | CSV exports are safe | Formula-injection guard (`=+-@\t\r` prefixed), RFC-4180 quoting, 10,000-row cap | `csv.spec.ts` | PASS |
@@ -138,6 +138,7 @@ limitation · **FAIL** broken · **N/A** deliberately out of scope.
 | F5 | B | **Known-vulnerable Next.js.** 16.2.10 was subject to SSRF in rewrites, middleware bypass and DoS advisories | Upgraded to 16.3.4 — a **minor** bump, no major migration. Website now reports **0 production vulnerabilities** |
 | F6 | A | **Report pages fetched the same query twice.** Filters live in the URL, so `values` took a new object identity on every rewrite and re-fired the same expensive aggregate | Fetch keyed on the serialized query; defaults presented on first render |
 | F7 | A | **Duplicate referrals under concurrency.** Duplicate prevention was check-then-act with no serialisation, so a double submit could create two referrals | `FOR UPDATE` lock on the parent service request plus an in-transaction re-check |
+| F8 | A | **Unrecoverable sign-in dead end.** Two faults combined: `/auth/me` returning 401 was swallowed behind a `/* surfaced elsewhere */` comment, so an expired session rendered "No organization access" (wrong — that message means "no membership"); and `signOut()` awaited a network revoke made with the already-rejected token, so when it failed every following line — clearing storage and navigating — was skipped. The only escape hatch on the screen was the one thing a broken session prevented | 401/403 now discards the dead session and routes to `/login`; sign-out always falls back to a local-only clear and always navigates. Both branches verified by reproducing a dead session end to end |
 
 ## 5. Webhook inventory
 
