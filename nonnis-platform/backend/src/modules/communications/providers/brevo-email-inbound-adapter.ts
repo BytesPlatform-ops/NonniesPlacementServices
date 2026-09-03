@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "../../../config/configuration";
+import { stripQuotedReply } from "../email/strip-quoted-reply";
 import type { EmailInboundAdapter, NormalizedInboundAttachment, NormalizedInboundEmail } from "./email-inbound-adapter";
 
 const ATTACHMENT_ENDPOINT = "https://api.brevo.com/v3/inbound/attachments";
@@ -70,7 +71,11 @@ export class BrevoEmailInboundAdapter implements EmailInboundAdapter {
         destinations,
         primaryTo: this.mailboxList(it.To)[0],
         subject: it.Subject ? String(it.Subject) : undefined,
-        text: this.firstString(it.RawTextBody, it.ExtractedMarkdownMessage),
+        // Brevo's ExtractedMarkdownMessage is the reply WITHOUT the quoted
+        // history; RawTextBody is the whole thread pasted under it. Prefer the
+        // extraction, and fall back to trimming the raw body ourselves so a
+        // reply never arrives with the entire conversation repeated inside it.
+        text: this.firstString(it.ExtractedMarkdownMessage) ?? stripQuotedReply(this.firstString(it.RawTextBody)),
         html: it.RawHtmlBody ? String(it.RawHtmlBody) : undefined,
         internetMessageId: it.MessageId ? String(it.MessageId) : undefined,
         inReplyTo: it.InReplyTo ? String(it.InReplyTo) : headers["in-reply-to"],
