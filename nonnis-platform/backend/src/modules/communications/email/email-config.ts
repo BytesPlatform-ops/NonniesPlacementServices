@@ -33,9 +33,19 @@ export function generateUnsubscribeToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-/** Opaque per-recipient thread/correlation token (used by 15C for inbound routing). */
+/**
+ * Opaque per-recipient thread/correlation token (used for inbound routing).
+ *
+ * Lowercase hex on purpose. The token travels inside the local part of a
+ * reply address, and mail systems are entitled to change the case of a local
+ * part — Brevo does. A mixed-case token (base64url) therefore comes back
+ * different from how it was sent and never matches its conversation, so every
+ * reply silently fails to thread. Hex survives any case folding unchanged.
+ *
+ * 16 random bytes = 128 bits, so widening the alphabet is not needed.
+ */
 export function generateThreadToken(): string {
-  return randomBytes(18).toString("base64url");
+  return randomBytes(16).toString("hex");
 }
 
 /** Safe, public provider status (never exposes the API key or secrets). */

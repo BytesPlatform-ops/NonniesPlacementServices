@@ -3,6 +3,7 @@ import type { PrismaService } from "../../../database/prisma.service";
 import type { EmailInboundAdapter, NormalizedInboundEmail } from "../providers/email-inbound-adapter";
 import type { AttachmentStorageService } from "./attachment-storage.service";
 import { InboundEmailService } from "./inbound-email.service";
+import { generateThreadToken } from "./email-config";
 
 const DOMAIN = "reply.nonnis.com";
 const TOKEN = "abcdef0123456789XYtok";
@@ -35,7 +36,15 @@ function build(h: Harness) {
       create: reviewCreate,
     },
     communicationConversation: {
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { threadToken?: string; id?: string } }) => Promise.resolve(where.threadToken !== undefined ? (h.conversationByToken ?? null) : (h.conversationById ?? null))),
+      findUnique: jest.fn().mockImplementation(({ where }: { where: { threadToken?: unknown; id?: string } }) => Promise.resolve(where.threadToken !== undefined ? (h.conversationByToken ?? null) : (h.conversationById ?? null))),
+      // Token lookups go through findFirst so they can match case-insensitively.
+      findFirst: jest.fn().mockImplementation(({ where }: { where: { threadToken?: { equals?: string; mode?: string } } }) => {
+        const requested = where.threadToken?.equals;
+        const stored = (h.conversationByToken as { threadToken?: string } | undefined)?.threadToken;
+        // Mirror the database's case-insensitive comparison.
+        if (requested && stored && requested.toLowerCase() !== stored.toLowerCase()) return Promise.resolve(null);
+        return Promise.resolve(h.conversationByToken ?? null);
+      }),
     },
     communicationContact: { findUnique: jest.fn().mockResolvedValue(h.contact ?? null) },
     communicationMessageAttachment: { create: jest.fn().mockResolvedValue({}) },
@@ -115,5 +124,37 @@ describe("InboundEmailService correlation + safety", () => {
     await svc.ingestOne(email({ autoSubmitted: true }));
     const data = conversationUpdate.mock.calls[0]![0].data;
     expect(data.lastInboundAt).toBeNull(); // unchanged (conversation.lastInboundAt was null)
+  });
+});
+
+describe("reply-token case folding", () => {
+  // Observed in production: an email sent with Reply-To
+  //   reply-uTyDlfckmu_MDDiqtySvF-ez@reply.nonnisplacement.com
+  // arrived at the recipient as
+  //   reply-utydlfckmu_mddiqtysvf-ez@reply.nonnisplacement.com
+  // Mail systems may change the case of a local part, so a case-sensitive
+  // lookup meant every reply failed to thread and was quarantined instead.
+  const MIXED = "uTyDlfckmu_MDDiqtySvF-ez";
+  const conversation = { ...CONVERSATION, threadToken: MIXED };
+
+  it("threads a reply whose token was lowercased in transit", async () => {
+    const { svc, messageCreate, reviewCreate } = build({ conversationByToken: conversation, contact: CONTACT_MATCH });
+    const r = await svc.ingestOne(email({ destinations: [`reply-${MIXED.toLowerCase()}@${DOMAIN}`] }));
+    expect(r).toEqual({ status: "linked", conversationId: "conv-1" });
+    expect(messageCreate).toHaveBeenCalled();
+    expect(reviewCreate).not.toHaveBeenCalled();
+  });
+
+  it("still threads a reply that comes back with its original casing", async () => {
+    const { svc, messageCreate } = build({ conversationByToken: conversation, contact: CONTACT_MATCH });
+    const r = await svc.ingestOne(email({ destinations: [`reply-${MIXED}@${DOMAIN}`] }));
+    expect(r).toEqual({ status: "linked", conversationId: "conv-1" });
+    expect(messageCreate).toHaveBeenCalled();
+  });
+
+  it("newly generated tokens survive case folding unchanged", () => {
+    const token = generateThreadToken();
+    expect(token).toBe(token.toLowerCase());
+    expect(token).toMatch(/^[0-9a-f]{32}$/);
   });
 });

@@ -78,7 +78,13 @@ export class InboundEmailService {
     // 1) Opaque thread token from any destination address.
     const token = findReplyToken(this.config, n.destinations);
     if (token) {
-      const conv = await this.prisma.communicationConversation.findUnique({ where: { threadToken: token } });
+      // Matched case-insensitively: the token rides in an email local part, and
+      // mail systems may change its case in transit (Brevo lowercases it). New
+      // tokens are lowercase hex and unaffected, but conversations created
+      // before that change still hold mixed-case tokens and must keep threading.
+      const conv = await this.prisma.communicationConversation.findFirst({
+        where: { threadToken: { equals: token, mode: "insensitive" } },
+      });
       if (conv) return { kind: "resolved", conversation: conv, via: "token" };
       return { kind: "review", reason: "UNKNOWN_TOKEN" };
     }
