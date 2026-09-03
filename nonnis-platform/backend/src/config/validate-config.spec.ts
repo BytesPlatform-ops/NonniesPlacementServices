@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import type { AppConfig } from "./configuration";
 import { assertProductionConfig, collectProductionConfigProblems } from "./validate-config";
 
@@ -84,16 +85,53 @@ describe("production config validation", () => {
     expect(joined).toMatch(/TWILIO_A2P_APPROVED/);
   });
 
-  it("aggregates every problem into one error and never logs values", () => {
-    const bad = prodConfig({ databaseUrl: undefined, formIngestToken: "sekret-value-here", communicationsPublicSiteUrl: "http://localhost:3000" });
-    let message = "";
+  const badConfig = () =>
+    prodConfig({ databaseUrl: undefined, formIngestToken: "sekret-value-here", communicationsPublicSiteUrl: "http://localhost:3000" });
+
+  it("starts anyway on a misconfiguration so one bad value cannot take the platform down", () => {
+    // A boot-time throw turned a single mistyped variable into a total outage:
+    // health checks and public content died along with the misconfigured feature.
+    const spy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     try {
-      assertProductionConfig(bad);
-    } catch (err) {
-      message = err instanceof Error ? err.message : "";
+      expect(() => assertProductionConfig(badConfig())).not.toThrow();
+      const logged = spy.mock.calls.flat().join("\n");
+      expect(logged).toMatch(/2 production configuration problem\(s\)/);
+      expect(logged).toMatch(/DATABASE_URL/);
+      expect(logged).toMatch(/COMMUNICATIONS_PUBLIC_SITE_URL/);
+      // Names only — a value must never reach the logs.
+      expect(logged).not.toContain("sekret-value-here");
+      expect(logged).not.toContain("localhost:3000");
+    } finally {
+      spy.mockRestore();
     }
-    expect(message).toMatch(/Refusing to start: 2 production configuration problem\(s\)/);
-    expect(message).not.toContain("sekret-value-here");
-    expect(message).not.toContain("localhost:3000");
+  });
+
+  it("still hard-fails when STRICT_CONFIG_CHECK is set, for staging smoke tests", () => {
+    const previous = process.env.STRICT_CONFIG_CHECK;
+    process.env.STRICT_CONFIG_CHECK = "true";
+    try {
+      let message = "";
+      try {
+        assertProductionConfig(badConfig());
+      } catch (err) {
+        message = err instanceof Error ? err.message : "";
+      }
+      expect(message).toMatch(/Refusing to start: 2 production configuration problem\(s\)/);
+      expect(message).not.toContain("sekret-value-here");
+      expect(message).not.toContain("localhost:3000");
+    } finally {
+      if (previous === undefined) delete process.env.STRICT_CONFIG_CHECK;
+      else process.env.STRICT_CONFIG_CHECK = previous;
+    }
+  });
+
+  it("stays silent when the configuration is healthy", () => {
+    const spy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      assertProductionConfig(prodConfig());
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

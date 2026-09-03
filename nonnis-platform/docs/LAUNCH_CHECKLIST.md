@@ -21,7 +21,7 @@ only the client can make.
 | 1.4 | Supabase production project created, with automated backups **and** point-in-time recovery enabled | EXTERNAL CONFIGURATION PENDING | Client |
 | 1.5 | **Backup restore drill completed** against a scratch database (runbook §5). An untested backup is not a backup | CODE READY — drill not yet run | Ops |
 | 1.6 | Generate and set `FORM_INGEST_TOKEN` and `COMMUNICATIONS_UNSUBSCRIBE_SECRET` (16+ characters each) | CODE READY | Ops |
-| 1.7 | Set `FRONTEND_URL`, `COMMUNICATIONS_PUBLIC_SITE_URL`, `COMMUNICATIONS_API_URL` to real https origins. The backend refuses to start otherwise | CODE READY | Ops |
+| 1.7 | Set `FRONTEND_URL`, `COMMUNICATIONS_PUBLIC_SITE_URL`, `COMMUNICATIONS_API_URL` to real https origins. The backend logs each problem by name at boot and starts anyway, so check the deploy logs | CODE READY | Ops |
 | 1.8 | Deploy the backend **in the same region as the database** (audit risk R2) | CODE READY | Ops |
 
 ## 2. Live provider credentials
@@ -57,7 +57,7 @@ Run against the production deployment.
 ### 3.1 Infrastructure
 - [ ] `GET /health` returns `status: ok`
 - [ ] `GET /api/v1/communications/configuration` shows the intended readiness state
-- [ ] Backend logs show no `Refusing to start`
+- [ ] Backend deploy logs show no `production configuration problem(s) detected`
 - [ ] CRM loads and can sign in; no CORS errors in the browser console
 - [ ] `https://<domain>/robots.txt` shows the **real** domain in the sitemap line
 - [ ] `https://<domain>/sitemap.xml` contains real-domain URLs, real blog posts and real published providers

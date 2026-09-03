@@ -24,10 +24,18 @@ it. The CRM does, and the backend allows **exactly one** origin: `FRONTEND_URL`.
 
 ## 2. Configuration
 
-The backend **refuses to start** in production if configuration is unsafe. It
-prints every problem by variable name and never prints a value. If the process
-exits with `Refusing to start: N production configuration problem(s)`, fix the
-listed variables — do not work around the check.
+At boot the backend checks its production configuration and logs an error block
+naming every problem by variable name — never a value. It then **starts anyway**,
+so one mistyped variable degrades the feature it affects instead of taking down
+health checks, public content and sign-in along with it.
+
+Search the deploy logs for `production configuration problem(s) detected` after
+every deployment. The listed variables are genuinely broken and must be fixed;
+the process starting is not a sign that they are optional.
+
+Set `STRICT_CONFIG_CHECK=true` to make the same check refuse to start instead.
+Use it in staging or a pre-release smoke test, where failing loudly is safe —
+not in the live environment.
 
 ### Backend — required in production
 
@@ -172,9 +180,18 @@ line.
 
 ## 7. Common incidents
 
-**Backend will not start, logs `Refusing to start`.**
-Configuration is unsafe. Each line names one variable. Fix them; the check is
-protecting you from shipping localhost unsubscribe links or a broken CORS origin.
+**Deploy logs show `production configuration problem(s) detected`.**
+Configuration is unsafe. Each line names one variable. Fix them: the affected
+features are misbehaving right now — typically localhost unsubscribe links or a
+CORS origin that blocks the CRM. The application starting does not mean the
+problem is cosmetic.
+
+**Every route returns 500, including `/health` and public endpoints.**
+That is a boot failure, not a route problem — the whole function died on start.
+Check the deploy logs for the first error after the process launched. Common
+causes are an unreachable database, a missing runtime dependency, or (if
+`STRICT_CONFIG_CHECK=true` is set) a configuration problem. Do not debug
+individual endpoints; nothing is running.
 
 **CRM loads but every API call fails with a CORS error.**
 `FRONTEND_URL` does not exactly match the CRM's origin. It allows one origin,

@@ -1,7 +1,8 @@
+import { Logger } from "@nestjs/common";
 import type { AppConfig } from "./configuration";
 
 /**
- * Fail-fast production configuration validation.
+ * Production configuration validation.
  *
  * Every value in `loadConfiguration()` tolerates being unset so that local
  * development, tests and CI boot with zero setup. That convenience is dangerous
@@ -12,8 +13,8 @@ import type { AppConfig } from "./configuration";
  * pinned to `http://localhost:3001` so the deployed CRM cannot call the API).
  *
  * This check runs once at boot. Outside production it does nothing. In
- * production it collects EVERY problem and throws a single error naming the
- * offending variables — never their values, so nothing secret reaches logs.
+ * production it collects EVERY problem and reports the offending variables by
+ * name — never their values, so nothing secret reaches logs.
  */
 
 const LOCAL_HOST = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?/i;
@@ -107,13 +108,39 @@ export function collectProductionConfigProblems(config: AppConfig): Problem[] {
   return problems;
 }
 
-/** Throws a single aggregated error when production configuration is unsafe. */
+/**
+ * Report production configuration problems at boot.
+ *
+ * This deliberately does NOT stop the process. An earlier version threw, on the
+ * reasoning that a silently-wrong deployment is worse than a loud failure. In
+ * practice that turned one mistyped variable into a total outage: health checks,
+ * the public website's content feed and CRM sign-in all died together, because
+ * refusing to boot takes down everything rather than the thing misconfigured.
+ * A partial misconfiguration should degrade the feature it affects, not the
+ * whole platform.
+ *
+ * So the problems are logged as an unmissable error block and startup
+ * continues. Values are never logged — only variable names.
+ *
+ * Set STRICT_CONFIG_CHECK=true to restore hard-fail behaviour, which is useful
+ * in staging or a pre-release smoke test where refusing to start is safe.
+ */
 export function assertProductionConfig(config: AppConfig): void {
   const problems = collectProductionConfigProblems(config);
   if (problems.length === 0) return;
-  throw new Error(
-    `Refusing to start: ${problems.length} production configuration problem(s).\n` +
-      problems.map((p) => `  - ${p}`).join("\n") +
-      "\nSee docs/PRODUCTION_RUNBOOK.md. (Values are never logged.)",
-  );
+
+  const detail =
+    `${problems.length} production configuration problem(s) detected:\n` +
+    problems.map((p) => `  - ${p}`).join("\n") +
+    "\nSee docs/PRODUCTION_RUNBOOK.md. (Values are never logged.)";
+
+  if (String(process.env.STRICT_CONFIG_CHECK ?? "").toLowerCase() === "true") {
+    throw new Error(`Refusing to start: ${detail}`);
+  }
+
+  const logger = new Logger("ConfigCheck");
+  logger.error("=".repeat(72));
+  logger.error(detail);
+  logger.error("Starting anyway — the affected features will misbehave until this is fixed.");
+  logger.error("=".repeat(72));
 }
