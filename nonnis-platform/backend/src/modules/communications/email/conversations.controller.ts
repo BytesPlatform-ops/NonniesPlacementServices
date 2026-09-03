@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from "@nestj
 import { PERMISSIONS } from "../../../common/rbac";
 import { CurrentUser, RequirePermissions } from "../../auth/decorators";
 import type { RequestUser } from "../../auth/request-user";
+import { EmailDispatcherService } from "./email-dispatcher.service";
 import { ConversationService } from "./conversation.service";
 import { AttachmentUploadUrlDto, ListConversationsDto, ReplyDto } from "../dto/inbox.dto";
 
@@ -12,7 +13,31 @@ import { AttachmentUploadUrlDto, ListConversationsDto, ReplyDto } from "../dto/i
  */
 @Controller(["communications/conversations", "communications/email/conversations"])
 export class ConversationsController {
-  constructor(private readonly conversations: ConversationService) {}
+  constructor(
+    private readonly conversations: ConversationService,
+    private readonly dispatcher: EmailDispatcherService,
+  ) {}
+
+  /**
+   * Send whatever was just queued, inside this request.
+   *
+   * The background dispatcher is a timer, and a timer only runs while the
+   * process is alive. On a serverless host the instance is frozen as soon as the
+   * request finishes, so a queued reply was being picked up and then abandoned
+   * mid-flight — the provider call aborted and the message landed on "delivery
+   * uncertain" instead of being sent.
+   *
+   * Draining here keeps the instance alive for the send. It stays best effort:
+   * the row is already durably queued, so if this attempt fails the message is
+   * retried later rather than lost.
+   */
+  private async flush(): Promise<void> {
+    try {
+      await this.dispatcher.runRepliesOnce();
+    } catch {
+      // Already queued and retryable — never fail the user's send over this.
+    }
+  }
 
   @Get()
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
@@ -64,14 +89,18 @@ export class ConversationsController {
 
   @Post(":id/reply")
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_SEND)
-  reply(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: ReplyDto) {
-    return this.conversations.replyToConversation(user, id, dto.body, dto.attachments ?? [], dto.idempotencyKey);
+  async reply(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: ReplyDto) {
+    const result = await this.conversations.replyToConversation(user, id, dto.body, dto.attachments ?? [], dto.idempotencyKey);
+    await this.flush();
+    return result;
   }
 
   @Post(":id/messages/:messageId/retry")
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_SEND)
-  retry(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Param("messageId", new ParseUUIDPipe()) messageId: string) {
-    return this.conversations.retryReply(user, id, messageId);
+  async retry(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Param("messageId", new ParseUUIDPipe()) messageId: string) {
+    const result = await this.conversations.retryReply(user, id, messageId);
+    await this.flush();
+    return result;
   }
 
   @Get(":id/attachments/:attachmentId/download")

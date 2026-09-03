@@ -29,6 +29,7 @@ import { InboundReviewService } from "./email/inbound-review.service";
 import { InboundEmailService } from "./email/inbound-email.service";
 import { EmailInboundWebhookController } from "./email/email-inbound-webhook.controller";
 import { AttachmentStorageService } from "./email/attachment-storage.service";
+import { DispatchRunController } from "./dispatch/dispatch-run.controller";
 import { SmsTemplatesController } from "./sms/sms-templates.controller";
 import { SmsTemplateService } from "./sms/sms-template.service";
 import { SmsCampaignsController } from "./sms/sms-campaigns.controller";
@@ -57,6 +58,7 @@ import { CommunicationsOperationsController } from "./operations/communications-
 @Module({
   imports: [AuditModule],
   controllers: [
+    DispatchRunController,
     ContactsController,
     ListsController,
     TagsController,

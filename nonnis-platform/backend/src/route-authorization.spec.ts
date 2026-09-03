@@ -34,6 +34,10 @@ const INTENTIONALLY_PUBLIC = new Set([
   "POST /webhooks/communications/email/inbound",
   "POST /webhooks/communications/sms/inbound",
   "POST /webhooks/communications/sms/status",
+  // Scheduler-driven dispatch pass. A cron has no user session, so this cannot
+  // use Supabase auth; it is guarded by the same shared secret as the provider
+  // webhooks, compared in constant time.
+  "POST /internal/dispatch/run",
 ]);
 
 /**
