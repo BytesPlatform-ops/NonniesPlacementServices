@@ -27,10 +27,10 @@ though only the operational case foundation is implemented so far.
 
 Two separate applications:
 
-| App        | Stack                                             | Dev port |
-| ---------- | ------------------------------------------------- | -------- |
-| `backend`  | Node.js · TypeScript · NestJS · Prisma · Postgres | `4000`   |
-| `frontend` | Next.js (App Router) · TypeScript · Tailwind      | `3001`   |
+| App          | Stack                                                 | Dev port |
+| ------------ | ----------------------------------------------------- | -------- |
+| `backend`  | Node.js · TypeScript · NestJS · Prisma · Postgres | `4000` |
+| `frontend` | Next.js (App Router) · TypeScript · Tailwind        | `3001` |
 
 - REST API, versioned under `/api/v1`, with a normalized `{ data }` / error envelope.
 - Modular NestJS boundaries; DTO validation; centralized exception handling;
@@ -202,15 +202,15 @@ database.
 
 ### Backend environment variables
 
-| Variable       | Purpose                                | Example                                                       |
-| -------------- | -------------------------------------- | ------------------------------------------------------------ |
-| `DATABASE_URL`               | Postgres connection string for Prisma      | `postgresql://user:pass@host:6543/postgres?pgbouncer=true` |
-| `DIRECT_URL`                 | Direct/session-pooler URL for migrations    | `postgresql://user:pass@host:5432/postgres`                |
-| `PORT`                       | API port                                    | `4000`                                                     |
-| `FRONTEND_URL`               | Allowed CORS origin for the frontend        | `http://localhost:3001`                                    |
-| `SUPABASE_URL`               | Supabase project URL                        | `https://[ref].supabase.co`                                |
-| `SUPABASE_ANON_KEY`          | Supabase anon key (token verification)      | *(from Supabase dashboard)*                                |
-| `SUPABASE_SERVICE_ROLE_KEY`  | **Secret** — admin ops (invites) only       | *(backend only; never sent to the frontend)*               |
+| Variable                      | Purpose                                      | Example                                                      |
+| ----------------------------- | -------------------------------------------- | ------------------------------------------------------------ |
+| `DATABASE_URL`              | Postgres connection string for Prisma        | `postgresql://user:pass@host:6543/postgres?pgbouncer=true` |
+| `DIRECT_URL`                | Direct/session-pooler URL for migrations     | `postgresql://user:pass@host:5432/postgres`                |
+| `PORT`                      | API port                                     | `4000`                                                     |
+| `FRONTEND_URL`              | Allowed CORS origin for the frontend         | `http://localhost:3001`                                    |
+| `SUPABASE_URL`              | Supabase project URL                         | `https://[ref].supabase.co`                                |
+| `SUPABASE_ANON_KEY`         | Supabase anon key (token verification)       | *(from Supabase dashboard)*                                |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Secret** — admin ops (invites) only | *(backend only; never sent to the frontend)*               |
 
 ---
 
@@ -227,11 +227,11 @@ Commands: `npm run typecheck` · `npm run lint` · `npm run build` · `npm test`
 
 ### Frontend environment variables
 
-| Variable                        | Purpose                             | Example                     |
-| ------------------------------- | ----------------------------------- | --------------------------- |
-| `NEXT_PUBLIC_API_URL`           | Base URL of the backend API         | `http://localhost:4000`     |
-| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL (public)       | `https://[ref].supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public/safe)     | *(from Supabase dashboard)* |
+| Variable                          | Purpose                         | Example                       |
+| --------------------------------- | ------------------------------- | ----------------------------- |
+| `NEXT_PUBLIC_API_URL`           | Base URL of the backend API     | `http://localhost:4000`     |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL (public)   | `https://[ref].supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public/safe) | *(from Supabase dashboard)* |
 
 ---
 
@@ -330,8 +330,7 @@ scoring, ranking, or compliance workflows.
 - **Endpoints:** `GET/POST /providers`, `GET/PATCH /providers/:id`,
   `PATCH /providers/:id/status`, `GET /providers/:id/users`, and per-provider
   sub-resources for `services`, `coverage`, `payment-types`, `languages`, `hours`
-  (`PUT`), and `capacity` (`PUT`). Admin catalogs: `GET/POST/PATCH
-  /service-categories` (+`/status`), `/payment-types`, `/languages`.
+  (`PUT`), and `capacity` (`PUT`). Admin catalogs: `GET/POST/PATCH /service-categories` (+`/status`), `/payment-types`, `/languages`.
 - **Search/filter** (`GET /providers`): `q`, `status`, `serviceCategoryId`, `state`,
   `city`, `postalCode`, `languageId`, `paymentTypeId`, `availability`, whitelisted
   `sort`/`order`, pagination. Explicit filtering only — never suitability ranking.
@@ -368,8 +367,7 @@ or analytics.
   coverage/payment/languages/hours and (`users.manage_own_organization`) invites
   teammates to provider roles only. Provider Staff are read-only except capacity
   (`provider_capacity.manage_own`).
-- **Routing:** `/provider` (overview), `/provider/{profile,services,coverage,payment,
-  languages,hours,capacity,team}`. A role-aware landing (`/home`) sends provider-org
+- **Routing:** `/provider` (overview), `/provider/{profile,services,coverage,payment, languages,hours,capacity,team}`. A role-aware landing (`/home`) sends provider-org
   users to the portal; other roles keep the operations console. The sidebar swaps to
   portal navigation when the active organization is a provider.
 
@@ -466,10 +464,10 @@ escalation anywhere.
 - **Messages** (`Message`, append-only) with three visibility scopes decided by a
   centralized `MessageAccessService`: **CASE_TEAM** (`/cases/:id/messages` — case org
   + Nonnis; providers excluded), **NONNIS_INTERNAL** (`/cases/:id/internal-notes` —
-  `internal_notes.manage` only), **PROVIDER_REFERRAL** (`/referrals/:id/messages` —
-  the referral's provider **or** the case/Nonnis side; one provider never sees
-  another's thread). The formal referral clarification workflow (ReferralResponse) is
-  untouched; referral messages are for ordinary follow-up.
+    `internal_notes.manage` only), **PROVIDER_REFERRAL** (`/referrals/:id/messages` —
+    the referral's provider **or** the case/Nonnis side; one provider never sees
+    another's thread). The formal referral clarification workflow (ReferralResponse) is
+    untouched; referral messages are for ordinary follow-up.
 - **Unified timeline** (`GET /cases/:id/timeline`, `cases.read`): one viewer-aware
   history merging WorkflowEvents with the messages the viewer may see (internal notes
   only for `internal_notes.manage`; providers cannot reach it), filterable
@@ -607,8 +605,7 @@ ranking, prediction, scheduling, or custom report builder.
   ordinary tenant-scoped APIs are untouched.
 - **Endpoints:** `GET /api/v1/reports/overview` (counts only), plus `cases`,
   `referrals`, `providers`, `readiness`, `tasks`, and `form-submissions` reports,
-  each returning `{ appliedFilters, summary, groups, items, page, pageSize, total,
-  totalPages }` with server-side date / organization / facility filtering, search,
+  each returning `{ appliedFilters, summary, groups, items, page, pageSize, total, totalPages }` with server-side date / organization / facility filtering, search,
   whitelisted sort, and pagination. `GET /api/v1/reports/filter-options` feeds the
   filter dropdowns.
 - **One definition everywhere:** reports reuse existing business logic — active-case
@@ -727,6 +724,7 @@ model, and this phase makes **no** live provider calls and sends nothing.
 ## Communications — Email Templates & Campaigns (Phase 15B)
 
 Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis Admin
+
 + Operations), which gates **all** campaign queueing and test sends.
 
 - **Templates + visual builder:** reusable templates with a block builder (text /
@@ -740,8 +738,7 @@ Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis A
   **eligibility preview**. The **sender is fixed** to the configured verified sender
   (only From-Name is editable). Queueing snapshots content + recipients and returns
   immediately — it never sends inline.
-- **Delivery:** a **Postgres-backed dispatcher** claims recipients with `FOR UPDATE
-  SKIP LOCKED` (multi-instance safe), sends with bounded concurrency, and retries
+- **Delivery:** a **Postgres-backed dispatcher** claims recipients with `FOR UPDATE SKIP LOCKED` (multi-instance safe), sends with bounded concurrency, and retries
   transient failures with backoff. The 15A eligibility + suppression policy is
   re-checked **at send time** (a newly opted-out contact is not sent). Ambiguous
   sends become `DELIVERY_UNKNOWN` and are **never blindly retried**. Campaigns can be
@@ -806,8 +803,7 @@ Console. Twilio is only the SMS transport + inbound provider behind the 15A
   segment summary. Eligibility reuses the shared policy — **OPTED_IN required,
   UNKNOWN never eligible**, opted-out/suppressed/invalid numbers excluded, duplicates
   across lists messaged once. Queueing snapshots each recipient's rendered message.
-- **Safe dispatch:** the SMS worker reuses the **same** Postgres `FOR UPDATE SKIP
-  LOCKED` claiming and the **same** retry / ambiguous-timeout policy as email, with
+- **Safe dispatch:** the SMS worker reuses the **same** Postgres `FOR UPDATE SKIP LOCKED` claiming and the **same** retry / ambiguous-timeout policy as email, with
   bounded batch size and concurrency. Consent and suppression are re-checked
   **immediately before each send**, so a contact who texts STOP after the campaign was
   queued is never messaged. Campaigns can be cancelled.

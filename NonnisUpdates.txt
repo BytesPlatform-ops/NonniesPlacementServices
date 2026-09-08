@@ -202,3 +202,15 @@ Part 4: Developer Verification Checklist
 
 
 murtaza mu se other wali cheez batae ga
+
+
+
+
+
+
+
+Nonnies:
+1. Type facility names (handswritten not drop down) (referral facilities)
+2. “Others “right after payment options 
+3. Change email on website to the domain nonnisplacement.com . Contact no has to be changed. 
+4. Needs domain email for nonnis so they can use google workspace

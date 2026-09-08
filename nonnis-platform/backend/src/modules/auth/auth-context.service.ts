@@ -10,6 +10,16 @@ const userWithAccessInclude = {
       organization: true,
       role: { include: { permissions: { include: { permission: true } } } },
     },
+    // Ordered so the membership list is stable across requests. Without this,
+    // Postgres returns rows in whatever order it likes, and a multi-membership
+    // user with no stored choice could be dropped into a different organization
+    // — and so a different landing page — on each first sign-in.
+    //
+    // `isPrimary` first because that flag exists precisely to name the default.
+    // `createdAt` then `id` break the remaining ties: `createdAt` is the
+    // meaningful order (longest-standing membership wins) and `id` guarantees
+    // determinism even for rows created in the same transaction.
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }, { id: "asc" }],
   },
 } satisfies Prisma.UserInclude;
 

@@ -41,6 +41,18 @@ async function main() {
   assert(/Trusted by families/i.test(home), "/ renders the Testimonials section heading");
   assert(/Demo Family Testimonial|Demo Hospital Partner|Demo Provider Partner/.test(home), "/ renders at least one seeded testimonial");
 
+  // The homepage marketplace strip is fed by the same published residential
+  // listings as /residential-providers. Assert it renders real ones and links
+  // them, so a broken fetch shows up here rather than as a silently empty
+  // section that build and typecheck both consider fine.
+  const directory = await get("/residential-providers");
+  const slugs = [...directory.matchAll(/href="\/residential-providers\/([a-z0-9-]+)"/g)].map((m) => m[1]);
+  assert(slugs.length > 0, "/residential-providers lists at least one published provider");
+  assert(
+    slugs.some((slug) => home.includes(`href="/residential-providers/${slug}"`)),
+    "/ marketplace strip links a published provider from the directory",
+  );
+
   if (process.exitCode) {
     console.error("\nSmoke test FAILED — public content is not rendering correctly.");
   } else {

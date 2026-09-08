@@ -61,6 +61,8 @@ export interface UserDetailView extends UserView {
 export interface RoleOption {
   code: string;
   name: string;
+  /** Organization types this role may be assigned in (authoritative, from the server). */
+  allowedOrganizationTypes: string[];
 }
 
 export const ORGANIZATION_TYPES = [

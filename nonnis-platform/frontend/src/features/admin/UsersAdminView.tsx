@@ -5,6 +5,7 @@ import { humanizeEnum } from "@/lib/format";
 import { statusTone } from "@/lib/admin-status";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
+import { activeOrgType } from "@/lib/landing";
 import { assignableRoles, changeMembershipRole, inviteUser, listUsers, setUserStatus } from "@/services/admin.service";
 import type { RoleOption, UserListItem } from "@/types/admin";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -17,13 +18,20 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { useAction } from "@/hooks/use-action";
 
 export function UsersAdminView() {
-  const { activeOrganizationId, hasPermission } = useAuth();
+  const { activeOrganizationId, hasPermission, me } = useAuth();
   const canManage =
     hasPermission(PERMISSIONS.USERS_MANAGE) || hasPermission(PERMISSIONS.USERS_MANAGE_OWN_ORGANIZATION);
 
   const users = useAsync(() => listUsers({ page: 1 }), [activeOrganizationId]);
   const roles = useAsync<RoleOption[]>(() => (canManage ? assignableRoles() : Promise.resolve([])), [activeOrganizationId, canManage]);
-  const assignable = roles.data ?? [];
+  // Offer only the roles that are valid in this organization's type. The server
+  // rejects an incompatible pairing with a 400 either way; filtering here means
+  // the option is never presented in the first place, and the rules come from
+  // the server with each role rather than being restated in the UI.
+  const orgType = activeOrgType(me, activeOrganizationId);
+  const assignable = (roles.data ?? []).filter(
+    (r) => !orgType || r.allowedOrganizationTypes.length === 0 || r.allowedOrganizationTypes.includes(orgType),
+  );
   const assignableCodes = new Set(assignable.map((r) => r.code));
 
   const [inviteOpen, setInviteOpen] = useState(false);

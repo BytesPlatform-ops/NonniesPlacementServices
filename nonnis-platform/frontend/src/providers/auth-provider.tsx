@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError, apiGet } from "@/lib/api-client";
 import { getActiveOrg, setActiveOrg as persistActiveOrg } from "@/lib/active-org";
 import { resolveActiveOrg } from "@/lib/resolve-active-org";
+import { landingPath } from "@/lib/landing";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { MeResponse } from "@/types/auth";
 
@@ -46,7 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(getActiveOrg());
 
-  const loadMe = useCallback(async () => {
+  /** Loads the caller's context and returns it, so a caller can act on the
+   *  freshly loaded value without waiting for React state to settle. */
+  const loadMe = useCallback(async (): Promise<MeResponse> => {
     let data = await apiGet<MeResponse>("/api/v1/auth/me");
     if (data.provisioned && data.memberships.length > 0) {
       const chosen = resolveActiveOrg(
@@ -64,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setActiveOrganizationId(null);
     }
     setMe(data);
+    return data;
   }, []);
 
   useEffect(() => {
@@ -115,9 +119,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       persistActiveOrg(id);
       setActiveOrganizationId(id);
-      await loadMe();
+      const next = await loadMe();
+      // Switching organization changes which console applies: a provider
+      // organization has a portal, Nonnis staff have the operations centre, and
+      // a referring organization has the case list. Staying on the current page
+      // would leave the user looking at a route the new organization may have no
+      // navigation for. The destination comes from the same landingPath() used
+      // after sign-in, so the two paths can never disagree.
+      router.replace(landingPath(next));
     },
-    [loadMe],
+    [loadMe, router],
   );
 
   const signOut = useCallback(async () => {
@@ -141,7 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       hasPermission: (code: string) => permissions.includes(code),
       switchOrganization,
-      reload: loadMe,
+      // `loadMe` returns the loaded context for internal callers; `reload` keeps
+      // its void contract so consumers are not handed a value to misuse.
+      reload: async () => {
+        await loadMe();
+      },
       signOut,
     };
   }, [loading, me, activeOrganizationId, switchOrganization, loadMe, signOut]);

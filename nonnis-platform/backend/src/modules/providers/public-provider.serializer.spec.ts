@@ -61,11 +61,37 @@ describe("public provider serializer (no internal leakage)", () => {
       internalNotes: "SECRET",
       services: [{ serviceCategory: { name: "Memory Care" } }],
       languages: [{ language: { name: "English" } }],
+      paymentTypes: [{ paymentType: { name: "Private Pay" } }, { paymentType: { name: "Medicaid" } }],
     } as unknown as ProviderPublicCardRow;
     const view = toProviderPublicCard(cardRow);
     expect(JSON.stringify(view)).not.toContain("SECRET");
     expect(view).not.toHaveProperty("phone");
     expect(view.services).toEqual(["Memory Care"]);
     expect(view.slug).toBe("sunrise");
+    // Funding is public on the detail page, so the card carries it too — the
+    // directory and homepage cards both display it.
+    expect(view.paymentTypes).toEqual(["Private Pay", "Medicaid"]);
+  });
+
+  it("card still exposes no capacity, notes or internal identifiers", () => {
+    // Capacity is deliberately never public: the homepage cannot show real bed
+    // availability, so it must not claim any.
+    const cardRow = {
+      displayName: "Sunrise",
+      publicSlug: "sunrise",
+      publicDescription: "Short summary",
+      city: "Reno",
+      state: "NV",
+      services: [],
+      languages: [],
+      paymentTypes: [],
+      capacity: [{ totalBeds: 12, availableBeds: 3 }],
+      internalNotes: "SECRET",
+    } as unknown as ProviderPublicCardRow;
+    const serialized = JSON.stringify(toProviderPublicCard(cardRow));
+    expect(serialized).not.toContain("capacity");
+    expect(serialized).not.toContain("availableBeds");
+    expect(serialized).not.toContain("SECRET");
+    expect(serialized).not.toContain("organizationId");
   });
 });

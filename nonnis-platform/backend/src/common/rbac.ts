@@ -227,3 +227,61 @@ export function assignableRoleCodes(actorPermissions: ReadonlySet<string>): Role
   }
   return [];
 }
+
+// ---------------------------------------------------------------------------
+// Role ↔ organization type compatibility
+// ---------------------------------------------------------------------------
+
+/**
+ * The organization types each role may be assigned to.
+ *
+ * A role and an organization type are two halves of one decision, and the
+ * platform already behaves as if they are: the CRM picks the provider portal or
+ * the staff console purely from `Organization.type`, never from the role code.
+ * A provider role sitting in a hospital organization therefore produced a user
+ * with provider permissions and a staff console — a combination nothing in the
+ * product means to support. These rules make that impossible to create.
+ *
+ * DISCHARGE_PROFESSIONAL covers the referring side of the network: the
+ * organizations that discharge or refer patients. NONNIS and PROVIDER are
+ * excluded because each already has its own dedicated roles. PARTNER is
+ * included by elimination — it is neither the platform operator nor a care
+ * provider — and excluding it would make PARTNER organizations unusable, since
+ * no role could then be assigned to anyone in one.
+ */
+export const ROLE_ALLOWED_ORGANIZATION_TYPES: Record<RoleCode, readonly OrganizationTypeCode[]> = {
+  [ROLES.NONNIS_ADMIN]: ["NONNIS"],
+  [ROLES.NONNIS_OPERATIONS]: ["NONNIS"],
+  [ROLES.DISCHARGE_PROFESSIONAL]: ["HOSPITAL", "REHABILITATION_CENTER", "SKILLED_NURSING_FACILITY", "PARTNER"],
+  [ROLES.PROVIDER_ADMIN]: ["PROVIDER"],
+  [ROLES.PROVIDER_STAFF]: ["PROVIDER"],
+};
+
+/** Every organization type in the schema's `OrganizationType` enum. */
+export type OrganizationTypeCode =
+  | "NONNIS"
+  | "HOSPITAL"
+  | "REHABILITATION_CENTER"
+  | "SKILLED_NURSING_FACILITY"
+  | "PROVIDER"
+  | "PARTNER";
+
+/** True when `roleCode` may be held inside an organization of `organizationType`. */
+export function isRoleAllowedForOrganizationType(roleCode: string, organizationType: string): boolean {
+  const allowed = ROLE_ALLOWED_ORGANIZATION_TYPES[roleCode as RoleCode];
+  return !!allowed && (allowed as readonly string[]).includes(organizationType);
+}
+
+/** The roles that may be assigned inside an organization of this type. */
+export function rolesForOrganizationType(organizationType: string): RoleCode[] {
+  return (Object.keys(ROLE_ALLOWED_ORGANIZATION_TYPES) as RoleCode[]).filter((code) =>
+    isRoleAllowedForOrganizationType(code, organizationType),
+  );
+}
+
+/** Human-readable reason for a rejected role/organization pairing. */
+export function roleOrganizationTypeError(roleCode: string, organizationType: string): string {
+  const allowed = ROLE_ALLOWED_ORGANIZATION_TYPES[roleCode as RoleCode];
+  if (!allowed) return `Unknown role: ${roleCode}.`;
+  return `The ${roleCode} role cannot be assigned in a ${organizationType} organization. It is only valid in: ${allowed.join(", ")}.`;
+}

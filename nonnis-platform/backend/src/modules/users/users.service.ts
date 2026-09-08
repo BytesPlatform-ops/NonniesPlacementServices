@@ -10,7 +10,8 @@ import { ConfigService } from "@nestjs/config";
 import { type UserStatus } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
-import { assignableRoleCodes, PERMISSIONS } from "../../common/rbac";
+import { PERMISSIONS, ROLE_ALLOWED_ORGANIZATION_TYPES, assignableRoleCodes, isRoleAllowedForOrganizationType, roleOrganizationTypeError } from "../../common/rbac";
+import type { RoleCode } from "../../common/rbac";
 import type { AppConfig } from "../../config/configuration";
 import { AuditService } from "../audit/audit.service";
 import { SupabaseService } from "../auth/supabase.service";
@@ -112,11 +113,24 @@ export class UsersService {
     return toUserDetailView(user, memberships);
   }
 
-  /** Roles the actor is permitted to assign (for safe UI role options). */
-  async assignableRoles(actor: RequestUser): Promise<Array<{ code: string; name: string }>> {
+  /**
+   * Roles the actor is permitted to assign, each carrying the organization types
+   * it is valid in.
+   *
+   * The types travel with the role so the UI can hide an incompatible option
+   * using the same rules the server enforces, instead of keeping its own copy
+   * that can drift out of step with them.
+   */
+  async assignableRoles(
+    actor: RequestUser,
+  ): Promise<Array<{ code: string; name: string; allowedOrganizationTypes: string[] }>> {
     const codes = assignableRoleCodes(actor.activePermissions);
     const roles = await this.prisma.role.findMany({ where: { code: { in: codes } }, orderBy: { code: "asc" } });
-    return roles.map((r) => ({ code: r.code, name: r.name }));
+    return roles.map((r) => ({
+      code: r.code,
+      name: r.name,
+      allowedOrganizationTypes: [...(ROLE_ALLOWED_ORGANIZATION_TYPES[r.code as RoleCode] ?? [])],
+    }));
   }
 
   async invite(actor: RequestUser, dto: InviteUserDto): Promise<InviteResult> {
@@ -131,6 +145,7 @@ export class UsersService {
     }
 
     this.assertAssignable(actor, dto.roleCode);
+    this.assertRoleFitsOrganization(dto.roleCode, org.type);
     const role = await this.prisma.role.findUnique({ where: { code: dto.roleCode } });
     if (!role) {
       throw new BadRequestException("Unknown role.");
@@ -259,7 +274,7 @@ export class UsersService {
     const organizationId = requireActiveOrganization(actor);
     const membership = await this.prisma.organizationMembership.findFirst({
       where: { id: membershipId, userId, organizationId },
-      include: { role: true },
+      include: { role: true, organization: { select: { type: true } } },
     });
     if (!membership) {
       throw new NotFoundException("Membership not found");
@@ -269,6 +284,9 @@ export class UsersService {
     if (!assignable.includes(membership.role.code) || !assignable.includes(dto.roleCode)) {
       throw new ForbiddenException("You cannot assign this role.");
     }
+    // The organization a membership belongs to cannot change, so the new role
+    // has to fit the organization the membership is already in.
+    this.assertRoleFitsOrganization(dto.roleCode, membership.organization.type);
     const newRole = await this.prisma.role.findUnique({ where: { code: dto.roleCode } });
     if (!newRole) {
       throw new BadRequestException("Unknown role.");
@@ -287,6 +305,19 @@ export class UsersService {
   }
 
   // ---- authorization helpers ----
+
+  /**
+   * Rejects a role that does not belong in this organization type.
+   *
+   * Separate from `assertAssignable`, which asks whether the *actor* may hand
+   * out the role at all. This asks whether the role makes sense where it is
+   * going — a distinct question with a distinct answer (400, not 403).
+   */
+  private assertRoleFitsOrganization(roleCode: string, organizationType: string): void {
+    if (!isRoleAllowedForOrganizationType(roleCode, organizationType)) {
+      throw new BadRequestException(roleOrganizationTypeError(roleCode, organizationType));
+    }
+  }
 
   private resolveManageableOrg(actor: RequestUser, requestedOrganizationId: string): string {
     if (actor.activePermissions.has(PERMISSIONS.USERS_MANAGE)) {

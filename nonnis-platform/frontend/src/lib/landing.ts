@@ -11,6 +11,11 @@ export function activeOrgIsProvider(me: MeResponse | null, activeOrganizationId:
   return activeMembership(me, activeOrganizationId)?.organizationType === "PROVIDER";
 }
 
+/** The active organization's type, or null when there is no usable membership. */
+export function activeOrgType(me: MeResponse | null, activeOrganizationId: string | null): string | null {
+  return activeMembership(me, activeOrganizationId)?.organizationType ?? null;
+}
+
 /**
  * Role-aware post-login landing path. Provider-org users go to their self-service
  * portal; everyone else keeps the operations console default.

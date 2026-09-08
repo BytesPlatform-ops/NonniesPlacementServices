@@ -1,0 +1,15 @@
+Updated implementation sequence
+
+1. Foundation ✅
+2. Identity/Auth/RBAC ✅
+3. Discharge Dashboard + Case Workspace ✅
+4. Scope Realignment + Architecture Cleanup ← ab ye run karo
+5. Provider Management + Service Categories + Capacity
+6. Basic Provider Portal
+7. Nonnis Admin Operations Control Center
+8. Referral Workflow with Manual Provider Selection
+9. Tasks + Basic Case Messaging + Unified Timeline
+10. Discharge Readiness Score + Operational Blockers
+11. Basic Reporting + Admin Reports
+12. Public Residential Provider Directory
+13. Full Core-System Audit + Production Hardening

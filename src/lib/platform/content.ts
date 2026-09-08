@@ -73,6 +73,8 @@ export interface ResidentialProviderCard {
   imageUrl: string | null;
   services: string[];
   languages: string[];
+  /** Funding/insurance accepted. Same public data the detail page shows. */
+  paymentTypes: string[];
 }
 
 export interface ResidentialProviderDetail {
@@ -184,10 +186,29 @@ export async function fetchTestimonials(): Promise<TestimonialItem[]> {
 
 const EMPTY_DIRECTORY: ResidentialDirectoryPage = { items: [], total: 0, page: 1, pageSize: 12, totalPages: 0 };
 
+/**
+ * Fills in list fields the backend may not send.
+ *
+ * The website and the platform API deploy independently, so the site can be
+ * running ahead of the backend that answers it. A card field added on the API
+ * side arrives as `undefined` until that deploy lands, and a component that
+ * maps over it would throw at render — turning a missing pill into a broken
+ * page. Defaulting to an empty list degrades to "not shown" instead.
+ */
+function normalizeCard(card: ResidentialProviderCard): ResidentialProviderCard {
+  return {
+    ...card,
+    services: card.services ?? [],
+    languages: card.languages ?? [],
+    paymentTypes: card.paymentTypes ?? [],
+  };
+}
+
 /** Published residential providers matching the public filters. Degrades to empty on failure. */
 export async function fetchResidentialProviders(params: ResidentialProviderQuery = {}): Promise<ResidentialDirectoryPage> {
   const data = await getJson<ResidentialDirectoryPage>(`/public/residential-providers?${buildDirectoryQuery(params)}`);
-  return data ?? EMPTY_DIRECTORY;
+  if (!data) return EMPTY_DIRECTORY;
+  return { ...data, items: (data.items ?? []).map(normalizeCard) };
 }
 
 /** A single published residential provider by slug, or null if not found / unpublished. */

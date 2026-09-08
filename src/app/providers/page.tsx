@@ -16,6 +16,7 @@ import { ProviderListingGrid } from "@/components/marketplace/BedMarketplaceStri
 import { CareStoryCarousel } from "@/components/sections/CareStoryCarousel";
 import type { Slide } from "@/components/media/VIPVideoCarousel";
 import { PROVIDER_FAQS } from "@/data/faqs";
+import { fetchResidentialProviders } from "@/lib/platform/content";
 
 const PROVIDER_SLIDES: Slide[] = [
   { type: "video", src: "/assets/videos/provider-care-loop.mp4", poster: "/assets/nonnis/specialty-care/provider-memory-care-room.jpg", caption: "Care your team delivers, seen", sub: "Show the daily life residents will join" },
@@ -45,7 +46,14 @@ const STATS = [
   { value: 92, suffix: "%", label: "Avg. top-match fit score" },
 ];
 
-export default function ProvidersPage() {
+/** Matches the public directory's revalidation so a publish shows up here too. */
+export const revalidate = 60;
+
+export default async function ProvidersPage() {
+  // The same published listings the public directory serves — this section
+  // shows a provider exactly how their own listing will appear.
+  const { items: residentialProviders } = await fetchResidentialProviders({ limit: 9 });
+
   return (
     <>
       <PageHero
@@ -85,9 +93,9 @@ export default function ProvidersPage() {
 
       {/* Facility marketplace cards */}
       <Section tone="ice" density="normal">
-        <SectionHeading eyebrow="Live marketplace" title="How your listing appears" description="Every listing shows real-time availability, care specialties, funding accepted, pricing, and an RN-reviewed match score." align="center" className="mx-auto" />
+        <SectionHeading eyebrow="Live marketplace" title="How your listing appears" description="Every listing shows your photo, location, care specialties, and the funding you accept — linked to your full community page." align="center" className="mx-auto" />
         <div className="mt-10">
-          <ProviderListingGrid />
+          <ProviderListingGrid providers={residentialProviders} />
         </div>
       </Section>
 

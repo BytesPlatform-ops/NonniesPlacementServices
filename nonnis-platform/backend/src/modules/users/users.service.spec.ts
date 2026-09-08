@@ -54,7 +54,8 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     updatedAt: now,
   };
   const p: Record<string, unknown> = {
-    organization: { findUnique: jest.fn().mockResolvedValue({ id: "prov", status: "ACTIVE" }) },
+    // A real Organization always carries a type; role compatibility is checked against it.
+    organization: { findUnique: jest.fn().mockResolvedValue({ id: "prov", status: "ACTIVE", type: "PROVIDER" }) },
     role: { findUnique: jest.fn().mockResolvedValue({ id: "role-x", code: ROLES.PROVIDER_STAFF, name: "Provider Staff" }), findMany: jest.fn().mockResolvedValue([]) },
     user: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -163,5 +164,123 @@ describe("UsersService — status changes", () => {
     const { svc, audit } = service(makePrisma());
     await svc.setStatus(providerAdmin(), "target", "SUSPENDED" as UserStatus);
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "user.suspended" }));
+  });
+});
+
+describe("role must fit the organization type", () => {
+  /** A Nonnis administrator, who may assign any role. */
+  function nonnisAdmin(): RequestUser {
+    return {
+      ...providerAdmin(),
+      id: "nonnis-1",
+      activeOrganizationId: "nonnis",
+      activePermissions: new Set([PERMISSIONS.USERS_MANAGE, PERMISSIONS.USERS_READ]),
+    };
+  }
+
+  function prismaForOrg(type: string, roleCode: string) {
+    return makePrisma({
+      organization: { findUnique: jest.fn().mockResolvedValue({ id: "org", status: "ACTIVE", type }) },
+      role: { findUnique: jest.fn().mockResolvedValue({ id: "r", code: roleCode, name: roleCode }), findMany: jest.fn().mockResolvedValue([]) },
+    });
+  }
+
+  const VALID: Array<[string, string]> = [
+    [ROLES.NONNIS_ADMIN, "NONNIS"],
+    [ROLES.NONNIS_OPERATIONS, "NONNIS"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "HOSPITAL"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "REHABILITATION_CENTER"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "SKILLED_NURSING_FACILITY"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "PARTNER"],
+    [ROLES.PROVIDER_ADMIN, "PROVIDER"],
+    [ROLES.PROVIDER_STAFF, "PROVIDER"],
+  ];
+
+  const INVALID: Array<[string, string]> = [
+    [ROLES.PROVIDER_ADMIN, "HOSPITAL"],
+    [ROLES.PROVIDER_ADMIN, "NONNIS"],
+    [ROLES.PROVIDER_STAFF, "SKILLED_NURSING_FACILITY"],
+    [ROLES.PROVIDER_STAFF, "PARTNER"],
+    [ROLES.NONNIS_ADMIN, "PROVIDER"],
+    [ROLES.NONNIS_ADMIN, "HOSPITAL"],
+    [ROLES.NONNIS_OPERATIONS, "PARTNER"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "PROVIDER"],
+    [ROLES.DISCHARGE_PROFESSIONAL, "NONNIS"],
+  ];
+
+  it.each(VALID)("invite: accepts %s into a %s organization", async (roleCode, orgType) => {
+    const prisma = prismaForOrg(orgType, roleCode);
+    const { svc } = service(prisma);
+    await expect(svc.invite(nonnisAdmin(), inviteDto({ organizationId: "org", roleCode }))).resolves.toMatchObject({ roleCode });
+  });
+
+  it.each(INVALID)("invite: rejects %s in a %s organization with a 400", async (roleCode, orgType) => {
+    const prisma = prismaForOrg(orgType, roleCode);
+    const { svc } = service(prisma);
+    await expect(svc.invite(nonnisAdmin(), inviteDto({ organizationId: "org", roleCode }))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it("invite: never creates a membership for a rejected pairing", async () => {
+    const prisma = prismaForOrg("HOSPITAL", ROLES.PROVIDER_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "org", roleCode: ROLES.PROVIDER_ADMIN })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    const memberships = (prisma as unknown as { organizationMembership: { create: jest.Mock } }).organizationMembership;
+    expect(memberships.create).not.toHaveBeenCalled();
+  });
+
+  function prismaForRoleChange(orgType: string, currentRole: string, newRole: string) {
+    return makePrisma({
+      organizationMembership: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue({
+          id: "mem",
+          userId: "target",
+          organizationId: "nonnis",
+          role: { code: currentRole, name: currentRole },
+          organization: { type: orgType },
+        }),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      role: { findUnique: jest.fn().mockResolvedValue({ id: "r2", code: newRole, name: newRole }), findMany: jest.fn().mockResolvedValue([]) },
+    });
+  }
+
+  it("role change: accepts a role valid for the membership's organization", async () => {
+    const prisma = prismaForRoleChange("NONNIS", ROLES.NONNIS_OPERATIONS, ROLES.NONNIS_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.changeMembershipRole(nonnisAdmin(), "target", "mem", { roleCode: ROLES.NONNIS_ADMIN }),
+    ).resolves.toBeDefined();
+  });
+
+  it("role change: rejects a role that does not fit the membership's organization", async () => {
+    // The organization of a membership cannot change, so a provider role can
+    // never become valid here — this is a 400, not a permission problem.
+    const prisma = prismaForRoleChange("NONNIS", ROLES.NONNIS_OPERATIONS, ROLES.PROVIDER_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.changeMembershipRole(nonnisAdmin(), "target", "mem", { roleCode: ROLES.PROVIDER_ADMIN }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    const memberships = (prisma as unknown as { organizationMembership: { update: jest.Mock } }).organizationMembership;
+    expect(memberships.update).not.toHaveBeenCalled();
+  });
+
+  it("exposes the allowed organization types alongside each assignable role", async () => {
+    const prisma = makePrisma({
+      role: {
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([{ code: ROLES.PROVIDER_ADMIN, name: "Provider Administrator" }]),
+      },
+    });
+    const { svc } = service(prisma);
+    await expect(svc.assignableRoles(providerAdmin())).resolves.toEqual([
+      { code: ROLES.PROVIDER_ADMIN, name: "Provider Administrator", allowedOrganizationTypes: ["PROVIDER"] },
+    ]);
   });
 });

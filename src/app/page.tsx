@@ -14,6 +14,15 @@ import { Section } from "@/components/ui/Section";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { CareProfileWizard } from "@/components/forms/CareProfileWizard";
 import { FinalCTA } from "@/components/sections/FinalCTA";
+import { fetchResidentialProviders } from "@/lib/platform/content";
+
+/**
+ * The marketplace strip mirrors the published residential-provider directory,
+ * so the homepage picks up an admin publish/unpublish on the same schedule the
+ * directory does (`/residential-providers` also revalidates every 60s, and the
+ * underlying fetch every 30s).
+ */
+export const revalidate = 60;
 
 /**
  * Home — visual-first, motion-led: hero → live bed marketplace → scroll-stacked
@@ -21,11 +30,16 @@ import { FinalCTA } from "@/components/sections/FinalCTA";
  * Lando-style placement gallery → audiences → cinematic resident journey →
  * fanned care-story deck → Washington network → pricing → CTA.
  */
-export default function Home() {
+export default async function Home() {
+  // Published residential providers, in the admin-set display order the public
+  // directory uses. Fetched here because the carousel itself is a client
+  // component (Embla) and cannot reach the server-only content helpers.
+  const { items: residentialProviders } = await fetchResidentialProviders({ limit: 12 });
+
   return (
     <>
       <Hero />
-      <BedMarketplaceStrip />
+      <BedMarketplaceStrip providers={residentialProviders} />
       <HowItWorksScrollJourney />
       <FloatingMatchCards />
       <AnimatedMatchConsole />

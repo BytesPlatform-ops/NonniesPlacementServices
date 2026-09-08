@@ -12,6 +12,9 @@ import { Prisma, type CoverageType, type DayOfWeek } from "@prisma/client";
 export const providerPublicCardInclude = {
   services: { where: { active: true }, select: { serviceCategory: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
   languages: { where: { active: true }, select: { language: { select: { name: true } } } },
+  // Funding/insurance is already public on the detail page; the directory and
+  // homepage cards show it too, so the card projection carries it as well.
+  paymentTypes: { where: { active: true }, select: { paymentType: { select: { name: true } } } },
 } satisfies Prisma.ProviderInclude;
 
 export type ProviderPublicCardRow = Prisma.ProviderGetPayload<{ include: typeof providerPublicCardInclude }>;
@@ -39,6 +42,7 @@ export interface ProviderPublicCardView {
   imageUrl: string | null;
   services: string[];
   languages: string[];
+  paymentTypes: string[];
 }
 
 export interface ProviderPublicDetailView {
@@ -87,6 +91,7 @@ export function toProviderPublicCard(row: ProviderPublicCardRow): ProviderPublic
     imageUrl: row.publicFeaturedImageUrl ?? null,
     services: [...new Set(row.services.map((s) => s.serviceCategory.name))],
     languages: [...new Set(row.languages.map((l) => l.language.name))],
+    paymentTypes: [...new Set(row.paymentTypes.map((pt) => pt.paymentType.name))],
   };
 }
 
