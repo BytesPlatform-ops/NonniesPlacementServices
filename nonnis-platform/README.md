@@ -17,9 +17,10 @@ Provider selection is **manual** throughout: a user searches and filters
 providers and chooses one by hand. There is no automated matching or
 recommendation engine (see **Current agreed scope** below).
 
-It is not a staffing / job platform. It will eventually serve three user groups —
-**Discharge Professionals**, **Service Providers**, and **Nonnis Operations Staff** —
-though only the operational case foundation is implemented so far.
+It is not a staffing / job platform. It serves **Discharge Professionals**, **Service
+Providers**, and **Nonnis Operations Staff**, and — since the Care Seeker module — the
+**families** placed through a case, who get a narrow read-mostly view of their own case
+(see **Care Seeker (family) portal**).
 
 ---
 
@@ -242,6 +243,12 @@ Commands: `npm run typecheck` · `npm run lint` · `npm run build` · `npm test`
   (generated with `prisma migrate diff`, so it exists without a live database).
 - Apply with `npm run prisma:migrate` (or `prisma migrate deploy` in CI/production)
   once `DATABASE_URL` points at a real Postgres instance.
+- Later migrations are additive and applied forward with `prisma migrate deploy`. The
+  most recent is `20260909190000_care_seeker_portal` (see **Care Seeker (family)
+  portal**), which is applied: it created three new tables, five new enums and two
+  enum-value additions, with no `DROP`, no `ALTER COLUMN` and no data statement.
+  `prisma migrate reset` and destructive `db push` are never used against a shared
+  database — see **Development environment safety**.
 
 ---
 
@@ -254,9 +261,15 @@ Commands: `npm run typecheck` · `npm run lint` · `npm run build` · `npm test`
   application user + active-organization context; a global `PermissionsGuard`
   enforces `@RequirePermissions` / `@RequireAnyPermission`. Nothing trusts the
   browser's role, org id, or user id.
-- **RBAC:** roles map to permissions (seeded, idempotent). System roles:
-  `NONNIS_ADMIN`, `NONNIS_OPERATIONS`, `DISCHARGE_PROFESSIONAL`, `PROVIDER_ADMIN`,
-  `PROVIDER_STAFF`. Permission codes cover platform/orgs/users/facilities/cases/audit.
+- **RBAC:** roles map to permissions (seeded, idempotent). Organization-scoped system
+  roles: `NONNIS_ADMIN`, `NONNIS_OPERATIONS`, `DISCHARGE_PROFESSIONAL`,
+  `PROVIDER_ADMIN`, `PROVIDER_STAFF`; plus the case-scoped `CARE_SEEKER` (see
+  **Care Seeker (family) portal** below). Permission codes cover platform/orgs/users/
+  facilities/cases/audit, the case sub-resources (`case_documents.*`,
+  `case_appointments.*`, `care_seekers.manage`) and the family portal (`seeker_*`).
+  A **role ↔ organization-type** rule set is enforced on both invite and role change,
+  so a provider role can never be created inside a hospital organization; `CARE_SEEKER`
+  is deliberately valid in **no** organization type.
 - **Multi-tenancy:** organization-scoped requests carry `X-Organization-Id`, which
   the backend re-validates against active membership. Case, facility and user
   queries are bounded by organization; cross-org detail access returns 404 to avoid
@@ -283,6 +296,65 @@ npm run bootstrap:admin -- you@org.com # first NONNIS_ADMIN (email supplied by y
 
 `bootstrap:admin` is idempotent and requires `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 It never hardcodes an email or secret.
+
+`npm run rbac:sync` applies the role/permission definitions on their own. It shares its
+implementation with `prisma:seed` but touches only the three RBAC tables, so a role
+change can be rolled out without re-running the seed's demo CMS content.
+
+### Post-login landing
+
+`/home` is a role-aware dispatcher; the destination comes from one `landingPath()`
+helper, which organization switching also reuses so the two can never disagree.
+
+| Role | Lands on |
+| ---- | -------- |
+| `NONNIS_ADMIN`, `NONNIS_OPERATIONS` | `/operations` |
+| `DISCHARGE_PROFESSIONAL` | `/cases` |
+| `PROVIDER_ADMIN`, `PROVIDER_STAFF` | `/provider` |
+| `CARE_SEEKER` | `/seeker` |
+
+Provider-portal selection is decided by `Organization.type`, never by the role code.
+Organization switching and `X-Organization-Id` behavior are unchanged, and a Care
+Seeker needs **no** organization membership — real or placeholder — to sign in.
+
+### Password recovery
+
+Recovery is Supabase Auth end to end; the CRM only detects the session and collects the
+new password.
+
+```
+Forgot password → recovery email → production CRM → recovery session detected
+→ Set a new password (entered twice) → auth.updateUser({ password })
+→ recovery session cleared → sign in → role-aware landing
+```
+
+Both link shapes are handled. A reset requested inside the CRM uses **PKCE** and arrives
+as `?code=`, which `/auth/callback` exchanges server-side. A link sent without a usable
+`redirectTo` — from the Supabase dashboard, for example — arrives in the **implicit**
+form with its tokens in the URL **fragment**, which never reaches the server; the root
+page and `/login` forward that fragment to `/auth/update-password`, where the browser
+client consumes it and emits `PASSWORD_RECOVERY`.
+
+`/auth/update-password` proves a recovery or invite session exists before showing the
+form, requires the password twice, has an explicit expired/invalid state, and clears the
+fragment from the address bar. After a **recovery** it signs the session out so the
+emailed link cannot be reused; after an **invite** the user stays signed in. Both exit
+through `/home`, so the destination is role-aware rather than hardcoded. No password and
+no access token is ever logged.
+
+Supabase **Authentication → URL Configuration** must name the production CRM — a Site URL
+left at the Supabase default (`http://localhost:3000`) is what sends production recovery
+links to a developer machine, and `localhost:3000` is the public website's port, not the
+CRM's:
+
+```
+Site URL:       https://admin.nonnisplacement.com
+Redirect URLs:  https://admin.nonnisplacement.com/**
+                http://localhost:3001/**
+```
+
+The backend's `FRONTEND_URL` builds the redirect for **invite** emails, so it must be the
+production CRM origin too.
 
 ## Discharge case workspace (this slice)
 
@@ -674,9 +746,14 @@ publish. No second provider database.
   removes it) seeds clearly-fictional demo communities using existing Supabase images.
 
 Out of scope and confirmed absent: matching/scoring/ranking, reviews/ratings,
-subscription billing/Stripe, public capacity exposure, family accounts, favorites,
-and public referral creation. Full details in
+subscription billing/Stripe, public capacity exposure, public self-service family
+sign-up, favorites, and public referral creation. (Authenticated family access does now
+exist, but only inside the CRM and only by explicit grant on a case — see **Care Seeker
+(family) portal**. Nothing on the public website is account-gated.) Full details in
 [`docs/RESIDENTIAL_DIRECTORY.md`](docs/RESIDENTIAL_DIRECTORY.md).
+
+The publishing controls described here are now wired through to the marketing site's
+homepage as well — see **Published providers on the public website**.
 
 ## Communications — Foundation (Phase 15A)
 
@@ -724,7 +801,6 @@ model, and this phase makes **no** live provider calls and sends nothing.
 ## Communications — Email Templates & Campaigns (Phase 15B)
 
 Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis Admin
-
 + Operations), which gates **all** campaign queueing and test sends.
 
 - **Templates + visual builder:** reusable templates with a block builder (text /
@@ -863,11 +939,225 @@ Email + SMS system coherent, safe, recoverable and observable.
 The Communications module (15A–15E) is **complete**. Full details, live-provider setup
 and known residual risks: [`docs/COMMUNICATIONS.md`](docs/COMMUNICATIONS.md).
 
+### Live SMS enablement status
+
+The SMS code is complete; taking it live is Twilio-side configuration and carrier
+registration, which is still in progress. Done so far:
+
+- Twilio number **ported**.
+- **Nonnis Production CRM** Messaging Service configured, with the number attached to it.
+- Inbound webhook configured.
+- Delivery status callback configured.
+- A2P 10DLC **Brand approved**.
+- A2P 10DLC **Campaign approved**.
+
+Remaining dependency: the phone number's carrier registration sync — the final messaging
+enablement for the number. Until that completes, **live SMS end-to-end is not verified**.
+Email is unaffected, and the SMS mock path (`npm run communications:simulate-sms`) works
+regardless.
+
+## Published providers on the public website
+
+Slice 13 built the publishing controls and the public directory; this connects the last
+link, so what an operator publishes is what a family sees. The **Website Listing** tab is
+unchanged as the single place publishing happens, and the internal `Provider` record
+remains the only source — nothing here adds a second provider model, table, API or
+publishing system.
+
+- **The homepage carousel is live data.** The "Real care & community, matched to real
+  needs" section on the marketing site read a hard-coded demo array (`src/data/listings.ts`)
+  that had no backend behind it and no slug to link to. It now renders the same published
+  residential providers the directory serves, in the admin-set display order, and every
+  card links to `/residential-providers/[slug]`. The demo array is deleted.
+- **One eligibility rule.** A provider appears only when it is residential **and** ACTIVE
+  **and** published — the single `publishedWhere()` filter already used by the directory,
+  the slug lookup and the filter options. Unpublishing or deactivating removes it from the
+  homepage and the directory together.
+- **Real fields only:** featured image, name, city/state, services, funding/payment types
+  where recorded, public description, and the public slug. The card projection was extended
+  with `paymentTypes` — data the detail page already published — and nothing else.
+- **The fabricated values are gone, not re-sourced.** The demo cards carried a match
+  percentage, a bed count, a price tier and an "RN Reviewed" badge. None of those exist in
+  the platform: provider selection is manual with no scoring engine, `ProviderCapacity` is
+  deliberately never public, and there is no pricing or review field. They were removed
+  rather than approximated, along with the badges that rendered them.
+- **Version-skew safe.** The website and the platform API deploy independently, so the
+  directory fetchers default any list field the API has not shipped yet to empty. A newer
+  site against an older API loses a row of pills, never the page.
+- **Admin "View on website"** now opens the production site. `PUBLIC_SITE_URL` resolves
+  `NEXT_PUBLIC_SITE_URL` and, when it is unset, falls back to `https://nonnisplacement.com`
+  in a production build and `http://localhost:3000` in development — so a missing variable
+  degrades to the right host instead of an unreachable one. `NEXT_PUBLIC_*` values are
+  inlined at build time, so changing it requires a redeploy.
+
+The public directory and detail pages, the business-facing `/providers` page, the "List
+Your Community" form, the CMS and the sitemap are behaviorally unchanged.
+
+## Care Seeker (family) portal
+
+An **additive** module giving a family member or authorized representative a read-mostly
+view of the one case they are placed on. It reuses the existing authentication, RBAC,
+case, referral, provider, workflow-event, messaging, private-storage and audit
+architecture; it introduces no second auth system and no parallel case model.
+
+### Access model
+
+Staff, provider and discharge users reach the platform through `OrganizationMembership`,
+and that mechanism is untouched. A family member is **case-scoped** instead:
+
+```
+Provider / Nonnis / Discharge  →  organization-scoped  (OrganizationMembership)
+Care Seeker                    →  case-scoped          (CareSeekerCaseAccess)
+```
+
+`RequestUser` gained a `caseAccess` list, empty for every organization user, so nothing
+that reads `memberships` changes behavior. Access is **always explicit**: a grant is
+created by someone holding `care_seekers.manage`, and a matching email or phone number on
+the case grants nothing — `Case.representativeContact` and friends are free text captured
+from a referring facility, not verified identity. One case may carry several grants
+(patient, spouse, adult child, power of attorney).
+
+Authorization is two-tier, and both tiers are exercised by an HTTP-level cross-role test
+suite:
+
+1. **Permission gate** — every `/seeker/*` route requires a `seeker_*` permission that no
+   staff or provider role holds.
+2. **Row gate** — each request re-derives the grant for the case being asked for. An
+   unauthorized case returns **404, not 403**, so a family member cannot probe ids to learn
+   which cases exist. `CARE_SEEKER` cannot be granted through the organization invite flow
+   at all; that path rejects it with a clear 400.
+
+### Family routes
+
+| Route | Shows |
+| ----- | ----- |
+| `/seeker` | Placement journey, care-recipient summary, next required action, latest update, and counts for matches / documents needed / new replies / next appointment |
+| `/seeker/care-plan` | Requested services with what has actually been arranged, care requirements with their real mandatory flag, and the recorded funding, location, language, accessibility and equipment needs |
+| `/seeker/matches` | Only the providers referred for **this** case, with services supported vs requested and a case-safe availability status |
+| `/seeker/matches/[referralId]` | One matched provider: photo, description, services, languages, funding, coverage, case-specific status, and a tour request |
+| `/seeker/appointments` | Tours and assessments, with confirm / ask-to-reschedule / cancel |
+| `/seeker/documents` | Documents requested from the family and documents shared with them, with upload |
+| `/seeker/messages` | The family's thread with the care team |
+| `/seeker/progress` | Family-friendly milestones derived from the case's workflow history |
+| `/seeker/account` | Own profile fields, sign-in email, and the cases this account may see |
+
+### What the family view will and will not say
+
+- **No invented numbers.** There is no match percentage anywhere in the platform, so the
+  comparison is a plain count and two lists ("supports 5 of 6 services you asked for").
+- **Availability is a status, never a bed count.** Derived from the referral and placement
+  for this case, falling back to the provider's declared `CapacityStatus`;
+  `availableCount` is not selected into the projection at all.
+- **Arrangement is derived, not stored.** Whether a requested service is confirmed,
+  provider-reviewing or still unmet comes from `ServiceRequest.status` plus the referral
+  statuses raised for it — no fourth status column that could drift from the referrals it
+  summarises.
+- **Placement Confirmed and Service Started stay separate stages.** A scheduled start is
+  not a started service, and the journey never reports one as the other.
+- **Field-by-field projections.** Internal notes, eligibility notes, licence details,
+  organization and user ids, storage paths, staff commentary and other cases are absent
+  because nothing reaches the family unless it is explicitly written out.
+
+### Staff side
+
+The case workspace gains three permission-gated tabs; a role without the matching
+permission sees exactly the tabs it saw before.
+
+- **Documents** — request a document from the family (which makes it family-visible),
+  upload on their behalf, then Accept or ask for an update. "Needs update" requires a
+  reason, because the family sees it. Files live in a dedicated **private** Supabase bucket
+  reusing the existing signed-URL storage service and the platform's one attachment policy;
+  only the object key is stored and it is never returned to a browser.
+- **Tours** — schedule, put a time on a family's request, add family-visible instructions
+  and an outcome note, complete or cancel. A family may only confirm, ask to reschedule, or
+  cancel; they can never set a time or write a staff field.
+- **Family Access** — invite a family member by email with an optional relationship, then
+  revoke or restore. The invitation is the same Supabase invite staff invites use, and the
+  grant row is kept after revocation so the history stays auditable. Someone who already
+  holds organization access is refused, so the two access models never mix in one session.
+
+Family correspondence is a new `CARE_SEEKER` scope on the existing `Message` model — not a
+second chat system — and appears on the staff unified timeline for the case organization
+and Nonnis. Internal notes and provider-referral threads remain in their own scopes and are
+never exposed to a family member; a provider can still only reach `PROVIDER_REFERRAL`.
+
+### Schema
+
+Migration `20260909190000_care_seeker_portal`, entirely additive:
+
+- `CareSeekerCaseAccess` — `userId` + `caseId` + `roleId` + status + relationship, unique
+  on `(userId, caseId)`, indexed on each side.
+- `CaseDocument` — title, review status, visibility, "requested from the family" flag, file
+  metadata and private storage key, review note and due date.
+- `CaseAppointment` — type, status, time, location, family-visible instructions and outcome,
+  optionally linked to a provider and a referral.
+- `MessageScope` gains `CARE_SEEKER`; `WorkflowEventType` gains twelve values covering
+  access grants, documents and appointments, so the family timeline and the staff timeline
+  read the same history.
+
+No existing column was altered or dropped. Applying it left every existing production row
+count unchanged; the only differences were the expected RBAC additions (one role, twelve
+permissions), and no existing role lost a permission.
+
+## Current status & remaining work
+
+The Care Seeker module and the password-recovery fix are **implemented and verified by
+test**, and the migration and RBAC sync are applied. Verified suite totals:
+
+| Suite | Tests |
+| ----- | ----- |
+| Backend (Jest) | **828** across 93 suites |
+| CRM frontend (Vitest) | **140** across 22 files |
+| Public website (Vitest) | **26** across 5 files |
+
+Backend and CRM typecheck, lint and production build pass; the website's tests, lint and
+build pass. Cross-role and cross-case authorization is covered by an HTTP-level suite over
+the real application — a family member is refused every staff and provider surface, one
+family member cannot reach another case, and existing `NONNIS_ADMIN`, `NONNIS_OPERATIONS`,
+`DISCHARGE_PROFESSIONAL`, `PROVIDER_ADMIN` and `PROVIDER_STAFF` reach is unchanged.
+
+Still outstanding:
+
+- Care Seeker manual UAT.
+- Commit and push the current Care Seeker + password-recovery work.
+- Deploy the backend and the CRM.
+- A fresh production password-recovery end-to-end test after the Supabase URL
+  configuration and the deploy are both in place.
+- Final administrator password rotation and verification (handled privately, never in this
+  repository).
+- Twilio phone-number registration sync, then a live SMS end-to-end test.
+- A final cross-role production smoke test.
+- Remaining production cleanup and hardening.
+
+## Development environment safety
+
+**The local backend currently points at the shared production Supabase project unless it is
+explicitly reconfigured.** `backend/.env` is the only environment file, it does not set
+`NODE_ENV`, and there is no separate development database or local Postgres setup. A guard
+that only reads `NODE_ENV` is therefore no guard at all.
+
+So, when writing or running anything that touches data:
+
+- **Never use a real identity for a test helper.** Reusing a real email can reset that
+  person's password before any later validation runs.
+- **Default a test helper to dry run.** It should report exactly what it would do and write
+  nothing until an explicit `--apply` flag, plus a second acknowledgement when the target
+  database is not on localhost.
+- **Never run `prisma migrate reset`**, a destructive `db push`, `--accept-data-loss`, or
+  `DROP DATABASE` / `DROP SCHEMA`. Schema changes are additive, reviewed as SQL, and applied
+  forward with `prisma migrate deploy`.
+- **Never mutate a production user, case or provider for a test** without explicit approval.
+- **Never commit `.env`, a secret, a token or a password** — and never record one here.
+
+Look up an email on `lower(btrim(email))` rather than by exact match: at least one real row
+carries a trailing newline, and an exact-match lookup silently misses it.
+
 ## Relationship to the existing website
 
 The public marketing site at the repository root keeps its existing behavior; the
 changes are additive — the form-submission persistence call, plus a new `/blog` area,
-a homepage testimonials band, and a "Blog" nav link, all reading published content from
-the platform's public API. Repository-level isolation guards keep tooling from crossing
+a homepage testimonials band, a "Blog" nav link, the `/residential-providers` directory,
+and the homepage provider carousel, all reading published content from the platform's
+public API. Repository-level isolation guards keep tooling from crossing
 the boundary: the root `tsconfig.json` and `eslint.config.mjs` exclude `nonnis-platform`,
 and `.gitignore` ignores its build artifacts.
