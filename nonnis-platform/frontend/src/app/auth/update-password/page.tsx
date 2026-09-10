@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { isRecoveryFragment } from "@/lib/auth-recovery";
+import { authFragmentType, isPasswordSetupFragment } from "@/lib/auth-recovery";
 
 type Phase = "checking" | "ready" | "expired";
 
@@ -45,10 +45,20 @@ export default function UpdatePasswordPage() {
     const supabase = supabaseBrowser();
     let settled = false;
 
-    // Reading the fragment before any await: the client consumes it, so this is
-    // the last moment the link type is still visible.
-    if (typeof window !== "undefined" && isRecoveryFragment(window.location.hash)) {
-      setIsRecovery(true);
+    // Reading the fragment before any await: creating the client consumes it, so
+    // this is the last moment the link type is still visible.
+    //
+    // A fragment that is neither an invitation nor a recovery — a magic link,
+    // say — still carries a session but is not a request to choose a password,
+    // so it is handed straight on to `/home` rather than interrupted here.
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      const fragmentType = authFragmentType(hash);
+      if (fragmentType && !isPasswordSetupFragment(hash)) {
+        router.replace("/home");
+        return;
+      }
+      if (fragmentType === "recovery") setIsRecovery(true);
     }
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -88,7 +98,7 @@ export default function UpdatePasswordPage() {
         window.history.replaceState(null, "", window.location.pathname);
       }
     };
-  }, []);
+  }, [router]);
 
   const onSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -166,12 +176,12 @@ export default function UpdatePasswordPage() {
           ) : (
             <>
               <h1 className="text-lg font-semibold text-slate-900">
-                {isRecovery ? "Set a new password" : "Set your password"}
+                {isRecovery ? "Set a new password" : "Welcome — set your password"}
               </h1>
               <p className="mt-1 text-sm text-slate-500">
                 {isRecovery
                   ? "Choose a new password for your account."
-                  : "Choose a password to finish setting up your account."}
+                  : "Choose a password to finish setting up your account, then you will be taken straight in."}
               </p>
 
               {error ? (

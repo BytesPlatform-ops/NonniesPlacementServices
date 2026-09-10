@@ -167,3 +167,59 @@ describe("navigation", () => {
     expect(labels.some((l) => l.startsWith("Seeker"))).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Where an invited user ends up after setting their password
+//
+// `/auth/update-password` deliberately sends them to `/home` rather than naming
+// a destination itself, so the landing decision stays in one place. These cover
+// what `/home` then does for each freshly-invited role.
+// ---------------------------------------------------------------------------
+
+describe("landing after an invitation is accepted", () => {
+  it("takes a newly invited Provider Administrator to the provider portal", () => {
+    const providerAdmin = me({
+      memberships: [
+        membership("PROVIDER", "PROVIDER_ADMIN", [
+          PERMISSIONS.PROVIDERS_READ,
+          PERMISSIONS.PROVIDERS_MANAGE_OWN,
+          PERMISSIONS.REFERRALS_READ,
+        ]),
+      ],
+      activeOrganizationId: "org-1",
+      permissions: [PERMISSIONS.PROVIDERS_READ, PERMISSIONS.PROVIDERS_MANAGE_OWN, PERMISSIONS.REFERRALS_READ],
+    });
+    expect(landingPath(providerAdmin)).toBe("/provider");
+  });
+
+  it("takes newly invited Provider Staff to the provider portal too", () => {
+    const providerStaff = me({
+      memberships: [membership("PROVIDER", "PROVIDER_STAFF", [PERMISSIONS.PROVIDERS_READ])],
+      activeOrganizationId: "org-1",
+      permissions: [PERMISSIONS.PROVIDERS_READ],
+    });
+    expect(landingPath(providerStaff)).toBe("/provider");
+  });
+
+  it("takes a newly invited family member to the family portal", () => {
+    expect(landingPath(seeker)).toBe("/seeker");
+  });
+
+  it("takes a newly invited discharge professional to their cases", () => {
+    const discharge = me({
+      memberships: [membership("HOSPITAL", "DISCHARGE_PROFESSIONAL", [PERMISSIONS.CASES_READ])],
+      activeOrganizationId: "org-1",
+      permissions: [PERMISSIONS.CASES_READ],
+    });
+    expect(landingPath(discharge)).toBe("/cases");
+  });
+
+  it("takes a newly invited Nonnis administrator to operations", () => {
+    const admin = me({
+      memberships: [membership("NONNIS", "NONNIS_ADMIN", [PERMISSIONS.CASES_READ_ALL])],
+      activeOrganizationId: "org-1",
+      permissions: [PERMISSIONS.CASES_READ_ALL],
+    });
+    expect(landingPath(admin)).toBe("/operations");
+  });
+});
