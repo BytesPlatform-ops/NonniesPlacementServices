@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -48,6 +49,8 @@ const STATUS_LABELS: Record<CareSeekerAccessStatus, string> = {
  */
 @Injectable()
 export class CareSeekerAdminService {
+  private readonly logger = new Logger(CareSeekerAdminService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -217,9 +220,18 @@ export class CareSeekerAdminService {
           where: { id: granted.userId, supabaseAuthUserId: null },
           data: { supabaseAuthUserId: supabaseUserId },
         });
-      } catch {
+      } catch (error) {
+        // Family invitations share one email sender with organization invites,
+        // so they share its send-rate limit too — and a limit that has been hit
+        // is waited out rather than retried. Discarding the reason left the
+        // same "please retry" for that and for a genuinely broken sender, with
+        // a grant sitting at Invited and no email to account for it.
+        const reason = error instanceof Error ? error.message : "unknown error";
+        this.logger.warn(`Family invitation email for grant ${accessId} was not sent: ${reason}`);
         throw new ServiceUnavailableException(
-          "Access was granted, but the invitation email could not be sent. Please retry the invite.",
+          /rate limit/i.test(reason)
+            ? "Access was granted, but the email provider's sending rate limit was reached. Wait a few minutes, then revoke and grant the access again to resend the invitation."
+            : "Access was granted, but the invitation email could not be sent. Please retry the invite.",
         );
       }
     }
