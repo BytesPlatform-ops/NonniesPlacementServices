@@ -4,6 +4,7 @@ import { AuthContextService } from "./auth-context.service";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
 import { AuthService } from "./auth.service";
+import { InvitationService } from "./invitation.service";
 import { PermissionsGuard } from "./permissions.guard";
 import { SupabaseService } from "./supabase.service";
 import { TOKEN_VERIFIER } from "./token-verifier";
@@ -21,9 +22,10 @@ import { TOKEN_VERIFIER } from "./token-verifier";
     { provide: TOKEN_VERIFIER, useExisting: SupabaseService },
     AuthContextService,
     AuthService,
+    InvitationService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
-  exports: [SupabaseService, AuthContextService],
+  exports: [SupabaseService, AuthContextService, InvitationService],
 })
 export class AuthModule {}

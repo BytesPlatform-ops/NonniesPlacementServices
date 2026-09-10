@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { PERMISSIONS } from "../../common/rbac";
 import { PrismaService } from "../../database/prisma.service";
 import { CurrentUser, RequirePermissions } from "../auth/decorators";
@@ -52,6 +52,29 @@ export class CareSeekerAdminController {
       },
       user.id,
     );
+  }
+
+  @Post(":accessId/resend-invitation")
+  @RequirePermissions(PERMISSIONS.CARE_SEEKERS_MANAGE)
+  @HttpCode(HttpStatus.OK)
+  async resendInvitation(
+    @CurrentUser() user: RequestUser,
+    @Param("caseId", new ParseUUIDPipe()) caseId: string,
+    @Param("accessId", new ParseUUIDPipe()) accessId: string,
+  ): Promise<{ accessId: string; email: string; emailKind: string }> {
+    const record = await ensureCaseAccess(this.prisma, user, caseId, true);
+    return this.careSeekers.resendInvitation({ caseId, organizationId: record.organizationId, accessId }, user.id);
+  }
+
+  @Delete(":accessId")
+  @RequirePermissions(PERMISSIONS.CARE_SEEKERS_MANAGE)
+  async removeInvitation(
+    @CurrentUser() user: RequestUser,
+    @Param("caseId", new ParseUUIDPipe()) caseId: string,
+    @Param("accessId", new ParseUUIDPipe()) accessId: string,
+  ): Promise<{ id: string; accountRemoved: boolean }> {
+    const record = await ensureCaseAccess(this.prisma, user, caseId, true);
+    return this.careSeekers.removeInvitation({ caseId, organizationId: record.organizationId, accessId }, user.id);
   }
 
   @Patch(":accessId")

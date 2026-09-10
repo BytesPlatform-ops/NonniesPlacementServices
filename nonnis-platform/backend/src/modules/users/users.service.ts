@@ -7,15 +7,14 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { type UserStatus } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS, ROLE_ALLOWED_ORGANIZATION_TYPES, assignableRoleCodes, isRoleAllowedForOrganizationType, roleOrganizationTypeError } from "../../common/rbac";
 import type { RoleCode } from "../../common/rbac";
-import type { AppConfig } from "../../config/configuration";
 import { AuditService } from "../audit/audit.service";
 import { SupabaseService } from "../auth/supabase.service";
+import { InvitationEmailError, InvitationService, type InvitationEmailKind } from "../auth/invitation.service";
 import { requireActiveOrganization } from "../auth/org-context";
 import type { RequestUser } from "../auth/request-user";
 import {
@@ -43,6 +42,9 @@ export interface InviteResult {
   organizationId: string;
   roleCode: string;
   status: "INVITED";
+  /** Which email was sent — an invitation, or a password-setup link for an
+   *  address that is already registered. */
+  emailKind: InvitationEmailKind;
 }
 
 const membershipInclude = { organization: true, role: true } as const;
@@ -55,7 +57,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly supabase: SupabaseService,
-    private readonly config: ConfigService<AppConfig, true>,
+    private readonly invitations: InvitationService,
   ) {}
 
   async list(actor: RequestUser, query: ListUsersQueryDto): Promise<PaginatedResult<UserListItem>> {
@@ -217,32 +219,71 @@ export class UsersService {
       return user.id;
     });
 
-    // External invite — cannot participate in the DB transaction.
-    const redirectTo = `${this.config.get("frontendUrl", { infer: true })}/auth/callback`;
-    try {
-      const { supabaseUserId } = await this.supabase.inviteByEmail(email, redirectTo);
-      await this.prisma.user.updateMany({
-        where: { id: userId, supabaseAuthUserId: null },
-        data: { supabaseAuthUserId: supabaseUserId },
-      });
-    } catch (error) {
-      // The pending invite record is consistent; surface the failure (not silent) so it can be retried.
-      //
-      // Which failure it was decides what to do about it — a send-rate limit is
-      // waited out, a misconfigured sender is not — and discarding the reason
-      // left "please retry" as the only signal for either, with an INVITED row
-      // and no email to explain it. The provider's message names the cause and
-      // carries no credential or token.
-      const reason = error instanceof Error ? error.message : "unknown error";
-      this.logger.warn(`Invite email for user ${userId} was not sent: ${reason}`);
-      throw new ServiceUnavailableException(
-        /rate limit/i.test(reason)
-          ? "The invitation was recorded, but the email provider's sending rate limit was reached. Wait a few minutes, then resend the invitation."
-          : "The invitation was recorded, but the invite email could not be sent. Please retry.",
-      );
+    // External invite — cannot participate in the DB transaction. The pending
+    // record stays consistent either way, and a failure is surfaced rather than
+    // swallowed so it can be resent.
+    const emailKind = await this.sendInvitationEmail(
+      userId,
+      email,
+      "The invitation was recorded, but the email",
+    );
+
+    return { userId, email, organizationId, roleCode: dto.roleCode, status: "INVITED", emailKind };
+  }
+
+  /**
+   * Sends the invitation email again for a user who has not accepted yet.
+   *
+   * Necessary because the first send can fail on its own (a provider rate
+   * limit) and because an invitation that did arrive and was ignored cannot be
+   * re-issued as an invitation at all — the address is registered by then. The
+   * shared invitation service picks the email that will actually go out.
+   */
+  async resendInvitation(
+    actor: RequestUser,
+    id: string,
+  ): Promise<{ userId: string; email: string; emailKind: InvitationEmailKind }> {
+    const organizationId = await this.assertManageableTarget(actor, id);
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, email: true, status: true } });
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+    if (user.status !== "INVITED") {
+      throw new BadRequestException("This user has already accepted their invitation.");
     }
 
-    return { userId, email, organizationId, roleCode: dto.roleCode, status: "INVITED" };
+    const emailKind = await this.sendInvitationEmail(user.id, user.email, "The invitation email");
+    await this.audit.record({
+      action: "user.invitation_resent",
+      entityType: "User",
+      entityId: user.id,
+      organizationId,
+      actorUserId: actor.id,
+      metadata: { email: user.email, emailKind },
+    });
+
+    return { userId: user.id, email: user.email, emailKind };
+  }
+
+  /**
+   * Sends an invitation email and turns a failure into something the person who
+   * pressed the button can act on. `prefix` completes the sentence, so the
+   * distinction that matters — a rate limit is waited out, a broken sender is
+   * not — reads the same wherever an invitation is sent from.
+   */
+  private async sendInvitationEmail(userId: string, email: string, prefix: string): Promise<InvitationEmailKind> {
+    try {
+      return await this.invitations.send(userId, email);
+    } catch (error) {
+      if (error instanceof InvitationEmailError) {
+        throw new ServiceUnavailableException(
+          error.rateLimited
+            ? `${prefix} was not sent: the email provider's sending rate limit was reached. Wait a few minutes and try again.`
+            : `${prefix} could not be sent. Please retry.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async updateProfile(actor: RequestUser, id: string, dto: UpdateUserDto): Promise<UserDetailView> {

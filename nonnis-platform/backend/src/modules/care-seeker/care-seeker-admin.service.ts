@@ -6,13 +6,12 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import type { CareSeekerAccessStatus } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import { ROLES } from "../../common/rbac";
-import type { AppConfig } from "../../config/configuration";
 import { AuditService } from "../audit/audit.service";
 import { SupabaseService } from "../auth/supabase.service";
+import { InvitationEmailError, InvitationService, type InvitationEmailKind } from "../auth/invitation.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
 
 export interface CareSeekerAccessView {
@@ -55,7 +54,7 @@ export class CareSeekerAdminService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly supabase: SupabaseService,
-    private readonly config: ConfigService<AppConfig, true>,
+    private readonly invitations: InvitationService,
     private readonly workflowEvents: WorkflowEventsService,
   ) {}
 
@@ -206,37 +205,164 @@ export class CareSeekerAdminService {
       metadata: { accessId, email },
     });
 
-    // External invite — outside the transaction. Reuses the same Supabase
-    // invite and callback URL as organization invites.
-    const redirectTo = `${this.config.get("frontendUrl", { infer: true })}/auth/callback`;
+    // External invite — outside the transaction, and through the same service
+    // organization invites use, so both kinds of invitation behave alike.
     const granted = await this.prisma.careSeekerCaseAccess.findUniqueOrThrow({
       where: { id: accessId },
       include: { user: this.userSelect },
     });
     if (granted.user.status === "INVITED") {
+      await this.sendInvitationEmail(
+        granted.userId,
+        granted.user.email,
+        "Access was granted, but the invitation email",
+      );
+    }
+
+    return this.toView(granted);
+  }
+
+  /**
+   * Sends the invitation email again for a family member who has not signed in
+   * yet, without disturbing the grant.
+   *
+   * Before this, a pending invitation could only be re-sent by revoking the
+   * access and granting it again — which rewrote the grant's history to work
+   * around a mail problem, and still failed once the address was registered.
+   */
+  async resendInvitation(
+    input: { caseId: string; organizationId: string; accessId: string },
+    actorUserId: string,
+  ): Promise<{ accessId: string; email: string; emailKind: InvitationEmailKind }> {
+    const grant = await this.prisma.careSeekerCaseAccess.findFirst({
+      where: { id: input.accessId, caseId: input.caseId },
+      include: { user: this.userSelect },
+    });
+    if (!grant) throw new NotFoundException("Care seeker access not found");
+    if (grant.status === "REVOKED") {
+      throw new BadRequestException("This access is revoked. Restore it before resending the invitation.");
+    }
+    if (grant.user.status !== "INVITED") {
+      throw new BadRequestException("This person has already signed in, so there is no invitation to resend.");
+    }
+
+    const emailKind = await this.sendInvitationEmail(
+      grant.userId,
+      grant.user.email,
+      "The invitation email",
+    );
+    await this.audit.record({
+      action: "care_seeker.invitation_resent",
+      entityType: "CareSeekerCaseAccess",
+      entityId: grant.id,
+      organizationId: input.organizationId,
+      actorUserId,
+      metadata: { caseId: input.caseId, email: grant.user.email, emailKind },
+    });
+
+    return { accessId: grant.id, email: grant.user.email, emailKind };
+  }
+
+  /**
+   * Removes a pending family invitation, and the account behind it when that
+   * account exists for nothing else.
+   *
+   * Revoking is the right tool for someone who has access and should not: it
+   * keeps the grant, and the history of it. This is for an invitation that
+   * never landed — a wrong address, or an aborted test — where what is wanted
+   * is for the address to be free to invite again, which needs the sign-in
+   * identity gone as well as the row.
+   */
+  async removeInvitation(
+    input: { caseId: string; organizationId: string; accessId: string },
+    actorUserId: string,
+  ): Promise<{ id: string; accountRemoved: boolean }> {
+    const grant = await this.prisma.careSeekerCaseAccess.findFirst({
+      where: { id: input.accessId, caseId: input.caseId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            supabaseAuthUserId: true,
+            _count: { select: { memberships: true, careSeekerAccess: true } },
+          },
+        },
+      },
+    });
+    if (!grant) throw new NotFoundException("Care seeker access not found");
+    if (grant.status !== "INVITED") {
+      throw new BadRequestException(
+        "Only a pending invitation can be removed. Revoke the access instead, which keeps its history.",
+      );
+    }
+
+    // The account goes only if this grant is the whole of it. A family member
+    // invited to a second case, or someone who has signed in, keeps their
+    // account and loses just this grant.
+    const accountRemoved =
+      grant.user.status === "INVITED" &&
+      grant.user._count.memberships === 0 &&
+      grant.user._count.careSeekerAccess === 1;
+
+    if (accountRemoved && grant.user.supabaseAuthUserId) {
+      // First, for the same reason as everywhere else: an identity left behind
+      // makes the address permanently uninvitable, which is the one thing this
+      // operation exists to prevent.
       try {
-        const { supabaseUserId } = await this.supabase.inviteByEmail(granted.user.email, redirectTo);
-        await this.prisma.user.updateMany({
-          where: { id: granted.userId, supabaseAuthUserId: null },
-          data: { supabaseAuthUserId: supabaseUserId },
-        });
+        await this.supabase.deleteAuthUser(grant.user.supabaseAuthUserId);
       } catch (error) {
-        // Family invitations share one email sender with organization invites,
-        // so they share its send-rate limit too — and a limit that has been hit
-        // is waited out rather than retried. Discarding the reason left the
-        // same "please retry" for that and for a genuinely broken sender, with
-        // a grant sitting at Invited and no email to account for it.
         const reason = error instanceof Error ? error.message : "unknown error";
-        this.logger.warn(`Family invitation email for grant ${accessId} was not sent: ${reason}`);
+        this.logger.warn(`Sign-in identity for user ${grant.userId} was not removed: ${reason}`);
         throw new ServiceUnavailableException(
-          /rate limit/i.test(reason)
-            ? "Access was granted, but the email provider's sending rate limit was reached. Wait a few minutes, then revoke and grant the access again to resend the invitation."
-            : "Access was granted, but the invitation email could not be sent. Please retry the invite.",
+          "The sign-in identity could not be removed, so the invitation was left in place. Please retry.",
         );
       }
     }
 
-    return this.toView(granted);
+    await this.prisma.$transaction(async (tx) => {
+      await this.audit.record(
+        {
+          action: "care_seeker.invitation_removed",
+          entityType: "CareSeekerCaseAccess",
+          entityId: grant.id,
+          organizationId: input.organizationId,
+          actorUserId,
+          metadata: { caseId: input.caseId, email: grant.user.email, accountRemoved },
+        },
+        tx,
+      );
+      // Deleting the user takes the grant with it — the relation cascades — so
+      // the two branches must not both run.
+      if (accountRemoved) {
+        await tx.user.delete({ where: { id: grant.userId } });
+      } else {
+        await tx.careSeekerCaseAccess.delete({ where: { id: grant.id } });
+      }
+    });
+
+    return { id: grant.id, accountRemoved };
+  }
+
+  /**
+   * Sends an invitation email and turns a failure into something the person who
+   * pressed the button can act on — the same wording rule organization invites
+   * use, since both share one email sender and therefore one rate limit.
+   */
+  private async sendInvitationEmail(userId: string, email: string, prefix: string): Promise<InvitationEmailKind> {
+    try {
+      return await this.invitations.send(userId, email);
+    } catch (error) {
+      if (error instanceof InvitationEmailError) {
+        throw new ServiceUnavailableException(
+          error.rateLimited
+            ? `${prefix} was not sent: the email provider's sending rate limit was reached. Wait a few minutes, then resend it.`
+            : `${prefix} could not be sent. Please resend it.`,
+        );
+      }
+      throw error;
+    }
   }
 
   /** Revokes or restores a grant. The row is kept so the history survives. */

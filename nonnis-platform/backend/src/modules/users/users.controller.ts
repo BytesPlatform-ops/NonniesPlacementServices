@@ -38,6 +38,16 @@ export class UsersController {
     return this.users.invite(user, dto);
   }
 
+  @Post(":id/resend-invitation")
+  @RequireAnyPermission(...USER_MANAGEMENT)
+  @HttpCode(HttpStatus.OK)
+  resendInvitation(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ): Promise<{ userId: string; email: string; emailKind: string }> {
+    return this.users.resendInvitation(user, id);
+  }
+
   @Get(":id")
   @RequirePermissions(PERMISSIONS.USERS_READ)
   findOne(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string): Promise<UserDetailView> {

@@ -71,6 +71,20 @@ export class SupabaseService implements TokenVerifier {
   }
 
   /**
+   * Email an existing user a link for setting a password.
+   *
+   * The counterpart to `inviteByEmail` for an address that is already
+   * registered: it cannot be invited a second time, but it can always be sent a
+   * fresh link, which lands on the same set-a-password screen.
+   */
+  async sendPasswordSetupLink(email: string, redirectTo: string): Promise<void> {
+    const { error } = await this.getAuthClient().auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  /**
    * Remove a sign-in identity. Returns false when it was already gone, so a
    * retry after a partial failure is not itself an error.
    *

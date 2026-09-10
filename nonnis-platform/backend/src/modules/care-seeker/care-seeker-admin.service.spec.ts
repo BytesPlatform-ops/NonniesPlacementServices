@@ -1,10 +1,10 @@
-import { ConflictException, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { CareSeekerAdminService } from "./care-seeker-admin.service";
 import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
 import type { SupabaseService } from "../auth/supabase.service";
+import { InvitationEmailError, type InvitationService } from "../auth/invitation.service";
 import type { WorkflowEventsService } from "../workflow-events/workflow-events.service";
-import type { ConfigService } from "@nestjs/config";
 
 const grantedRow = {
   id: "acc-1",
@@ -17,17 +17,29 @@ const grantedRow = {
   user: { email: "family@example.com", displayName: null, firstName: "Ann", lastName: "Miller", status: "INVITED" },
 };
 
-function build(opts: { existingUser?: unknown; membershipCount?: number; existingAccess?: unknown; role?: unknown } = {}) {
+function build(
+  opts: {
+    existingUser?: unknown;
+    membershipCount?: number;
+    existingAccess?: unknown;
+    role?: unknown;
+    /** What `careSeekerCaseAccess.findFirst` returns — the row resend and
+     *  remove-invitation both start from. */
+    accessRow?: unknown;
+  } = {},
+) {
   const tx = {
     user: {
       findUnique: jest.fn().mockResolvedValue(opts.existingUser ?? null),
       create: jest.fn().mockResolvedValue({ id: "user-1", email: "family@example.com" }),
+      delete: jest.fn().mockResolvedValue({}),
     },
     organizationMembership: { count: jest.fn().mockResolvedValue(opts.membershipCount ?? 0) },
     careSeekerCaseAccess: {
       findUnique: jest.fn().mockResolvedValue(opts.existingAccess ?? null),
       create: jest.fn().mockResolvedValue({ id: "acc-1", relationship: "Daughter" }),
       update: jest.fn().mockResolvedValue({ id: "acc-1", relationship: "Daughter" }),
+      delete: jest.fn().mockResolvedValue({}),
     },
   };
   const prisma = {
@@ -35,31 +47,40 @@ function build(opts: { existingUser?: unknown; membershipCount?: number; existin
     $transaction: jest.fn().mockImplementation((cb: (t: typeof tx) => unknown) => cb(tx)),
     careSeekerCaseAccess: {
       findUniqueOrThrow: jest.fn().mockResolvedValue(grantedRow),
-      findFirst: jest.fn().mockResolvedValue({ id: "acc-1", caseId: "case-a" }),
+      // `in`, not `??`: a test that passes null is asking for "no such row",
+      // which `??` would quietly turn back into the default.
+      findFirst: jest
+        .fn()
+        .mockResolvedValue("accessRow" in opts ? opts.accessRow : { id: "acc-1", caseId: "case-a" }),
       findMany: jest.fn().mockResolvedValue([grantedRow]),
       update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...grantedRow, ...data })),
     },
     user: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   } as unknown as PrismaService;
   const audit = { record: jest.fn().mockResolvedValue(undefined) } as unknown as AuditService;
-  const supabase = { inviteByEmail: jest.fn().mockResolvedValue({ supabaseUserId: "sb-1" }) } as unknown as SupabaseService;
-  const config = { get: jest.fn().mockReturnValue("https://crm.example") } as unknown as ConfigService<never, true>;
+  const supabase = {
+    inviteByEmail: jest.fn().mockResolvedValue({ supabaseUserId: "sb-1" }),
+    deleteAuthUser: jest.fn().mockResolvedValue(true),
+  } as unknown as SupabaseService;
+  const invitations = { send: jest.fn().mockResolvedValue("INVITE") } as unknown as InvitationService;
   const events = { record: jest.fn().mockResolvedValue(undefined) } as unknown as WorkflowEventsService;
-  const svc = new CareSeekerAdminService(prisma, audit, supabase, config as never, events);
-  return { svc, prisma, tx, audit, supabase, events };
+  const svc = new CareSeekerAdminService(prisma, audit, supabase, invitations, events);
+  return { svc, prisma, tx, audit, supabase, invitations, events };
 }
 
 const input = { caseId: "case-a", organizationId: "org-1", email: "Family@Example.com ", relationship: "Daughter" };
 
 describe("CareSeekerAdminService.grant", () => {
-  it("creates the application user and sends the existing Supabase invite", async () => {
-    const { svc, tx, supabase } = build();
+  it("creates the application user and sends the same invitation email as an organization invite", async () => {
+    const { svc, tx, invitations } = build();
     const view = await svc.grant(input, "staff-1");
 
     expect(tx.user.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ email: "family@example.com", status: "INVITED" }) }),
     );
-    expect(supabase.inviteByEmail).toHaveBeenCalledWith("family@example.com", "https://crm.example/auth/callback");
+    // Which email goes out, and where it points, is the invitation service's
+    // own test — both workflows share it precisely so they cannot diverge.
+    expect(invitations.send).toHaveBeenCalledWith("user-1", "family@example.com");
     expect(view.email).toBe("family@example.com");
     expect(view.statusLabel).toBe("Invited");
   });
@@ -114,12 +135,17 @@ describe("CareSeekerAdminService.grant", () => {
   });
 
   it("surfaces a failed invite instead of reporting success", async () => {
-    const { svc, prisma } = build();
-    (prisma as unknown as { careSeekerCaseAccess: { findUniqueOrThrow: jest.Mock } }).careSeekerCaseAccess.findUniqueOrThrow =
-      jest.fn().mockResolvedValue(grantedRow);
-    const svcFailing = svc as unknown as { supabase: { inviteByEmail: jest.Mock } };
-    svcFailing.supabase.inviteByEmail = jest.fn().mockRejectedValue(new Error("smtp down"));
+    const { svc, invitations } = build();
+    (invitations.send as jest.Mock).mockRejectedValue(new InvitationEmailError("smtp down", false));
     await expect(svc.grant(input, "staff-1")).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("tells the caller to wait when the send-rate limit was the problem", async () => {
+    const { svc, invitations } = build();
+    (invitations.send as jest.Mock).mockRejectedValue(
+      new InvitationEmailError("429: email rate limit exceeded", true),
+    );
+    await expect(svc.grant(input, "staff-1")).rejects.toThrow(/rate limit/i);
   });
 });
 
@@ -155,5 +181,136 @@ describe("CareSeekerAdminService.setStatus", () => {
     await expect(
       svc.setStatus({ caseId: "case-b", organizationId: "org-1", accessId: "acc-1", status: "REVOKED" }, "staff-1"),
     ).rejects.toThrow(/not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resending and removing a pending family invitation
+//
+// Before these, a family invitation that never landed could only be chased by
+// revoking the access and granting it again — rewriting the grant's history to
+// work around a mail problem, and still failing once the address had been
+// registered by the first attempt.
+// ---------------------------------------------------------------------------
+
+const pendingGrant = () => ({
+    id: "acc-1",
+    caseId: "case-a",
+    userId: "user-1",
+    status: "INVITED",
+    user: {
+      id: "user-1",
+      email: "family@example.com",
+      displayName: null,
+      firstName: "Ann",
+      lastName: "Miller",
+      status: "INVITED",
+      supabaseAuthUserId: "sb-1",
+      _count: { memberships: 0, careSeekerAccess: 1 },
+    },
+  });
+
+const target = { caseId: "case-a", organizationId: "org-1", accessId: "acc-1" };
+
+describe("CareSeekerAdminService.resendInvitation", () => {
+  it("sends the invitation again without touching the grant", async () => {
+    const { svc, prisma, audit, invitations } = build({ accessRow: pendingGrant() });
+
+    await expect(svc.resendInvitation(target, "staff-1")).resolves.toEqual({
+      accessId: "acc-1",
+      email: "family@example.com",
+      emailKind: "INVITE",
+    });
+
+    expect(invitations.send).toHaveBeenCalledWith("user-1", "family@example.com");
+    const update = (prisma as unknown as { careSeekerCaseAccess: { update: jest.Mock } }).careSeekerCaseAccess.update;
+    expect(update).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "care_seeker.invitation_resent" }));
+  });
+
+  it("reports a password-setup link for an address already registered", async () => {
+    const { svc, invitations } = build({ accessRow: pendingGrant() });
+    (invitations.send as jest.Mock).mockResolvedValue("PASSWORD_SETUP");
+
+    await expect(svc.resendInvitation(target, "staff-1")).resolves.toMatchObject({ emailKind: "PASSWORD_SETUP" });
+  });
+
+  it("refuses a revoked access, which needs restoring first", async () => {
+    const grant = { ...pendingGrant(), status: "REVOKED" };
+    const { svc, invitations } = build({ accessRow: grant });
+
+    await expect(svc.resendInvitation(target, "staff-1")).rejects.toBeInstanceOf(BadRequestException);
+    expect(invitations.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses someone who has already signed in", async () => {
+    const grant = pendingGrant();
+    const { svc, invitations } = build({
+      accessRow: { ...grant, status: "ACTIVE", user: { ...grant.user, status: "ACTIVE" } },
+    });
+
+    await expect(svc.resendInvitation(target, "staff-1")).rejects.toBeInstanceOf(BadRequestException);
+    expect(invitations.send).not.toHaveBeenCalled();
+  });
+
+  it("404s for an access row on a different case", async () => {
+    const { svc } = build({ accessRow: null });
+    await expect(svc.resendInvitation(target, "staff-1")).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe("CareSeekerAdminService.removeInvitation", () => {
+  it("removes the grant, the account and the sign-in when the grant is all there is", async () => {
+    // The point of the operation: the address must be free to invite again,
+    // which an identity left behind would prevent.
+    const { svc, tx, supabase, audit } = build({ accessRow: pendingGrant() });
+
+    await expect(svc.removeInvitation(target, "staff-1")).resolves.toEqual({ id: "acc-1", accountRemoved: true });
+
+    expect(supabase.deleteAuthUser).toHaveBeenCalledWith("sb-1");
+    expect(tx.user.delete).toHaveBeenCalledWith({ where: { id: "user-1" } });
+    // Deleting the user cascades the grant; deleting both would be wrong.
+    expect(tx.careSeekerCaseAccess.delete).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "care_seeker.invitation_removed" }),
+      expect.anything(),
+    );
+  });
+
+  it("keeps the account when the person is invited to another case as well", async () => {
+    const grant = pendingGrant();
+    const { svc, tx, supabase } = build({
+      accessRow: { ...grant, user: { ...grant.user, _count: { memberships: 0, careSeekerAccess: 2 } } },
+    });
+
+    await expect(svc.removeInvitation(target, "staff-1")).resolves.toEqual({ id: "acc-1", accountRemoved: false });
+
+    expect(tx.careSeekerCaseAccess.delete).toHaveBeenCalledWith({ where: { id: "acc-1" } });
+    expect(tx.user.delete).not.toHaveBeenCalled();
+    expect(supabase.deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses anything but a pending invitation, pointing at revoke", async () => {
+    const grant = pendingGrant();
+    const { svc, tx } = build({
+      accessRow: { ...grant, status: "ACTIVE", user: { ...grant.user, status: "ACTIVE" } },
+    });
+
+    await expect(svc.removeInvitation(target, "staff-1")).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.user.delete).not.toHaveBeenCalled();
+    expect(tx.careSeekerCaseAccess.delete).not.toHaveBeenCalled();
+  });
+
+  it("leaves everything in place when the sign-in cannot be removed", async () => {
+    const { svc, tx, supabase } = build({ accessRow: pendingGrant() });
+    (supabase.deleteAuthUser as jest.Mock).mockRejectedValue(new Error("boom"));
+
+    await expect(svc.removeInvitation(target, "staff-1")).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(tx.user.delete).not.toHaveBeenCalled();
+  });
+
+  it("404s for an access row on a different case", async () => {
+    const { svc } = build({ accessRow: null });
+    await expect(svc.removeInvitation(target, "staff-1")).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -1,11 +1,10 @@
-import { BadRequestException, ForbiddenException, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
 import type { SupabaseService } from "../auth/supabase.service";
-import type { ConfigService } from "@nestjs/config";
+import { InvitationEmailError, type InvitationService } from "../auth/invitation.service";
 import type { RequestUser } from "../auth/request-user";
-import type { AppConfig } from "../../config/configuration";
 import { PERMISSIONS, ROLES } from "../../common/rbac";
 import type { InviteUserDto } from "./dto/user.dto";
 import type { UserStatus } from "@prisma/client";
@@ -32,8 +31,8 @@ function makeDeps() {
     inviteByEmail: jest.fn().mockResolvedValue({ supabaseUserId: "sb-new" }),
     deleteAuthUser: jest.fn().mockResolvedValue(true),
   } as unknown as SupabaseService;
-  const config = { get: jest.fn().mockReturnValue("http://localhost:3001") } as unknown as ConfigService<AppConfig, true>;
-  return { audit, supabase, config };
+  const invitations = { send: jest.fn().mockResolvedValue("INVITE") } as unknown as InvitationService;
+  return { audit, supabase, invitations };
 }
 
 function makePrisma(overrides: Record<string, unknown> = {}) {
@@ -82,8 +81,8 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
 }
 
 function service(prisma: PrismaService) {
-  const { audit, supabase, config } = makeDeps();
-  return { svc: new UsersService(prisma, audit, supabase, config), audit, supabase };
+  const { audit, supabase, invitations } = makeDeps();
+  return { svc: new UsersService(prisma, audit, supabase, invitations), audit, supabase, invitations };
 }
 
 const inviteDto = (over: Partial<InviteUserDto> = {}): InviteUserDto => ({
@@ -117,11 +116,11 @@ describe("UsersService — invitation & role escalation", () => {
   });
 
   it("invites a provider-scoped user: records audit and issues a Supabase invite", async () => {
-    const { svc, audit, supabase } = service(makePrisma());
+    const { svc, audit, invitations } = service(makePrisma());
     const result = await svc.invite(providerAdmin(), inviteDto());
     expect(result.status).toBe("INVITED");
     expect(result.userId).toBe("newuser");
-    expect(supabase.inviteByEmail).toHaveBeenCalledWith("new@prov.com", expect.stringContaining("/auth/callback"));
+    expect(invitations.send).toHaveBeenCalledWith("newuser", "new@prov.com");
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "user.invited" }), expect.anything());
   });
 
@@ -343,7 +342,7 @@ describe("UsersService — cross-organization onboarding", () => {
 
   it("lets a platform user manager invite the first PROVIDER_ADMIN into a provider organization", async () => {
     const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_ADMIN);
-    const { svc, supabase } = service(prisma);
+    const { svc, invitations } = service(prisma);
 
     const result = await svc.invite(
       nonnisAdmin(),
@@ -353,8 +352,9 @@ describe("UsersService — cross-organization onboarding", () => {
     expect(result.organizationId).toBe("prov");
     expect(result.roleCode).toBe(ROLES.PROVIDER_ADMIN);
     expect(result.status).toBe("INVITED");
-    // The invitation email is the same one every other invite sends.
-    expect(supabase.inviteByEmail).toHaveBeenCalledWith("first@prov.com", "http://localhost:3001/auth/callback");
+    // The invitation email is the same one every other invite sends — which
+    // email that is, and where it points, is the invitation service's own test.
+    expect(invitations.send).toHaveBeenCalledWith("newuser", "first@prov.com");
   });
 
   it("still refuses a provider role in the Nonnis organization", async () => {
@@ -594,5 +594,81 @@ describe("UsersService — deleting an account", () => {
 
     await expect(svc.deleteUser(providerAdmin(), "target")).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(del).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resending an invitation
+//
+// The first send can fail on its own (a provider rate limit), and an
+// invitation that did arrive and was ignored cannot be re-issued as an
+// invitation at all — by then the address is registered. Both are the shared
+// invitation service's problem; what belongs here is who may ask for a resend
+// and in which state.
+// ---------------------------------------------------------------------------
+
+function resendPrisma(user: Record<string, unknown> = {}) {
+  return makePrisma({
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ id: "target", email: "t@x.com", status: "INVITED", ...user }),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+    },
+  });
+}
+
+describe("UsersService — resending an invitation", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("sends again for a pending user and records it", async () => {
+    const { svc, audit, invitations } = service(resendPrisma());
+
+    await expect(svc.resendInvitation(providerAdmin(), "target")).resolves.toEqual({
+      userId: "target",
+      email: "t@x.com",
+      emailKind: "INVITE",
+    });
+    expect(invitations.send).toHaveBeenCalledWith("target", "t@x.com");
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "user.invitation_resent" }));
+  });
+
+  it("reports which email actually went out for an already-registered address", async () => {
+    // The recipient gets a password-setup link rather than a second invitation;
+    // the caller is told, because it is what the user will see in their inbox.
+    const { svc, invitations } = service(resendPrisma());
+    (invitations.send as jest.Mock).mockResolvedValue("PASSWORD_SETUP");
+
+    await expect(svc.resendInvitation(providerAdmin(), "target")).resolves.toMatchObject({
+      emailKind: "PASSWORD_SETUP",
+    });
+  });
+
+  it("refuses a user who has already accepted", async () => {
+    const { svc, invitations } = service(resendPrisma({ status: "ACTIVE" }));
+
+    await expect(svc.resendInvitation(providerAdmin(), "target")).rejects.toBeInstanceOf(BadRequestException);
+    expect(invitations.send).not.toHaveBeenCalled();
+  });
+
+  it("says a rate limit is a rate limit, so the caller knows to wait", async () => {
+    const { svc, invitations } = service(resendPrisma());
+    (invitations.send as jest.Mock).mockRejectedValue(new InvitationEmailError("429: email rate limit exceeded", true));
+
+    await expect(svc.resendInvitation(providerAdmin(), "target")).rejects.toThrow(/rate limit/i);
+  });
+
+  it("keeps an organization-scoped manager away from a user outside their organization", async () => {
+    const prisma = makePrisma({
+      organizationMembership: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    });
+    const { svc, invitations } = service(prisma);
+
+    await expect(svc.resendInvitation(providerAdmin(), "target")).rejects.toBeInstanceOf(NotFoundException);
+    expect(invitations.send).not.toHaveBeenCalled();
   });
 });
