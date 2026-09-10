@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -48,6 +49,8 @@ const membershipInclude = { organization: true, role: true } as const;
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -222,10 +225,20 @@ export class UsersService {
         where: { id: userId, supabaseAuthUserId: null },
         data: { supabaseAuthUserId: supabaseUserId },
       });
-    } catch {
+    } catch (error) {
       // The pending invite record is consistent; surface the failure (not silent) so it can be retried.
+      //
+      // Which failure it was decides what to do about it — a send-rate limit is
+      // waited out, a misconfigured sender is not — and discarding the reason
+      // left "please retry" as the only signal for either, with an INVITED row
+      // and no email to explain it. The provider's message names the cause and
+      // carries no credential or token.
+      const reason = error instanceof Error ? error.message : "unknown error";
+      this.logger.warn(`Invite email for user ${userId} was not sent: ${reason}`);
       throw new ServiceUnavailableException(
-        "The invitation was recorded, but the invite email could not be sent. Please retry.",
+        /rate limit/i.test(reason)
+          ? "The invitation was recorded, but the email provider's sending rate limit was reached. Wait a few minutes, then resend the invitation."
+          : "The invitation was recorded, but the invite email could not be sent. Please retry.",
       );
     }
 
@@ -266,6 +279,91 @@ export class UsersService {
       metadata: { status },
     });
     return this.findOne(actor, id);
+  }
+
+  /**
+   * Permanently remove a user account, sign-in identity included.
+   *
+   * Deleting the Supabase identity is as much the point as the row: an address
+   * that is still registered cannot be invited again, so an account cleared out
+   * of our tables alone would leave the invitation permanently unrepeatable.
+   *
+   * An ACTIVE user is refused. Suspension is reversible and this is not, so the
+   * destructive step is only reachable from a state someone chose deliberately
+   * (invited, suspended or deactivated) — which is also the state a pending or
+   * finished test account is already in.
+   */
+  async deleteUser(actor: RequestUser, id: string): Promise<{ id: string }> {
+    const organizationId = await this.assertManageableTarget(actor, id);
+    if (id === actor.id) {
+      throw new BadRequestException("You cannot delete your own account.");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        supabaseAuthUserId: true,
+        _count: { select: { memberships: true } },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+    if (user.status === "ACTIVE") {
+      throw new BadRequestException(
+        "Suspend or deactivate this user before deleting the account.",
+      );
+    }
+    // A user row is global, so removing it also ends memberships in
+    // organizations the actor may not manage. An organization-scoped manager is
+    // therefore confined to someone who belongs only to theirs.
+    if (user._count.memberships > 1 && !actor.activePermissions.has(PERMISSIONS.USERS_MANAGE)) {
+      throw new ForbiddenException(
+        "This user also belongs to another organization, so only a platform administrator can delete the account.",
+      );
+    }
+
+    // The identity goes first: were it to survive a failed row delete, the
+    // address would stay unusable for a new invitation, which is the whole
+    // reason for deleting rather than deactivating. Re-running this after a
+    // partial failure is harmless — an identity that is already gone is not an
+    // error.
+    if (user.supabaseAuthUserId) {
+      try {
+        await this.supabase.deleteAuthUser(user.supabaseAuthUserId);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "unknown error";
+        this.logger.warn(`Sign-in identity for user ${id} was not removed: ${reason}`);
+        throw new ServiceUnavailableException(
+          "The sign-in identity could not be removed, so the account was left in place. Please retry.",
+        );
+      }
+    }
+
+    // Memberships and this user's own case-access grants cascade away with the
+    // row; case assignments and audit/workflow actors are nulled instead, so
+    // the record of what happened outlives the account it happened under. The
+    // audit event is written in the same transaction as the delete, and names
+    // the email because the row that held it is about to be gone.
+    await this.prisma.$transaction(async (tx) => {
+      await this.audit.record(
+        {
+          action: "user.deleted",
+          entityType: "User",
+          entityId: id,
+          organizationId,
+          actorUserId: actor.id,
+          metadata: { email: user.email, status: user.status },
+        },
+        tx,
+      );
+      await tx.user.delete({ where: { id } });
+    });
+
+    return { id: user.id };
   }
 
   async changeMembershipRole(

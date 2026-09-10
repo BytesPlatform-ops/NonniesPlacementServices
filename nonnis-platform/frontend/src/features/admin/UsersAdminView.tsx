@@ -11,6 +11,7 @@ import { rolesAssignableIn } from "@/lib/assignable-roles";
 import {
   assignableRoles,
   changeMembershipRole,
+  deleteUser,
   inviteUser,
   listOrganizations,
   listUsers,
@@ -158,30 +159,53 @@ export function UsersAdminView() {
             align: "right" as const,
             render: (row: UserListItem) =>
               assignableCodes.has(row.membership.roleCode) ? (
-                row.status === "SUSPENDED" ? (
-                  <MutationButton
-                    variant="link"
-                    className="text-brand-700 hover:text-brand-800"
-                    pendingLabel="Reactivating…"
-                    confirm={{ title: "Reactivate this user?", description: "The user will regain normal access to their organization.", confirmLabel: "Reactivate" }}
-                    action={() => setUserStatus(row.id, "ACTIVE")}
-                    successToast="User reactivated"
-                    onSuccess={() => users.reload()}
-                  >
-                    Reactivate
-                  </MutationButton>
-                ) : (
-                  <MutationButton
-                    variant="danger-link"
-                    pendingLabel="Suspending…"
-                    confirm={{ title: "Suspend this user?", description: "The user will lose normal access until their account is reactivated.", confirmLabel: "Suspend user", variant: "danger" }}
-                    action={() => setUserStatus(row.id, "SUSPENDED")}
-                    successToast="User suspended"
-                    onSuccess={() => users.reload()}
-                  >
-                    Suspend
-                  </MutationButton>
-                )
+                <div className="flex items-center justify-end gap-3">
+                  {row.status === "SUSPENDED" ? (
+                    <MutationButton
+                      variant="link"
+                      className="text-brand-700 hover:text-brand-800"
+                      pendingLabel="Reactivating…"
+                      confirm={{ title: "Reactivate this user?", description: "The user will regain normal access to their organization.", confirmLabel: "Reactivate" }}
+                      action={() => setUserStatus(row.id, "ACTIVE")}
+                      successToast="User reactivated"
+                      onSuccess={() => users.reload()}
+                    >
+                      Reactivate
+                    </MutationButton>
+                  ) : (
+                    <MutationButton
+                      variant="danger-link"
+                      pendingLabel="Suspending…"
+                      confirm={{ title: "Suspend this user?", description: "The user will lose normal access until their account is reactivated.", confirmLabel: "Suspend user", variant: "danger" }}
+                      action={() => setUserStatus(row.id, "SUSPENDED")}
+                      successToast="User suspended"
+                      onSuccess={() => users.reload()}
+                    >
+                      Suspend
+                    </MutationButton>
+                  )}
+                  {/* Deleting frees the email address to be invited again, which
+                      suspending does not. An active account is deliberately not
+                      offered it — the server refuses one, so suspending is the
+                      step that comes first. */}
+                  {row.status === "ACTIVE" ? null : (
+                    <MutationButton
+                      variant="danger-link"
+                      pendingLabel="Deleting…"
+                      confirm={{
+                        title: "Delete this account?",
+                        description: `${row.email} and their sign-in are removed for good, and the address becomes free to invite again. Cases, messages and history remain, but stop naming this account.`,
+                        confirmLabel: "Delete account",
+                        variant: "danger",
+                      }}
+                      action={() => deleteUser(row.id)}
+                      successToast="Account deleted"
+                      onSuccess={() => users.reload()}
+                    >
+                      Delete
+                    </MutationButton>
+                  )}
+                </div>
               ) : null,
           },
         ]

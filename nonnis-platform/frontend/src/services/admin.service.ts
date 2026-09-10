@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import type { PaginatedResult } from "@/types/api";
 import type {
   FacilityView,
@@ -90,6 +90,14 @@ export function inviteUser(body: {
 
 export function setUserStatus(id: string, status: string): Promise<UserDetailView> {
   return apiPatch<UserDetailView>(`/api/v1/users/${id}/status`, { status });
+}
+
+/**
+ * Delete a user account outright, sign-in identity included, so the address is
+ * free to invite again. The server refuses an active user — suspend first.
+ */
+export function deleteUser(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/v1/users/${id}`);
 }
 
 export function changeMembershipRole(userId: string, membershipId: string, roleCode: string): Promise<UserDetailView> {

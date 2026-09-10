@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, ServiceUnavailableException } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
@@ -28,7 +28,10 @@ function providerAdmin(): RequestUser {
 
 function makeDeps() {
   const audit = { record: jest.fn() } as unknown as AuditService;
-  const supabase = { inviteByEmail: jest.fn().mockResolvedValue({ supabaseUserId: "sb-new" }) } as unknown as SupabaseService;
+  const supabase = {
+    inviteByEmail: jest.fn().mockResolvedValue({ supabaseUserId: "sb-new" }),
+    deleteAuthUser: jest.fn().mockResolvedValue(true),
+  } as unknown as SupabaseService;
   const config = { get: jest.fn().mockReturnValue("http://localhost:3001") } as unknown as ConfigService<AppConfig, true>;
   return { audit, supabase, config };
 }
@@ -485,5 +488,111 @@ describe("UsersService — list and manage scope", () => {
     const { svc, audit } = service(prisma);
     await svc.setStatus(nonnisAdmin(), "target", "SUSPENDED" as UserStatus);
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "prov" }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deleting an account
+//
+// The operation exists so an address can be invited again: Supabase refuses to
+// invite one that is still registered, so the sign-in identity has to go with
+// the row. What must not happen is a live account disappearing by mis-click,
+// hence the ACTIVE guard and the membership-scope guard below.
+// ---------------------------------------------------------------------------
+
+function deletePrisma(user: Record<string, unknown> = {}, over: Record<string, unknown> = {}) {
+  const del = jest.fn().mockResolvedValue({});
+  const prisma = makePrisma({
+    user: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: "target",
+        email: "t@x.com",
+        status: "INVITED",
+        supabaseAuthUserId: "sb-target",
+        _count: { memberships: 1 },
+        ...user,
+      }),
+      delete: del,
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      create: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+    },
+    ...over,
+  });
+  return { prisma, del };
+}
+
+describe("UsersService — deleting an account", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("removes the sign-in identity and the row, and records the deletion", async () => {
+    const { prisma, del } = deletePrisma();
+    const { svc, audit, supabase } = service(prisma);
+
+    await expect(svc.deleteUser(providerAdmin(), "target")).resolves.toEqual({ id: "target" });
+
+    expect(supabase.deleteAuthUser).toHaveBeenCalledWith("sb-target");
+    expect(del).toHaveBeenCalledWith({ where: { id: "target" } });
+    // The email is captured in the audit event because the row that held it is
+    // about to be gone.
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "user.deleted", metadata: { email: "t@x.com", status: "INVITED" } }),
+      expect.anything(),
+    );
+  });
+
+  it("skips the identity call for an invite that never got one", async () => {
+    // An invitation whose email failed to send leaves no identity behind.
+    const { prisma, del } = deletePrisma({ supabaseAuthUserId: null });
+    const { svc, supabase } = service(prisma);
+
+    await svc.deleteUser(providerAdmin(), "target");
+
+    expect(supabase.deleteAuthUser).not.toHaveBeenCalled();
+    expect(del).toHaveBeenCalled();
+  });
+
+  it("refuses an active user, pointing at suspension instead", async () => {
+    const { prisma, del } = deletePrisma({ status: "ACTIVE" });
+    const { svc } = service(prisma);
+
+    await expect(svc.deleteUser(providerAdmin(), "target")).rejects.toBeInstanceOf(BadRequestException);
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete the actor's own account", async () => {
+    const { prisma, del } = deletePrisma();
+    const { svc } = service(prisma);
+
+    await expect(svc.deleteUser(providerAdmin(), "admin-1")).rejects.toBeInstanceOf(BadRequestException);
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("keeps an organization-scoped manager away from a user who belongs elsewhere too", async () => {
+    const { prisma, del } = deletePrisma({ _count: { memberships: 2 } });
+    const { svc } = service(prisma);
+
+    await expect(svc.deleteUser(providerAdmin(), "target")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("lets a platform manager delete a user who belongs to several organizations", async () => {
+    const { prisma, del } = deletePrisma({ _count: { memberships: 2 } });
+    const { svc } = service(prisma);
+
+    await expect(svc.deleteUser(nonnisAdmin(), "target")).resolves.toEqual({ id: "target" });
+    expect(del).toHaveBeenCalled();
+  });
+
+  it("leaves the row in place when the identity cannot be removed", async () => {
+    // Deleting the row first would strand a registered address that nothing in
+    // the admin UI can reach any more.
+    const { prisma, del } = deletePrisma();
+    const { svc, supabase } = service(prisma);
+    (supabase.deleteAuthUser as jest.Mock).mockRejectedValue(new Error("boom"));
+
+    await expect(svc.deleteUser(providerAdmin(), "target")).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(del).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS } from "../../common/rbac";
 import { CurrentUser, RequireAnyPermission, RequirePermissions } from "../auth/decorators";
@@ -62,6 +62,15 @@ export class UsersController {
     @Body() dto: UserStatusDto,
   ): Promise<UserDetailView> {
     return this.users.setStatus(user, id, dto.status);
+  }
+
+  @Delete(":id")
+  @RequireAnyPermission(...USER_MANAGEMENT)
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ): Promise<{ id: string }> {
+    return this.users.deleteUser(user, id);
   }
 
   @Patch(":id/memberships/:membershipId")

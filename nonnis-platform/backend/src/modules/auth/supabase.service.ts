@@ -69,4 +69,19 @@ export class SupabaseService implements TokenVerifier {
     }
     return { supabaseUserId: data.user.id };
   }
+
+  /**
+   * Remove a sign-in identity. Returns false when it was already gone, so a
+   * retry after a partial failure is not itself an error.
+   *
+   * Deleting the identity is what makes an address invitable again:
+   * `inviteUserByEmail` refuses one that is already registered, so an account
+   * removed only from our own tables could never be re-invited.
+   */
+  async deleteAuthUser(supabaseUserId: string): Promise<boolean> {
+    const { error } = await this.getAdminClient().auth.admin.deleteUser(supabaseUserId);
+    if (!error) return true;
+    if (error.status === 404) return false;
+    throw new Error(error.message);
+  }
 }
