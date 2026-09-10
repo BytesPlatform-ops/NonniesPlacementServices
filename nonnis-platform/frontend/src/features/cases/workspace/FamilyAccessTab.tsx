@@ -9,8 +9,16 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { formatDateTime } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
+import { invitationEmailSentMessage } from "@/lib/invitation-email";
+import { useToast } from "@/providers/toast-provider";
 import type { StatusTone } from "@/lib/case-status";
-import { grantCareSeekerAccess, listCareSeekers, setCareSeekerAccessStatus } from "@/services/care-seekers.service";
+import {
+  grantCareSeekerAccess,
+  listCareSeekers,
+  removeCareSeekerInvitation,
+  resendCareSeekerInvitation,
+  setCareSeekerAccessStatus,
+} from "@/services/care-seekers.service";
 import type { CaseDetail } from "@/types/domain";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800";
@@ -31,6 +39,7 @@ const ACCESS_TONES: Record<string, StatusTone> = {
  */
 export function FamilyAccessTab({ caseDetail }: { caseDetail: CaseDetail }) {
   const { hasPermission } = useAuth();
+  const toast = useToast();
   const canManage = hasPermission(PERMISSIONS.CARE_SEEKERS_MANAGE);
   const state = useAsync(() => listCareSeekers(caseDetail.id), [caseDetail.id]);
   const [form, setForm] = useState({ email: "", firstName: "", lastName: "", relationship: "" });
@@ -137,6 +146,37 @@ export function FamilyAccessTab({ caseDetail }: { caseDetail: CaseDetail }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge label={a.statusLabel} tone={ACCESS_TONES[a.status] ?? "neutral"} />
+                  {/* A pending invitation has its own two needs, which revoking
+                      does not serve: send it again when the email never
+                      arrived, or remove it when the address was wrong. Removing
+                      also frees that address, which revoking cannot. */}
+                  {a.status === "INVITED" ? (
+                    <>
+                      <MutationButton
+                        variant="secondary"
+                        pendingLabel="Sending…"
+                        action={() => resendCareSeekerInvitation(caseDetail.id, a.id)}
+                        onSuccess={(result) => toast.success(invitationEmailSentMessage(result.emailKind, a.email))}
+                      >
+                        Resend invite
+                      </MutationButton>
+                      <MutationButton
+                        variant="danger-link"
+                        pendingLabel="Removing…"
+                        confirm={{
+                          title: "Remove this invitation?",
+                          description: `${a.email} will no longer be invited to this case, and the address becomes free to invite again. Use Revoke instead for someone whose access should end but be kept on record.`,
+                          confirmLabel: "Remove invitation",
+                          variant: "danger",
+                        }}
+                        action={() => removeCareSeekerInvitation(caseDetail.id, a.id)}
+                        successToast="Invitation removed"
+                        onSuccess={state.reload}
+                      >
+                        Remove
+                      </MutationButton>
+                    </>
+                  ) : null}
                   {a.status === "REVOKED" ? (
                     <MutationButton
                       variant="secondary"

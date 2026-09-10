@@ -15,6 +15,7 @@ import {
   inviteUser,
   listOrganizations,
   listUsers,
+  resendUserInvitation,
   setUserStatus,
 } from "@/services/admin.service";
 import type { RoleOption, UserListItem } from "@/types/admin";
@@ -26,6 +27,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MutationButton } from "@/components/ui/MutationButton";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { useAction } from "@/hooks/use-action";
+import { useToast } from "@/providers/toast-provider";
+import { invitationEmailSentMessage } from "@/lib/invitation-email";
 
 export function UsersAdminView() {
   const { activeOrganizationId, hasPermission, me } = useAuth();
@@ -108,6 +111,7 @@ export function UsersAdminView() {
   };
 
   const runAction = useAction();
+  const toast = useToast();
 
   const onRoleChange = async (row: UserListItem, roleCode: string) => {
     if (roleCode === row.membership.roleCode) return;
@@ -184,6 +188,22 @@ export function UsersAdminView() {
                       Suspend
                     </MutationButton>
                   )}
+                  {/* An invitation that was sent once and ignored cannot be
+                      re-issued as an invitation — the address is registered by
+                      then — so the server may send a password-setup link
+                      instead. The toast says which arrived, because that is
+                      what the admin will be asked about. */}
+                  {row.status === "INVITED" ? (
+                    <MutationButton
+                      variant="link"
+                      className="text-brand-700 hover:text-brand-800"
+                      pendingLabel="Sending…"
+                      action={() => resendUserInvitation(row.id)}
+                      onSuccess={(result) => toast.success(invitationEmailSentMessage(result.emailKind, row.email))}
+                    >
+                      Resend invite
+                    </MutationButton>
+                  ) : null}
                   {/* Deleting frees the email address to be invited again, which
                       suspending does not. An active account is deliberately not
                       offered it — the server refuses one, so suspending is the

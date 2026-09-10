@@ -93,6 +93,15 @@ export function setUserStatus(id: string, status: string): Promise<UserDetailVie
 }
 
 /**
+ * Send a pending user's invitation email again. `emailKind` says which email
+ * actually went out: a fresh invitation, or a password-setup link for an
+ * address that was already registered by an earlier attempt.
+ */
+export function resendUserInvitation(id: string): Promise<{ userId: string; email: string; emailKind: string }> {
+  return apiPost<{ userId: string; email: string; emailKind: string }>(`/api/v1/users/${id}/resend-invitation`);
+}
+
+/**
  * Delete a user account outright, sign-in identity included, so the address is
  * free to invite again. The server refuses an active user — suspend first.
  */
