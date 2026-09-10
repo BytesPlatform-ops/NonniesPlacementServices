@@ -605,7 +605,18 @@ export function UsersTab({ provider }: { provider: ProviderDetailView }) {
         </ul>
       )}
       <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-        Provider users are managed in <Link href="/admin/users" className="text-brand-700 hover:underline">User administration</Link>.
+        Provider users are managed in{" "}
+        {/* Carries the organization so the admin screen opens already filtered to
+            this provider and its invite form is pointed at the right place —
+            without it the link lands on a screen scoped to the viewer's own
+            organization, where this provider's users are not listed. */}
+        <Link
+          href={`/admin/users?organizationId=${encodeURIComponent(provider.organizationId)}`}
+          className="text-brand-700 hover:underline"
+        >
+          User administration
+        </Link>
+        .
       </p>
     </Panel>
   );

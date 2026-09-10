@@ -285,3 +285,205 @@ describe("role must fit the organization type", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Onboarding a provider organization's FIRST administrator
+//
+// The backend has always allowed this — `resolveManageableOrg` lets a platform
+// user manager invite into any organization — but the admin UI had no
+// organization selector, so it could only ever invite into the manager's own.
+// These cover the path the new selector uses.
+// ---------------------------------------------------------------------------
+
+/** A Nonnis administrator: platform-wide user management, own org is NONNIS. */
+function nonnisAdmin(): RequestUser {
+  return {
+    id: "nonnis-1",
+    supabaseUserId: "sb-nonnis",
+    email: "admin@nonnis.local",
+    firstName: null,
+    lastName: null,
+    displayName: null,
+    status: "ACTIVE",
+    memberships: [],
+    caseAccess: [],
+    activeOrganizationId: "nonnis",
+    activePermissions: new Set([PERMISSIONS.USERS_MANAGE, PERMISSIONS.USERS_READ]),
+  };
+}
+
+/** Prisma double whose organization lookup answers per organization id. */
+function crossOrgPrisma(orgs: Record<string, { status: string; type: string }>, roleCode: string) {
+  return makePrisma({
+    organization: {
+      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) => {
+        const org = orgs[where.id];
+        return Promise.resolve(org ? { id: where.id, ...org } : null);
+      }),
+    },
+    role: {
+      findUnique: jest.fn().mockResolvedValue({ id: `role-${roleCode}`, code: roleCode, name: roleCode }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  });
+}
+
+const ORGS = {
+  nonnis: { status: "ACTIVE", type: "NONNIS" },
+  prov: { status: "ACTIVE", type: "PROVIDER" },
+  hospital: { status: "ACTIVE", type: "HOSPITAL" },
+  "prov-off": { status: "INACTIVE", type: "PROVIDER" },
+};
+
+describe("UsersService — cross-organization onboarding", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("lets a platform user manager invite the first PROVIDER_ADMIN into a provider organization", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_ADMIN);
+    const { svc, supabase } = service(prisma);
+
+    const result = await svc.invite(
+      nonnisAdmin(),
+      inviteDto({ organizationId: "prov", roleCode: ROLES.PROVIDER_ADMIN, email: "first@prov.com" }),
+    );
+
+    expect(result.organizationId).toBe("prov");
+    expect(result.roleCode).toBe(ROLES.PROVIDER_ADMIN);
+    expect(result.status).toBe("INVITED");
+    // The invitation email is the same one every other invite sends.
+    expect(supabase.inviteByEmail).toHaveBeenCalledWith("first@prov.com", "http://localhost:3001/auth/callback");
+  });
+
+  it("still refuses a provider role in the Nonnis organization", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "nonnis", roleCode: ROLES.PROVIDER_ADMIN })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("still refuses a Nonnis role in a provider organization", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.NONNIS_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "prov", roleCode: ROLES.NONNIS_ADMIN })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("allows a discharge professional in a referring organization", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.DISCHARGE_PROFESSIONAL);
+    const { svc } = service(prisma);
+    const result = await svc.invite(
+      nonnisAdmin(),
+      inviteDto({ organizationId: "hospital", roleCode: ROLES.DISCHARGE_PROFESSIONAL }),
+    );
+    expect(result.organizationId).toBe("hospital");
+  });
+
+  it("refuses CARE_SEEKER through the organization invite path", async () => {
+    // Family access is granted per case, never by adding someone to an
+    // organization — and CARE_SEEKER is valid in no organization type.
+    const prisma = crossOrgPrisma(ORGS, ROLES.CARE_SEEKER);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "prov", roleCode: ROLES.CARE_SEEKER })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("refuses an inactive organization even for a platform manager", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "prov-off", roleCode: ROLES.PROVIDER_ADMIN })),
+    ).rejects.toThrow(/inactive organization/i);
+  });
+
+  it("refuses an organization that does not exist", async () => {
+    const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_ADMIN);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(nonnisAdmin(), inviteDto({ organizationId: "nope", roleCode: ROLES.PROVIDER_ADMIN })),
+    ).rejects.toThrow(/does not exist/i);
+  });
+
+  it("keeps a provider admin confined to their own organization", async () => {
+    // The provider-portal Team invite is unchanged by any of this.
+    const prisma = crossOrgPrisma(ORGS, ROLES.PROVIDER_STAFF);
+    const { svc } = service(prisma);
+    await expect(
+      svc.invite(providerAdmin(), inviteDto({ organizationId: "hospital", roleCode: ROLES.PROVIDER_STAFF })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+/**
+ * `list()` pages with an array-form `$transaction` and a `count`, neither of
+ * which the shared harness needs for the invite tests. Built here rather than
+ * widening that harness for every unrelated case.
+ */
+function listPrisma() {
+  const findMany = jest.fn().mockResolvedValue([]);
+  const count = jest.fn().mockResolvedValue(0);
+  const prisma = makePrisma({
+    organizationMembership: {
+      findMany,
+      count,
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue({
+        id: "mem",
+        organizationId: "prov",
+        role: { code: ROLES.PROVIDER_STAFF, name: "Provider Staff" },
+      }),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+  }) as unknown as { $transaction: jest.Mock };
+  prisma.$transaction = jest
+    .fn()
+    .mockImplementation((arg: unknown) =>
+      Array.isArray(arg) ? Promise.all(arg) : (arg as (t: unknown) => unknown)(prisma),
+    );
+  return { prisma: prisma as unknown as PrismaService, findMany };
+}
+
+describe("UsersService — list and manage scope", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("lets a platform manager narrow the list to one organization", async () => {
+    const { prisma, findMany } = listPrisma();
+    const { svc } = service(prisma);
+    await svc.list(nonnisAdmin(), { page: 1, pageSize: 20, organizationId: "prov" });
+    expect(findMany.mock.calls[0][0].where.organizationId).toBe("prov");
+  });
+
+  it("shows a platform manager every organization when no filter is given", async () => {
+    // Without this a provider user invited from this screen would be invisible
+    // the moment the invite succeeded.
+    const { prisma, findMany } = listPrisma();
+    const { svc } = service(prisma);
+    await svc.list(nonnisAdmin(), { page: 1, pageSize: 20 });
+    expect(findMany.mock.calls[0][0].where.organizationId).toBeUndefined();
+  });
+
+  it("keeps an organization-scoped manager bound to their own organization", async () => {
+    const { prisma, findMany } = listPrisma();
+    const { svc } = service(prisma);
+    await svc.list(providerAdmin(), { page: 1, pageSize: 20 });
+    expect(findMany.mock.calls[0][0].where.organizationId).toBe("prov");
+  });
+
+  it("ignores an organization filter from an organization-scoped manager", async () => {
+    // Not an error — they are simply confined to their own organization, as before.
+    const { prisma, findMany } = listPrisma();
+    const { svc } = service(prisma);
+    await svc.list(providerAdmin(), { page: 1, pageSize: 20, organizationId: "hospital" });
+    expect(findMany.mock.calls[0][0].where.organizationId).toBe("prov");
+  });
+
+  it("attributes a status change to the target's own organization", async () => {
+    const prisma = makePrisma();
+    const { svc, audit } = service(prisma);
+    await svc.setStatus(nonnisAdmin(), "target", "SUSPENDED" as UserStatus);
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "prov" }));
+  });
+});

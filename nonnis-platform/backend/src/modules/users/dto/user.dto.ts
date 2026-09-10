@@ -71,4 +71,13 @@ export class ListUsersQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  /**
+   * Narrow the list to one organization. Honoured only for a platform user
+   * manager; anyone else stays bounded to their own active organization
+   * whatever they send.
+   */
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 }

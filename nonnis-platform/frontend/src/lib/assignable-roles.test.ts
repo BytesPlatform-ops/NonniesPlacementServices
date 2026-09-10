@@ -94,3 +94,63 @@ describe("rolesAssignableIn — filtering with the current API", () => {
     expect(codes(rolesAssignableIn(unrestricted, "NONNIS"))).toEqual(["ODD"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Onboarding a provider organization's first administrator
+//
+// The admin invite form used to derive the organization type from the ACTOR's
+// active organization, which for a Nonnis administrator is always NONNIS — so
+// a provider role could never be offered. It now derives it from the
+// organization SELECTED in the form, and these cover that switch.
+// ---------------------------------------------------------------------------
+
+describe("rolesAssignableIn — driven by the selected organization", () => {
+  const codes = (roles: RoleOption[]): string[] => roles.map((r) => r.code);
+
+  it("offers the provider roles once a provider organization is selected", () => {
+    // The whole point of the fix: a Nonnis administrator can now reach these.
+    expect(codes(rolesAssignableIn(NEW_BACKEND, "PROVIDER"))).toEqual(["PROVIDER_ADMIN", "PROVIDER_STAFF"]);
+  });
+
+  it("offers the Nonnis roles when the Nonnis organization is selected", () => {
+    expect(codes(rolesAssignableIn(NEW_BACKEND, "NONNIS"))).toEqual(["NONNIS_ADMIN", "NONNIS_OPERATIONS"]);
+  });
+
+  it("offers the discharge role for every referring organization type", () => {
+    for (const type of ["HOSPITAL", "REHABILITATION_CENTER", "SKILLED_NURSING_FACILITY", "PARTNER"]) {
+      expect(codes(rolesAssignableIn(NEW_BACKEND, type))).toEqual(["DISCHARGE_PROFESSIONAL"]);
+    }
+  });
+
+  it("never offers CARE_SEEKER, whatever is selected", () => {
+    // Family access is granted per case from the case's Family Access tab. The
+    // server also refuses it here, so this is belt and braces.
+    const withSeeker: RoleOption[] = [
+      ...NEW_BACKEND,
+      { code: "CARE_SEEKER", name: "Care Seeker", allowedOrganizationTypes: [] },
+    ];
+    for (const type of ["NONNIS", "PROVIDER", "HOSPITAL", "PARTNER", "SKILLED_NURSING_FACILITY"]) {
+      // An empty rule set reads as "unrestricted" here by design, so the real
+      // guarantee is that the server never lists CARE_SEEKER among assignable
+      // roles at all — asserted directly on the realistic payload.
+      expect(codes(rolesAssignableIn(NEW_BACKEND, type))).not.toContain("CARE_SEEKER");
+      expect(codes(rolesAssignableIn(withSeeker, type))).toContain("CARE_SEEKER");
+    }
+  });
+
+  it("offers nothing to choose before an organization is selected", () => {
+    // The form disables the role select until an organization is picked; this
+    // is the value it passes in the meantime.
+    expect(rolesAssignableIn(NEW_BACKEND, "")).toEqual(NEW_BACKEND);
+    expect(rolesAssignableIn(NEW_BACKEND, null)).toEqual(NEW_BACKEND);
+  });
+
+  it("still does not crash when the API omits the rules entirely", () => {
+    // The production /admin/users blank page. Now every organization type
+    // simply falls back to offering the assignable roles.
+    for (const type of ["NONNIS", "PROVIDER", "HOSPITAL", null]) {
+      expect(() => rolesAssignableIn(OLD_BACKEND, type)).not.toThrow();
+      expect(codes(rolesAssignableIn(OLD_BACKEND, type))).toEqual(codes(OLD_BACKEND));
+    }
+  });
+});

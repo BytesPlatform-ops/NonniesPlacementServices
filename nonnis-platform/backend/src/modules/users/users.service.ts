@@ -56,7 +56,7 @@ export class UsersService {
   ) {}
 
   async list(actor: RequestUser, query: ListUsersQueryDto): Promise<PaginatedResult<UserListItem>> {
-    const organizationId = requireActiveOrganization(actor);
+    const organizationId = this.resolveReadableOrg(actor, query.organizationId);
     const { page, pageSize, q, status } = query;
 
     const userFilter = {
@@ -72,7 +72,10 @@ export class UsersService {
         : {}),
     };
 
-    const where = { organizationId, ...(Object.keys(userFilter).length ? { user: userFilter } : {}) };
+    const where = {
+      ...(organizationId ? { organizationId } : {}),
+      ...(Object.keys(userFilter).length ? { user: userFilter } : {}),
+    };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.organizationMembership.findMany({
@@ -95,9 +98,9 @@ export class UsersService {
   }
 
   async findOne(actor: RequestUser, id: string): Promise<UserDetailView> {
-    const organizationId = requireActiveOrganization(actor);
+    const organizationId = this.resolveReadableOrg(actor);
     const inOrg = await this.prisma.organizationMembership.findFirst({
-      where: { userId: id, organizationId },
+      where: { userId: id, ...(organizationId ? { organizationId } : {}) },
       include: membershipInclude,
     });
     if (!inOrg) {
@@ -319,6 +322,25 @@ export class UsersService {
     }
   }
 
+  /**
+   * The organization a read is bounded by, or `null` for "every organization".
+   *
+   * The read counterpart of `resolveManageableOrg`, and it follows the same
+   * rule that has always governed writes: a platform user manager acts across
+   * organizations, everyone else is confined to their own active one. Without
+   * it the list could only ever show the manager's own organization, so a
+   * provider user invited from here would be invisible immediately afterwards.
+   *
+   * A requested id from a non-manager is ignored rather than rejected — they
+   * are simply bounded to their own organization, exactly as before.
+   */
+  private resolveReadableOrg(actor: RequestUser, requestedOrganizationId?: string): string | null {
+    if (actor.activePermissions.has(PERMISSIONS.USERS_MANAGE)) {
+      return requestedOrganizationId ?? null;
+    }
+    return requireActiveOrganization(actor);
+  }
+
   private resolveManageableOrg(actor: RequestUser, requestedOrganizationId: string): string {
     if (actor.activePermissions.has(PERMISSIONS.USERS_MANAGE)) {
       return requestedOrganizationId; // platform manager: any organization
@@ -343,9 +365,9 @@ export class UsersService {
    * Returns the organization id.
    */
   private async assertManageableTarget(actor: RequestUser, targetUserId: string): Promise<string> {
-    const organizationId = requireActiveOrganization(actor);
+    const organizationId = this.resolveReadableOrg(actor);
     const membership = await this.prisma.organizationMembership.findFirst({
-      where: { userId: targetUserId, organizationId },
+      where: { userId: targetUserId, ...(organizationId ? { organizationId } : {}) },
       include: { role: true },
     });
     if (!membership) {
@@ -355,6 +377,8 @@ export class UsersService {
     if (!assignable.includes(membership.role.code)) {
       throw new ForbiddenException("You cannot manage a user with this role.");
     }
-    return organizationId;
+    // The organization the action is attributed to: for a platform manager that
+    // is the target's own organization, not the manager's.
+    return membership.organizationId;
   }
 }

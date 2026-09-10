@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { humanizeEnum } from "@/lib/format";
 import { statusTone } from "@/lib/admin-status";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { activeOrgType } from "@/lib/landing";
 import { rolesAssignableIn } from "@/lib/assignable-roles";
-import { assignableRoles, changeMembershipRole, inviteUser, listUsers, setUserStatus } from "@/services/admin.service";
+import {
+  assignableRoles,
+  changeMembershipRole,
+  inviteUser,
+  listOrganizations,
+  listUsers,
+  setUserStatus,
+} from "@/services/admin.service";
 import type { RoleOption, UserListItem } from "@/types/admin";
 import { PERMISSIONS } from "@/lib/permissions";
 import { PageHeading } from "@/components/ui/PageHeading";
@@ -20,44 +28,79 @@ import { useAction } from "@/hooks/use-action";
 
 export function UsersAdminView() {
   const { activeOrganizationId, hasPermission, me } = useAuth();
+  const params = useSearchParams();
   const canManage =
     hasPermission(PERMISSIONS.USERS_MANAGE) || hasPermission(PERMISSIONS.USERS_MANAGE_OWN_ORGANIZATION);
+  // A platform user manager acts across organizations — the same rule the
+  // server has always applied to the invite endpoint. An organization-scoped
+  // manager (a provider admin) stays inside their own, so neither the filter
+  // nor the selector is shown to them.
+  const isPlatformManager = hasPermission(PERMISSIONS.USERS_MANAGE);
 
-  const users = useAsync(() => listUsers({ page: 1 }), [activeOrganizationId]);
+  // Provider detail links here with the provider's organization preselected.
+  const [orgFilter, setOrgFilter] = useState(() => (isPlatformManager ? (params.get("organizationId") ?? "") : ""));
+
+  const organizations = useAsync(
+    () => (isPlatformManager ? listOrganizations({ page: 1 }) : Promise.resolve(null)),
+    [isPlatformManager],
+  );
+  const users = useAsync(
+    () => listUsers({ page: 1, ...(orgFilter ? { organizationId: orgFilter } : {}) }),
+    [activeOrganizationId, orgFilter],
+  );
   const roles = useAsync<RoleOption[]>(() => (canManage ? assignableRoles() : Promise.resolve([])), [activeOrganizationId, canManage]);
-  // Offer only the roles that are valid in this organization's type. The server
+
+  const orgOptions = useMemo(
+    () => (organizations.data?.items ?? []).filter((o) => o.status === "ACTIVE"),
+    [organizations.data],
+  );
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", roleCode: "", organizationId: "" });
+
+  // Which organization the invitation is for: the one chosen in the form for a
+  // platform manager, otherwise the actor's own active organization.
+  const targetOrganizationId = isPlatformManager ? form.organizationId : (activeOrganizationId ?? "");
+  // Its type decides which roles are offered. For a platform manager that is
+  // the selected organization's own type — reading their active organization's
+  // type instead is exactly what made a provider role unofferable here.
+  const orgType = isPlatformManager
+    ? (orgOptions.find((o) => o.id === targetOrganizationId)?.type ?? null)
+    : activeOrgType(me, activeOrganizationId);
+  // Offer only the roles that are valid in that organization's type. The server
   // rejects an incompatible pairing with a 400 either way; filtering here means
   // the option is never presented in the first place, and the rules come from
   // the server with each role rather than being restated in the UI.
-  const orgType = activeOrgType(me, activeOrganizationId);
   const assignable = rolesAssignableIn(roles.data, orgType);
-  const assignableCodes = new Set(assignable.map((r) => r.code));
-
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", roleCode: "" });
+  const assignableCodes = new Set(rolesAssignableIn(roles.data, activeOrgType(me, activeOrganizationId)).map((r) => r.code));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const onInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!activeOrganizationId) return;
+    if (!targetOrganizationId) return;
     setBusy(true);
     setFormError(null);
     try {
       await inviteUser({
         email: form.email,
-        organizationId: activeOrganizationId,
+        organizationId: targetOrganizationId,
         roleCode: form.roleCode || assignable[0]?.code || "",
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
       });
-      setForm({ email: "", firstName: "", lastName: "", roleCode: "" });
+      setForm({ email: "", firstName: "", lastName: "", roleCode: "", organizationId: "" });
       setInviteOpen(false);
       setNotice("Invitation sent.");
+      // Show the organization just invited into, so the new user is visible
+      // straight away rather than appearing to have vanished.
+      if (isPlatformManager) setOrgFilter(targetOrganizationId);
       await users.reload();
-    } catch {
-      setFormError("Could not send the invitation.");
+    } catch (err) {
+      // The server is the authority on organization and role validity, so its
+      // message is more useful than a generic one.
+      setFormError(err instanceof Error && err.message ? err.message : "Could not send the invitation.");
     } finally {
       setBusy(false);
     }
@@ -149,7 +192,11 @@ export function UsersAdminView() {
     <div className="space-y-6">
       <PageHeading
         title="Users"
-        description="People with access to your active organization."
+        description={
+          isPlatformManager
+            ? "People with access to any organization you manage."
+            : "People with access to your active organization."
+        }
         actions={
           canManage ? (
             <button
@@ -189,25 +236,55 @@ export function UsersAdminView() {
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
               />
             </label>
+            {isPlatformManager ? (
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Organization</span>
+                <select
+                  required
+                  value={form.organizationId}
+                  onChange={(e) => setForm({ ...form, organizationId: e.target.value, roleCode: "" })}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                >
+                  <option value="">Select an organization…</option>
+                  {orgOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} · {humanizeEnum(o.type)}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-slate-500">
+                  The roles below are the ones valid in this organization.
+                </span>
+              </label>
+            ) : null}
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Role</span>
               <select
+                disabled={isPlatformManager && !form.organizationId}
                 value={form.roleCode || assignable[0]?.code || ""}
                 onChange={(e) => setForm({ ...form, roleCode: e.target.value })}
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
               >
+                {isPlatformManager && !form.organizationId ? (
+                  <option value="">Choose an organization first…</option>
+                ) : null}
                 {assignable.map((r) => (
                   <option key={r.code} value={r.code}>
                     {r.name}
                   </option>
                 ))}
               </select>
+              {isPlatformManager && form.organizationId && assignable.length === 0 ? (
+                <span className="mt-1 block text-xs text-amber-700">
+                  No role you may assign is valid in this organization type.
+                </span>
+              ) : null}
             </label>
             {formError ? <p className="text-sm text-rose-600 sm:col-span-2">{formError}</p> : null}
             <div className="sm:col-span-2">
               <button
                 type="submit"
-                disabled={busy || assignable.length === 0}
+                disabled={busy || assignable.length === 0 || !targetOrganizationId}
                 className="rounded-md bg-brand-700 px-3 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60"
               >
                 {busy ? "Sending…" : "Send invitation"}
@@ -217,7 +294,28 @@ export function UsersAdminView() {
         </Panel>
       ) : null}
 
-      <Panel>
+      <Panel
+        title={orgFilter ? (orgOptions.find((o) => o.id === orgFilter)?.name ?? "Users") : "All users"}
+        actions={
+          isPlatformManager ? (
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">Organization</span>
+              <select
+                value={orgFilter}
+                onChange={(e) => setOrgFilter(e.target.value)}
+                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
+              >
+                <option value="">All organizations</option>
+                {orgOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} · {humanizeEnum(o.type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : undefined
+        }
+      >
         {users.loading ? (
           <LoadingState label="Loading users…" />
         ) : users.error ? (

@@ -59,10 +59,17 @@ export function setFacilityStatus(id: string, status: string): Promise<FacilityV
 
 // ---- Users ----
 
-export function listUsers(params: { page?: number; q?: string } = {}): Promise<PaginatedResult<UserListItem>> {
+export function listUsers(
+  params: { page?: number; pageSize?: number; q?: string; status?: string; organizationId?: string } = {},
+): Promise<PaginatedResult<UserListItem>> {
   const query = new URLSearchParams();
   if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
   if (params.q) query.set("q", params.q);
+  if (params.status) query.set("status", params.status);
+  // Honoured only for a platform user manager; the server confines anyone else
+  // to their own active organization whatever is sent.
+  if (params.organizationId) query.set("organizationId", params.organizationId);
   const qs = query.toString();
   return apiGet<PaginatedResult<UserListItem>>(`/api/v1/users${qs ? `?${qs}` : ""}`);
 }
