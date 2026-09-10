@@ -12,6 +12,13 @@ import type { MeResponse } from "@/types/auth";
 interface AuthContextValue {
   loading: boolean;
   me: MeResponse | null;
+  /**
+   * Set when the caller's context could not be loaded for a reason that is not
+   * the session's fault — the API is unreachable or failing. It is kept apart
+   * from `me` so the shell can say so, instead of reading a missing context as
+   * a missing membership.
+   */
+  loadError: Error | null;
   activeOrganizationId: string | null;
   permissions: string[];
   hasPermission: (code: string) => boolean;
@@ -45,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [loadError, setLoadError] = useState<Error | null>(null);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(getActiveOrg());
 
   /** Loads the caller's context and returns it, so a caller can act on the
@@ -67,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setActiveOrganizationId(null);
     }
     setMe(data);
+    setLoadError(null);
     return data;
   }, []);
 
@@ -96,6 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             router.replace("/login");
             return;
           }
+          // Anything else — the API unreachable, or failing — says nothing about
+          // this account. Signing out would be wrong and so would the no-access
+          // screen, so the reason is carried through for the shell to show.
+          if (!mounted) return;
+          setLoadError(err instanceof Error ? err : new Error("Could not load your account."));
         }
       }
       setLoading(false);
@@ -104,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setMe(null);
+        setLoadError(null);
         persistActiveOrg(null);
         setActiveOrganizationId(null);
       }
@@ -138,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // the "no access" screen is the one thing a broken session prevents.
     await discardSession(supabaseBrowser());
     setMe(null);
+    setLoadError(null);
     persistActiveOrg(null);
     setActiveOrganizationId(null);
     router.replace("/login");
@@ -148,18 +164,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {
       loading,
       me,
+      loadError,
       activeOrganizationId,
       permissions,
       hasPermission: (code: string) => permissions.includes(code),
       switchOrganization,
       // `loadMe` returns the loaded context for internal callers; `reload` keeps
-      // its void contract so consumers are not handed a value to misuse.
+      // its void contract so consumers are not handed a value to misuse. A
+      // failure is recorded rather than rethrown: this is the retry offered on
+      // the "can't reach the platform" screen, and a rejection there would be an
+      // unhandled one with the reason lost.
       reload: async () => {
-        await loadMe();
+        try {
+          await loadMe();
+        } catch (err) {
+          setLoadError(err instanceof Error ? err : new Error("Could not load your account."));
+        }
       },
       signOut,
     };
-  }, [loading, me, activeOrganizationId, switchOrganization, loadMe, signOut]);
+  }, [loading, me, loadError, activeOrganizationId, switchOrganization, loadMe, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
