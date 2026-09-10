@@ -167,7 +167,25 @@ export class AuthContextService {
     const needsUserActivation = user.status === "INVITED";
     const invitedMembershipIds = user.memberships.filter((m) => m.status === "INVITED").map((m) => m.id);
 
-    if (needsUserActivation || invitedMembershipIds.length > 0) {
+    // A family member's invitation lives on the grant, not on a membership, so
+    // it has to be accepted here too — otherwise the user activates, the grant
+    // stays INVITED, `resolveActive` finds no usable case access, and someone
+    // who just set their password is shown "no organization access".
+    //
+    // A grant on a cancelled case is deliberately left pending: the case is no
+    // longer something to open, and accepting it would create access to a
+    // closed case that `resolve` then has to filter out anyway.
+    //
+    // Every pending grant the user holds is accepted, not only one. Each was
+    // created by a separate deliberate act by staff on a specific case, so
+    // there is no basis for accepting one invitation and holding the others
+    // back — and a relative invited to two cases would otherwise have to be
+    // re-invited to see the second.
+    const invitedGrantIds = user.careSeekerAccess
+      .filter((a) => a.status === "INVITED" && a.case.status !== "CANCELLED")
+      .map((a) => a.id);
+
+    if (needsUserActivation || invitedMembershipIds.length > 0 || invitedGrantIds.length > 0) {
       await this.prisma.$transaction(async (tx) => {
         if (needsUserActivation) {
           await tx.user.update({ where: { id: user!.id }, data: { status: "ACTIVE" } });
@@ -176,6 +194,16 @@ export class AuthContextService {
           await tx.organizationMembership.updateMany({
             where: { id: { in: invitedMembershipIds } },
             data: { status: "ACTIVE", joinedAt: new Date() },
+          });
+        }
+        if (invitedGrantIds.length > 0) {
+          // `userId` and `status` are repeated in the filter on purpose. The ids
+          // were read a moment ago; re-stating both means a grant revoked in
+          // between, or one that somehow belongs to anyone else, cannot be
+          // activated by this write.
+          await tx.careSeekerCaseAccess.updateMany({
+            where: { id: { in: invitedGrantIds }, userId: user!.id, status: "INVITED" },
+            data: { status: "ACTIVE" },
           });
         }
       });

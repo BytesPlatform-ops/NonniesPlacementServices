@@ -183,9 +183,12 @@ describe("AuthContextService", () => {
       expect([...(result?.activePermissions ?? [])]).toEqual([]);
     });
 
-    it("ignores a grant that has not been accepted yet", async () => {
+    it("ignores a grant still pending on a cancelled case", async () => {
+      // A pending grant on a LIVE case is accepted on first sign-in — see
+      // "care seeker invitation acceptance" below. On a cancelled case it stays
+      // pending, and `resolve` only ever considers ACTIVE grants.
       const result = await resolveWith(
-        userRec({ careSeekerAccess: [seekerAccess("case-a", { status: "INVITED" })] }),
+        userRec({ careSeekerAccess: [seekerAccess("case-a", { status: "INVITED", caseStatus: "CANCELLED" })] }),
       );
       expect(result?.caseAccess).toEqual([]);
     });
@@ -246,6 +249,172 @@ describe("AuthContextService", () => {
       );
       expect(result?.activeOrganizationId).toBeNull();
       expect([...(result?.activePermissions ?? [])]).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Accepting a family invitation on first sign-in
+  //
+  // The invite writes CareSeekerCaseAccess with status INVITED. Without this
+  // step the user activated and the grant did not, so someone who had just set
+  // their password was shown "no organization access".
+  // ---------------------------------------------------------------------------
+
+  describe("care seeker invitation acceptance", () => {
+    /** Wires a prisma double that records what the provisioning transaction wrote. */
+    function provisioning(before: Record<string, unknown>, after?: Record<string, unknown>) {
+      const tx = {
+        user: { update: jest.fn() },
+        organizationMembership: { updateMany: jest.fn() },
+        careSeekerCaseAccess: { updateMany: jest.fn() },
+      };
+      const prisma = {
+        user: {
+          findUnique: jest.fn().mockResolvedValue(before),
+          findUniqueOrThrow: jest.fn().mockResolvedValue(after ?? before),
+        },
+        $transaction: jest.fn().mockImplementation((cb: (t: typeof tx) => unknown) => cb(tx)),
+      } as unknown as PrismaService;
+      return { svc: new AuthContextService(prisma), tx, prisma };
+    }
+
+    it("activates the user and the pending grant, and the session then carries the case", async () => {
+      const invited = userRec({ status: "INVITED", careSeekerAccess: [seekerAccess("case-a", { status: "INVITED" })] });
+      const activated = userRec({ status: "ACTIVE", careSeekerAccess: [seekerAccess("case-a", { status: "ACTIVE" })] });
+      const { svc, tx } = provisioning(invited, activated);
+
+      const result = await svc.resolve(identity);
+
+      expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "ACTIVE" } }));
+      expect(tx.careSeekerCaseAccess.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["acc-case-a"] }, userId: "user-1", status: "INVITED" },
+        data: { status: "ACTIVE" },
+      });
+      // The end of the chain: a usable session on the right case.
+      expect(result?.status).toBe("ACTIVE");
+      expect(result?.caseAccess).toHaveLength(1);
+      expect(result?.caseAccess[0]?.caseId).toBe("case-a");
+      expect(result?.activePermissions.has("seeker_case.read")).toBe(true);
+      expect(result?.memberships).toEqual([]);
+      expect(result?.activeOrganizationId).toBeNull();
+    });
+
+    it("scopes the write to this user and to pending rows only", async () => {
+      // Both are re-stated in the filter so a grant revoked between the read
+      // and the write, or one belonging to anyone else, cannot be activated.
+      const { svc, tx } = provisioning(
+        userRec({ status: "INVITED", careSeekerAccess: [seekerAccess("case-a", { status: "INVITED" })] }),
+      );
+      await svc.resolve(identity);
+      const where = (tx.careSeekerCaseAccess.updateMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.userId).toBe("user-1");
+      expect(where.status).toBe("INVITED");
+    });
+
+    it("leaves a revoked grant revoked", async () => {
+      const { svc, tx } = provisioning(
+        userRec({ status: "ACTIVE", careSeekerAccess: [seekerAccess("case-a", { status: "REVOKED" })] }),
+      );
+      const result = await svc.resolve(identity);
+      expect(tx.careSeekerCaseAccess.updateMany).not.toHaveBeenCalled();
+      expect(result?.caseAccess).toEqual([]);
+    });
+
+    it("leaves a grant on a cancelled case pending, and unusable", async () => {
+      const { svc, tx } = provisioning(
+        userRec({
+          status: "INVITED",
+          careSeekerAccess: [seekerAccess("case-a", { status: "INVITED", caseStatus: "CANCELLED" })],
+        }),
+      );
+      const result = await svc.resolve(identity);
+      expect(tx.careSeekerCaseAccess.updateMany).not.toHaveBeenCalled();
+      expect(result?.caseAccess).toEqual([]);
+    });
+
+    it("does not rewrite a grant that is already active", async () => {
+      const { svc, tx } = provisioning(
+        userRec({ status: "ACTIVE", careSeekerAccess: [seekerAccess("case-a", { status: "ACTIVE" })] }),
+      );
+      const result = await svc.resolve(identity);
+      expect(tx.careSeekerCaseAccess.updateMany).not.toHaveBeenCalled();
+      expect(result?.caseAccess).toHaveLength(1);
+    });
+
+    it("accepts every pending grant a relative holds, and only the pending ones", async () => {
+      // Documented behaviour: each grant was a separate deliberate act by
+      // staff, so accepting one and holding the rest back has no basis.
+      const { svc, tx } = provisioning(
+        userRec({
+          status: "INVITED",
+          careSeekerAccess: [
+            seekerAccess("case-a", { status: "INVITED" }),
+            seekerAccess("case-b", { status: "INVITED" }),
+            seekerAccess("case-c", { status: "REVOKED" }),
+            seekerAccess("case-d", { status: "INVITED", caseStatus: "CANCELLED" }),
+          ],
+        }),
+      );
+      await svc.resolve(identity);
+      expect((tx.careSeekerCaseAccess.updateMany as jest.Mock).mock.calls[0][0].where.id.in).toEqual([
+        "acc-case-a",
+        "acc-case-b",
+      ]);
+    });
+
+    it("still refuses a family member whose only grant is pending on a cancelled case", async () => {
+      const { svc } = provisioning(
+        userRec({
+          status: "ACTIVE",
+          careSeekerAccess: [seekerAccess("case-a", { status: "INVITED", caseStatus: "CANCELLED" })],
+        }),
+      );
+      const result = await svc.resolve(identity);
+      expect([...(result?.activePermissions ?? [])]).toEqual([]);
+    });
+
+    it("leaves organization provisioning exactly as it was", async () => {
+      // An invited staff member has no grants; the grant write must not fire,
+      // and the membership write must still happen.
+      const { svc, tx } = provisioning(
+        userRec({
+          status: "INVITED",
+          memberships: [member("orgA", { roleCode: "PROVIDER_STAFF", perms: ["providers.read"], status: "INVITED" })],
+          careSeekerAccess: [],
+        }),
+        userRec({
+          status: "ACTIVE",
+          memberships: [member("orgA", { roleCode: "PROVIDER_STAFF", perms: ["providers.read"], status: "ACTIVE" })],
+          careSeekerAccess: [],
+        }),
+      );
+      const result = await svc.resolve(identity);
+      expect(tx.user.update).toHaveBeenCalled();
+      expect(tx.organizationMembership.updateMany).toHaveBeenCalled();
+      expect(tx.careSeekerCaseAccess.updateMany).not.toHaveBeenCalled();
+      expect(result?.activeOrganizationId).toBe("orgA");
+      expect(result?.activePermissions.has("providers.read")).toBe(true);
+    });
+
+    it("never gives an organization user care seeker permissions", async () => {
+      const { svc } = provisioning(
+        userRec({
+          status: "ACTIVE",
+          memberships: [member("orgA", { perms: ["cases.read"] })],
+          careSeekerAccess: [seekerAccess("case-a", { status: "INVITED" })],
+        }),
+      );
+      const result = await svc.resolve(identity);
+      expect(result?.activePermissions.has("cases.read")).toBe(true);
+      expect(result?.activePermissions.has("seeker_case.read")).toBe(false);
+    });
+
+    it("does not open a transaction when there is nothing to accept", async () => {
+      const { svc, prisma } = provisioning(
+        userRec({ status: "ACTIVE", memberships: [member("orgA")], careSeekerAccess: [] }),
+      );
+      await svc.resolve(identity);
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
     });
   });
 });

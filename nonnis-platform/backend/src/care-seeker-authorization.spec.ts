@@ -64,6 +64,33 @@ function seekerGrant(caseId: string) {
   };
 }
 
+/**
+ * A family member mid-invitation: the grant starts INVITED and the provisioning
+ * step is expected to accept it. Kept stateful so the same HTTP request that
+ * triggers activation also returns the activated session.
+ */
+const invitedSeeker = {
+  id: "u-seeker-invited",
+  accepted: false,
+  reset() {
+    this.accepted = false;
+  },
+  user() {
+    const grant = seekerGrant(CASE_A);
+    return {
+      id: this.id,
+      email: "seeker-invited@example.test",
+      firstName: null,
+      lastName: null,
+      displayName: null,
+      status: this.accepted ? "ACTIVE" : "INVITED",
+      supabaseAuthUserId: "sb-seeker-invited",
+      memberships: [],
+      careSeekerAccess: [{ ...grant, status: this.accepted ? "ACTIVE" : "INVITED" }],
+    };
+  },
+};
+
 /** The five identities under test, keyed by the bearer token used to reach them. */
 const USERS: Record<string, { id: string; memberships: unknown[]; careSeekerAccess: unknown[] }> = {
   "nonnis-admin": {
@@ -114,13 +141,26 @@ describe("Care Seeker authorization (e2e)", () => {
   let app: INestApplication;
 
   const tokenVerifierMock = {
-    verify: async (token: string): Promise<VerifiedIdentity | null> =>
-      USERS[token] ? { supabaseUserId: `sb-${token}`, email: `${token}@example.test` } : null,
+    verify: async (token: string): Promise<VerifiedIdentity | null> => {
+      if (token === "seeker-invited") {
+        return { supabaseUserId: "sb-seeker-invited", email: "seeker-invited@example.test" };
+      }
+      return USERS[token] ? { supabaseUserId: `sb-${token}`, email: `${token}@example.test` } : null;
+    },
   };
 
   const prismaMock = {
     user: {
+      // The provisioning transaction activates the user row.
+      update: jest.fn().mockImplementation(() => {
+        invitedSeeker.accepted = true;
+        return Promise.resolve({});
+      }),
+      findUniqueOrThrow: jest.fn().mockImplementation(() => Promise.resolve(invitedSeeker.user())),
       findUnique: jest.fn().mockImplementation(({ where }: { where: { supabaseAuthUserId?: string; id?: string } }) => {
+        if (where.supabaseAuthUserId === "sb-seeker-invited") {
+          return Promise.resolve(invitedSeeker.user());
+        }
         if (where.supabaseAuthUserId) {
           const token = where.supabaseAuthUserId.replace(/^sb-/, "");
           const u = USERS[token];
@@ -159,7 +199,15 @@ describe("Care Seeker authorization (e2e)", () => {
     workflowEvent: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     caseDocument: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     caseAppointment: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
-    careSeekerCaseAccess: { findMany: jest.fn().mockResolvedValue([]) },
+    careSeekerCaseAccess: {
+      findMany: jest.fn().mockResolvedValue([]),
+      // Accepting the invitation: recorded, and reflected in the next read.
+      updateMany: jest.fn().mockImplementation(({ where }: { where: { userId: string; status: string } }) => {
+        if (where.userId === invitedSeeker.id && where.status === "INVITED") invitedSeeker.accepted = true;
+        return Promise.resolve({ count: 1 });
+      }),
+    },
+    organizationMembership: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     provider: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findFirst: jest.fn().mockResolvedValue(null) },
     message: { findFirst: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn().mockImplementation((arg: unknown) => (Array.isArray(arg) ? Promise.all(arg) : (arg as (t: unknown) => unknown)(prismaMock))),
@@ -222,6 +270,59 @@ describe("Care Seeker authorization (e2e)", () => {
     ])("reaches %s", async (path) => {
       const res = await request(app.getHttpServer()).get(path).set("Authorization", as("seeker-a"));
       expect(res.status).toBe(200);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Accepting the invitation over real HTTP
+  //
+  // The invite writes the grant as INVITED. Until this was fixed the user
+  // activated and the grant did not, so a family member who had just set their
+  // password was served an empty session.
+  // -------------------------------------------------------------------------
+
+  describe("an invited care seeker's first request", () => {
+    beforeEach(() => invitedSeeker.reset());
+
+    it("accepts the grant and returns a usable session from /auth/me", async () => {
+      const res = await request(app.getHttpServer()).get("/api/v1/auth/me").set("Authorization", as("seeker-invited"));
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.status).toBe("ACTIVE");
+      expect(res.body.data.memberships).toEqual([]);
+      expect(res.body.data.activeOrganizationId).toBeNull();
+      // The field the CRM reads to decide the landing route.
+      expect(res.body.data.caseAccess).toHaveLength(1);
+      expect(res.body.data.caseAccess[0].caseId).toBe(CASE_A);
+      expect(res.body.data.permissions).toContain(PERMISSIONS.SEEKER_CASE_READ);
+    });
+
+    it("opens the portal on that same first request", async () => {
+      const res = await request(app.getHttpServer())
+        .get("/api/v1/seeker/dashboard")
+        .set("Authorization", as("seeker-invited"));
+      expect(res.status).toBe(200);
+      expect(res.body.data.caseId).toBe(CASE_A);
+    });
+
+    it("scopes the acceptance to this user and to pending grants only", async () => {
+      await request(app.getHttpServer()).get("/api/v1/auth/me").set("Authorization", as("seeker-invited"));
+      const where = (prismaMock.careSeekerCaseAccess.updateMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.userId).toBe(invitedSeeker.id);
+      expect(where.status).toBe("INVITED");
+    });
+
+    it("still refuses another case after acceptance", async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/seeker/dashboard?caseId=${CASE_B}`)
+        .set("Authorization", as("seeker-invited"));
+      expect(res.status).toBe(404);
+    });
+
+    it("accepts nothing for an organization user", async () => {
+      (prismaMock.careSeekerCaseAccess.updateMany as jest.Mock).mockClear();
+      await request(app.getHttpServer()).get("/api/v1/auth/me").set("Authorization", as("nonnis-admin"));
+      expect(prismaMock.careSeekerCaseAccess.updateMany).not.toHaveBeenCalled();
     });
   });
 
