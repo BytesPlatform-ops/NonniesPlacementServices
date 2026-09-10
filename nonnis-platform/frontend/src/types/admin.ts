@@ -61,8 +61,13 @@ export interface UserDetailView extends UserView {
 export interface RoleOption {
   code: string;
   name: string;
-  /** Organization types this role may be assigned in (authoritative, from the server). */
-  allowedOrganizationTypes: string[];
+  /**
+   * Organization types this role may be assigned in (authoritative, from the
+   * server). Optional because the CRM and the API deploy independently: an API
+   * one deployment behind does not send it. Read it through
+   * `rolesAssignableIn`, which treats its absence as "no restriction recorded".
+   */
+  allowedOrganizationTypes?: string[];
 }
 
 export const ORGANIZATION_TYPES = [

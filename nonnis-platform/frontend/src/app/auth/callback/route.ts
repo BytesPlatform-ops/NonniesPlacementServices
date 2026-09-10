@@ -13,7 +13,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = searchParams.get("code");
   const type = searchParams.get("type");
 
-  const destination = type === "invite" || type === "recovery" ? "/auth/update-password" : "/cases";
+  // Anything else lands on `/home`, which dispatches to the landing page for the
+  // caller's role. It used to hardcode `/cases`, which was wrong for a provider
+  // and is wrong for a family member.
+  const destination = type === "invite" || type === "recovery" ? "/auth/update-password" : "/home";
   const response = NextResponse.redirect(`${origin}${destination}`);
 
   const cookieStore = await cookies();

@@ -6,6 +6,7 @@ import { statusTone } from "@/lib/admin-status";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { activeOrgType } from "@/lib/landing";
+import { rolesAssignableIn } from "@/lib/assignable-roles";
 import { assignableRoles, changeMembershipRole, inviteUser, listUsers, setUserStatus } from "@/services/admin.service";
 import type { RoleOption, UserListItem } from "@/types/admin";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -29,9 +30,7 @@ export function UsersAdminView() {
   // the option is never presented in the first place, and the rules come from
   // the server with each role rather than being restated in the UI.
   const orgType = activeOrgType(me, activeOrganizationId);
-  const assignable = (roles.data ?? []).filter(
-    (r) => !orgType || r.allowedOrganizationTypes.length === 0 || r.allowedOrganizationTypes.includes(orgType),
-  );
+  const assignable = rolesAssignableIn(roles.data, orgType);
   const assignableCodes = new Set(assignable.map((r) => r.code));
 
   const [inviteOpen, setInviteOpen] = useState(false);

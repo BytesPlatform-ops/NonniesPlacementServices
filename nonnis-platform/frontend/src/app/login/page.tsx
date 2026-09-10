@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { isRecoveryFragment } from "@/lib/auth-recovery";
 
 type Mode = "signin" | "reset";
 
@@ -15,6 +16,29 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // A recovery link sent WITHOUT a `redirectTo` — from the Supabase dashboard,
+    // for example — arrives in the implicit form, carrying its tokens in the URL
+    // fragment and landing on the configured Site URL rather than on
+    // `/auth/callback`. A fragment never reaches the server, so middleware
+    // cannot route it; it funnels the visitor here instead, still carrying the
+    // fragment. Forward it, fragment intact, to the page that can consume it.
+    //
+    // Read before this page touches the Supabase client at all: creating the
+    // client consumes the fragment, and then the link type is gone.
+    const hash = window.location.hash;
+    if (isRecoveryFragment(hash)) {
+      window.location.replace(`/auth/update-password${hash}`);
+      return;
+    }
+
+    if (new URLSearchParams(window.location.search).get("reset") === "1") {
+      setNotice("Your password has been updated. Sign in with your new password.");
+    }
+  }, []);
 
   const onSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
