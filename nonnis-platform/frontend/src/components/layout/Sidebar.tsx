@@ -37,8 +37,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { visibleNav, visibleProviderNav } from "@/lib/navigation";
-import { activeOrgIsProvider } from "@/lib/landing";
+import { visibleNav, visibleProviderNav, visibleSeekerNav } from "@/lib/navigation";
+import { activeOrgIsProvider, isCareSeeker } from "@/lib/landing";
 import { useAuth } from "@/providers/auth-provider";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -81,8 +81,15 @@ export function Sidebar() {
   const pathname = usePathname();
   const { count: unread } = useUnreadMessages();
   const { permissions, me, activeOrganizationId } = useAuth();
-  const isProvider = activeOrgIsProvider(me, activeOrganizationId);
-  const groups = isProvider ? visibleProviderNav(permissions) : visibleNav(permissions);
+  // A family member is checked first: they have no organization, so the
+  // provider check below would fall through to the staff navigation.
+  const seeker = isCareSeeker(me);
+  const isProvider = !seeker && activeOrgIsProvider(me, activeOrganizationId);
+  const groups = seeker
+    ? visibleSeekerNav(permissions)
+    : isProvider
+      ? visibleProviderNav(permissions)
+      : visibleNav(permissions);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sage bg-ivory lg:flex">

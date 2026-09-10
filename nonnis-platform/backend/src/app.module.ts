@@ -4,6 +4,9 @@ import { loadConfiguration } from "./config/configuration";
 import { PrismaModule } from "./database/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CasesModule } from "./modules/cases/cases.module";
+import { CaseAppointmentsModule } from "./modules/case-appointments/case-appointments.module";
+import { CaseDocumentsModule } from "./modules/case-documents/case-documents.module";
+import { CareSeekerModule } from "./modules/care-seeker/care-seeker.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { ContentModule } from "./modules/content/content.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
@@ -30,6 +33,9 @@ import { UsersModule } from "./modules/users/users.module";
     AuthModule,
     HealthModule,
     CasesModule,
+    CaseDocumentsModule,
+    CaseAppointmentsModule,
+    CareSeekerModule,
     DashboardModule,
     OrganizationsModule,
     FacilitiesModule,

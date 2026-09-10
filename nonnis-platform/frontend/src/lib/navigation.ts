@@ -80,6 +80,29 @@ const PROVIDER_NAV: NavGroup[] = [
   },
 ];
 
+/**
+ * Care Seeker (family) portal navigation.
+ *
+ * Deliberately short and non-operational. Every item is gated on a `seeker_*`
+ * permission, so this list cannot render for a staff or provider session even
+ * if it were somehow selected — none of them hold those permissions.
+ */
+const SEEKER_NAV: NavGroup[] = [
+  {
+    title: null,
+    items: [
+      { label: "Dashboard", href: "/seeker", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "My Care Plan", href: "/seeker/care-plan", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "My Matches", href: "/seeker/matches", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "Tours & Appointments", href: "/seeker/appointments", permission: PERMISSIONS.SEEKER_APPOINTMENTS_READ },
+      { label: "Documents", href: "/seeker/documents", permission: PERMISSIONS.SEEKER_DOCUMENTS_READ },
+      { label: "Messages", href: "/seeker/messages", permission: PERMISSIONS.SEEKER_MESSAGES_READ },
+      { label: "Progress", href: "/seeker/progress", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "Account", href: "/seeker/account", permission: PERMISSIONS.SEEKER_CASE_READ },
+    ],
+  },
+];
+
 function filterNav(groups: NavGroup[], permissions: readonly string[]): NavGroup[] {
   const granted = new Set(permissions);
   return groups
@@ -95,4 +118,9 @@ export function visibleNav(permissions: readonly string[]): NavGroup[] {
 /** Filters the provider-portal navigation by permission. */
 export function visibleProviderNav(permissions: readonly string[]): NavGroup[] {
   return filterNav(PROVIDER_NAV, permissions);
+}
+
+/** Filters the family-portal navigation by permission. */
+export function visibleSeekerNav(permissions: readonly string[]): NavGroup[] {
+  return filterNav(SEEKER_NAV, permissions);
 }

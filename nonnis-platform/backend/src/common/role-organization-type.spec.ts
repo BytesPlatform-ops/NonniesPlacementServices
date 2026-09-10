@@ -90,4 +90,42 @@ describe("role ↔ organization type compatibility", () => {
       expect(rolesForOrganizationType(type).length).toBeGreaterThan(0);
     }
   });
+
+  describe("CARE_SEEKER", () => {
+    it("is rejected in every organization type", () => {
+      // A family member is scoped to a case, not an organization. The empty
+      // rule set is what makes the organization invite path refuse the role.
+      for (const type of ALL_TYPES) {
+        expect(isRoleAllowedForOrganizationType(ROLES.CARE_SEEKER, type)).toBe(false);
+      }
+    });
+
+    it("appears in no organization type's assignable list", () => {
+      for (const type of ALL_TYPES) {
+        expect(rolesForOrganizationType(type)).not.toContain(ROLES.CARE_SEEKER);
+      }
+    });
+
+    it("still has an explicit rule rather than being missing", () => {
+      // The distinction matters: "listed with no types" is a decision, while
+      // "absent" would be an oversight that the coverage test above catches.
+      expect(ROLE_ALLOWED_ORGANIZATION_TYPES[ROLES.CARE_SEEKER]).toEqual([]);
+    });
+
+    it("explains the rejection without claiming some other type would work", () => {
+      const message = roleOrganizationTypeError(ROLES.CARE_SEEKER, "NONNIS");
+      expect(message).toContain("CARE_SEEKER");
+      expect(message).toContain("NONNIS");
+    });
+
+    it("does not disturb the roles every other organization type may assign", () => {
+      // Regression guard for the four existing roles.
+      expect(rolesForOrganizationType("PROVIDER")).toEqual([ROLES.PROVIDER_ADMIN, ROLES.PROVIDER_STAFF]);
+      expect(rolesForOrganizationType("NONNIS")).toEqual([ROLES.NONNIS_ADMIN, ROLES.NONNIS_OPERATIONS]);
+      expect(rolesForOrganizationType("HOSPITAL")).toEqual([ROLES.DISCHARGE_PROFESSIONAL]);
+      expect(rolesForOrganizationType("REHABILITATION_CENTER")).toEqual([ROLES.DISCHARGE_PROFESSIONAL]);
+      expect(rolesForOrganizationType("SKILLED_NURSING_FACILITY")).toEqual([ROLES.DISCHARGE_PROFESSIONAL]);
+      expect(rolesForOrganizationType("PARTNER")).toEqual([ROLES.DISCHARGE_PROFESSIONAL]);
+    });
+  });
 });

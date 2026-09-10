@@ -25,6 +25,7 @@ function makeUser(permissions: string[], orgIds: string[]): RequestUser {
       isPrimary: true,
       permissions,
     })),
+    caseAccess: [],
     activeOrganizationId: orgIds[0] ?? null,
     activePermissions: new Set(permissions),
   };

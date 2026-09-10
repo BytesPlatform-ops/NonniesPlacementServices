@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { isCareSeeker } from "@/lib/landing";
 import { AppShell } from "./AppShell";
 
 export function ProtectedShell({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,12 @@ export function ProtectedShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!me || !me.provisioned || me.memberships.length === 0) {
+  // A family member legitimately has no organization membership — their access
+  // is a grant on a case. Without this the shell would show them the "no
+  // organization access" screen, which describes a different problem.
+  const hasAccess = !!me && me.provisioned && (me.memberships.length > 0 || isCareSeeker(me));
+
+  if (!hasAccess) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-card">

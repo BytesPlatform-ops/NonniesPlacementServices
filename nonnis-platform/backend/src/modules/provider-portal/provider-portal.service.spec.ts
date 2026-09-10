@@ -29,6 +29,7 @@ function makeUser(activeOrganizationId: string | null): RequestUser {
           },
         ]
       : [],
+    caseAccess: [],
     activeOrganizationId,
     activePermissions: new Set(),
   };

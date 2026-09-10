@@ -1,4 +1,4 @@
-export type MessageScope = "CASE_TEAM" | "NONNIS_INTERNAL" | "PROVIDER_REFERRAL";
+export type MessageScope = "CASE_TEAM" | "NONNIS_INTERNAL" | "PROVIDER_REFERRAL" | "CARE_SEEKER";
 
 export interface MessageView {
   id: string;

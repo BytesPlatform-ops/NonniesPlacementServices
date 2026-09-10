@@ -20,6 +20,7 @@ function providerAdmin(): RequestUser {
     displayName: null,
     status: "ACTIVE",
     memberships: [],
+    caseAccess: [],
     activeOrganizationId: "prov",
     activePermissions: new Set([PERMISSIONS.USERS_MANAGE_OWN_ORGANIZATION, PERMISSIONS.USERS_READ]),
   };

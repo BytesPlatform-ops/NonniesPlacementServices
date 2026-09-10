@@ -87,7 +87,13 @@ export class TimelineService {
     const readAll = user.activePermissions.has(PERMISSIONS.CASES_READ_ALL);
     if (!readAll && !this.memberOf(user, c.organizationId)) throw new NotFoundException(`Case ${caseId} not found`);
 
-    const scopes: MessageScope[] = ["CASE_TEAM", "PROVIDER_REFERRAL"];
+    // An allowlist, so a scope only ever appears here deliberately. CARE_SEEKER
+    // is included because this viewer has already been proved to be the case
+    // organization or Nonnis — exactly who the family thread is with, and who
+    // can already read it at `cases/:caseId/family-messages`. Providers never
+    // reach this method at all: it requires `cases.read`, which no provider
+    // role holds.
+    const scopes: MessageScope[] = ["CASE_TEAM", "PROVIDER_REFERRAL", "CARE_SEEKER"];
     if (user.activePermissions.has(PERMISSIONS.INTERNAL_NOTES_MANAGE)) scopes.push("NONNIS_INTERNAL");
 
     const { eventTypes, messageScopes } = this.resolveFilter(filter, scopes);

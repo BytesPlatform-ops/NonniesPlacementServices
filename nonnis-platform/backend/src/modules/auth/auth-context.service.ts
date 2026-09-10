@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
-import type { MembershipContext, RequestUser } from "./request-user";
+import type { CaseAccessContext, MembershipContext, RequestUser } from "./request-user";
 import type { VerifiedIdentity } from "./token-verifier";
 
 const userWithAccessInclude = {
@@ -20,6 +20,16 @@ const userWithAccessInclude = {
     // meaningful order (longest-standing membership wins) and `id` guarantees
     // determinism even for rows created in the same transaction.
     orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }, { id: "asc" }],
+  },
+  // Case-scoped grants for family members. Loaded for every user because the
+  // query is bounded by userId and an organization user simply has none — a
+  // conditional include would branch the hot path for no benefit.
+  //
+  // Ordered oldest-first so the portal's default case is stable across
+  // requests, for the same reason memberships are ordered.
+  careSeekerAccess: {
+    include: { case: { include: { patient: true } }, role: { include: { permissions: { include: { permission: true } } } } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   },
 } satisfies Prisma.UserInclude;
 
@@ -57,6 +67,27 @@ export class AuthContextService {
       permissions: m.role.permissions.map((rp) => rp.permission.code),
     }));
 
+    // Only an ACTIVE user with an ACTIVE grant on a live case has family access.
+    // A case that has been cancelled or completed stops being reachable, which
+    // matches how staff writes are already refused on those statuses.
+    const usableCaseAccess =
+      user.status === "ACTIVE"
+        ? user.careSeekerAccess.filter(
+            (a) => a.status === "ACTIVE" && a.case.status !== "CANCELLED",
+          )
+        : [];
+
+    const caseAccess: CaseAccessContext[] = usableCaseAccess.map((a) => ({
+      accessId: a.id,
+      caseId: a.caseId,
+      caseNumber: a.case.caseNumber,
+      careRecipientName: `${a.case.patient.firstName} ${a.case.patient.lastName}`.trim(),
+      relationship: a.relationship,
+      roleCode: a.role.code,
+      roleName: a.role.name,
+      permissions: a.role.permissions.map((rp) => rp.permission.code),
+    }));
+
     const active = this.resolveActive(memberships, requestedOrganizationId);
 
     return {
@@ -68,9 +99,31 @@ export class AuthContextService {
       displayName: user.displayName,
       status: user.status,
       memberships,
+      caseAccess,
       activeOrganizationId: active?.organizationId ?? null,
-      activePermissions: new Set(active?.permissions ?? []),
+      activePermissions: new Set(active?.permissions ?? this.caseAccessPermissions(memberships, caseAccess)),
     };
+  }
+
+  /**
+   * Permissions for a request with no active organization.
+   *
+   * Deliberately narrow: it returns something only when the user has NO
+   * organization membership at all. An organization user who simply did not
+   * send X-Organization-Id keeps their existing empty permission set and the
+   * 400 that follows — that behaviour is relied on by the multi-organization
+   * flow and is not changed here.
+   *
+   * Every grant carries the same CARE_SEEKER role today, so the union is that
+   * role's permissions. Which CASE may be read is a separate, row-level
+   * decision made per request by `ensureSeekerCaseAccess`.
+   */
+  private caseAccessPermissions(
+    memberships: MembershipContext[],
+    caseAccess: CaseAccessContext[],
+  ): string[] | null {
+    if (memberships.length > 0 || caseAccess.length === 0) return null;
+    return [...new Set(caseAccess.flatMap((a) => a.permissions))];
   }
 
   private resolveActive(

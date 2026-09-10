@@ -30,6 +30,7 @@ function platformAdmin(): RequestUser {
     displayName: null,
     status: "ACTIVE",
     memberships: [],
+    caseAccess: [],
     activeOrganizationId: "nonnis",
     activePermissions: new Set([PERMISSIONS.ORGANIZATIONS_MANAGE, PERMISSIONS.ORGANIZATIONS_READ]),
   };
@@ -58,6 +59,7 @@ function orgScopedUser(orgId: string): RequestUser {
         permissions: [PERMISSIONS.ORGANIZATIONS_READ],
       },
     ],
+    caseAccess: [],
     activeOrganizationId: orgId,
     activePermissions: new Set([PERMISSIONS.ORGANIZATIONS_READ]),
   };

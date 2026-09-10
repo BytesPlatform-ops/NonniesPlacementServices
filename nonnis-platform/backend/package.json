@@ -21,7 +21,9 @@
     "seed:communications-demo": "node --env-file=.env -r ts-node/register src/scripts/seed-communications-demo.ts",
     "communications:simulate-email-reply": "node --env-file=.env -r ts-node/register src/scripts/simulate-email-reply.ts",
     "communications:simulate-sms": "node --env-file=.env -r ts-node/register src/scripts/simulate-sms.ts",
-    "dev:auth-account": "node --env-file=.env -r ts-node/register src/scripts/dev-auth-account.ts"
+    "dev:auth-account": "node --env-file=.env -r ts-node/register src/scripts/dev-auth-account.ts",
+    "rbac:sync": "node --env-file=.env -r ts-node/register prisma/rbac-sync-cli.ts",
+    "dev:care-seeker": "node --env-file=.env -r ts-node/register src/scripts/dev-care-seeker-account.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

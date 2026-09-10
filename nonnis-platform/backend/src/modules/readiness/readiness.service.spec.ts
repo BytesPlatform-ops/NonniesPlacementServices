@@ -45,6 +45,7 @@ function readyCaseRow(over: Record<string, unknown> = {}) {
 function makeUser(over: Partial<RequestUser> = {}): RequestUser {
   return {
     id: "user-1",
+    caseAccess: [],
     activeOrganizationId: "org-1",
     activePermissions: new Set([PERMISSIONS.CASES_READ, PERMISSIONS.CASES_UPDATE]),
     memberships: [],

@@ -1,11 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import {
-  PERMISSION_DESCRIPTIONS,
-  PERMISSIONS,
-  ROLE_DEFINITIONS,
-  type PermissionCode,
-  type RoleCode,
-} from "../src/common/rbac";
+import { syncRbac } from "./sync-rbac";
 
 const prisma = new PrismaClient();
 
@@ -15,46 +9,9 @@ const prisma = new PrismaClient();
  * mappings so the database always matches the RBAC definitions.
  */
 async function main(): Promise<void> {
-  // 1. Permissions
-  const permissionCodes = Object.values(PERMISSIONS) as PermissionCode[];
-  for (const code of permissionCodes) {
-    await prisma.permission.upsert({
-      where: { code },
-      update: { description: PERMISSION_DESCRIPTIONS[code] },
-      create: { code, description: PERMISSION_DESCRIPTIONS[code] },
-    });
-  }
-  const permissions = await prisma.permission.findMany();
-  const permissionIdByCode = new Map(permissions.map((p) => [p.code, p.id]));
-
-  // 2. Roles + their permission mappings
-  const roleCodes = Object.keys(ROLE_DEFINITIONS) as RoleCode[];
-  for (const code of roleCodes) {
-    const def = ROLE_DEFINITIONS[code];
-    const role = await prisma.role.upsert({
-      where: { code },
-      update: { name: def.name, description: def.description, isSystem: true },
-      create: { code, name: def.name, description: def.description, isSystem: true },
-    });
-
-    const wantedPermissionIds = def.permissions
-      .map((c) => permissionIdByCode.get(c))
-      .filter((id): id is string => Boolean(id));
-
-    // Add/keep wanted mappings.
-    for (const permissionId of wantedPermissionIds) {
-      await prisma.rolePermission.upsert({
-        where: { roleId_permissionId: { roleId: role.id, permissionId } },
-        update: {},
-        create: { roleId: role.id, permissionId },
-      });
-    }
-
-    // Prune mappings no longer in the definition (keeps system roles exact).
-    await prisma.rolePermission.deleteMany({
-      where: { roleId: role.id, permissionId: { notIn: wantedPermissionIds } },
-    });
-  }
+  // 1-2. Roles, permissions and their mappings. Shared with `npm run rbac:sync`
+  //      so a role change can be applied without touching CMS content.
+  await syncRbac(prisma);
 
   // 3. Reference catalogs (idempotent by code). These are admin-editable; the
   //    seed only ensures a sensible starting set exists and never deletes rows.

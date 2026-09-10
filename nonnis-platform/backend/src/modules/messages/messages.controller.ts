@@ -39,6 +39,25 @@ export class MessagesController {
     return this.messages.sendInternal(user, caseId, dto);
   }
 
+  // ---- Family thread (staff side) ----
+  //
+  // Deliberately gated on MESSAGES_READ/SEND like the case-team thread, so the
+  // people who already correspond on a case can answer the family without a
+  // new permission. Providers cannot reach it: `caseTeamAccess` bounds it to
+  // the case organization and Nonnis.
+
+  @Get("cases/:caseId/family-messages")
+  @RequirePermissions(PERMISSIONS.MESSAGES_READ)
+  listFamily(@CurrentUser() user: RequestUser, @Param("caseId", new ParseUUIDPipe()) caseId: string, @Query() query: ListMessagesDto): Promise<PaginatedResult<MessageView>> {
+    return this.messages.listFamilyForStaff(user, caseId, query);
+  }
+
+  @Post("cases/:caseId/family-messages")
+  @RequirePermissions(PERMISSIONS.MESSAGES_SEND)
+  sendFamily(@CurrentUser() user: RequestUser, @Param("caseId", new ParseUUIDPipe()) caseId: string, @Body() dto: SendMessageDto): Promise<MessageView> {
+    return this.messages.sendFamilyForStaff(user, caseId, dto);
+  }
+
   // ---- Provider referral thread (staff + provider) ----
 
   @Get("referrals/:referralId/messages")

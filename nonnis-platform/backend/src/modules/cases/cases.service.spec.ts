@@ -18,6 +18,7 @@ function makeUser(overrides: Partial<RequestUser> = {}): RequestUser {
     displayName: null,
     status: "ACTIVE",
     memberships: [],
+    caseAccess: [],
     activeOrganizationId: "org",
     activePermissions: new Set([PERMISSIONS.CASES_READ, PERMISSIONS.CASES_CREATE, PERMISSIONS.CASES_UPDATE, PERMISSIONS.CASES_ASSIGN]),
     ...overrides,

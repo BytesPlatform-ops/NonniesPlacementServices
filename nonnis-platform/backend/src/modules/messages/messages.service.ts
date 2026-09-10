@@ -8,10 +8,11 @@ import { toMessageView, type MessageView } from "./messages.serializer";
 import type { ListMessagesDto, SendMessageDto } from "./dto/messages.dto";
 
 /**
- * Case-linked messaging. Three visibility scopes (CASE_TEAM / NONNIS_INTERNAL /
- * PROVIDER_REFERRAL) share this append-only service; access is decided by
- * MessageAccessService. Messages are timeline items themselves, so no duplicate
- * WorkflowEvent is emitted. Sender identity is always server-derived.
+ * Case-linked messaging. Four visibility scopes (CASE_TEAM / NONNIS_INTERNAL /
+ * PROVIDER_REFERRAL / CARE_SEEKER) share this append-only service; access is
+ * decided by MessageAccessService. Messages are timeline items themselves, so
+ * no duplicate WorkflowEvent is emitted. Sender identity is always
+ * server-derived.
  */
 @Injectable()
 export class MessagesService {
@@ -87,5 +88,40 @@ export class MessagesService {
   async sendReferral(user: RequestUser, referralId: string, dto: SendMessageDto): Promise<MessageView> {
     const ref = await this.access.referralAccess(user, referralId);
     return this.create(ref.caseId, "PROVIDER_REFERRAL", user.id, dto.body, referralId);
+  }
+
+  // ---- Family thread ----
+  //
+  // One thread per case between the family and the case/Nonnis side. It is a
+  // scope on the existing Message model rather than a second chat system, so
+  // the same append-only history, serializer and sender resolution apply.
+  //
+  // Providers are never a party to it: PROVIDER_REFERRAL remains the only
+  // thread they can reach, and nothing here widens that.
+
+  async listFamilyForStaff(user: RequestUser, caseId: string, query: ListMessagesDto): Promise<PaginatedResult<MessageView>> {
+    await this.access.caseTeamAccess(user, caseId);
+    return this.page({ caseId, scope: "CARE_SEEKER" }, query);
+  }
+
+  async sendFamilyForStaff(user: RequestUser, caseId: string, dto: SendMessageDto): Promise<MessageView> {
+    await this.access.caseTeamAccess(user, caseId);
+    return this.create(caseId, "CARE_SEEKER", user.id, dto.body);
+  }
+
+  /**
+   * The family's own view of the thread.
+   *
+   * Takes a case id the caller has ALREADY proven through
+   * `SeekerCaseAccessService`, in the same way the documents and appointments
+   * services do. A family member holds no organization membership, so the
+   * organization-based checks in MessageAccessService cannot decide for them.
+   */
+  async listFamilyForSeeker(caseId: string, query: ListMessagesDto): Promise<PaginatedResult<MessageView>> {
+    return this.page({ caseId, scope: "CARE_SEEKER" }, query);
+  }
+
+  async sendFamilyForSeeker(caseId: string, senderUserId: string, dto: SendMessageDto): Promise<MessageView> {
+    return this.create(caseId, "CARE_SEEKER", senderUserId, dto.body);
   }
 }

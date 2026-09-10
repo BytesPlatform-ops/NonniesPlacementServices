@@ -155,6 +155,18 @@ enum WorkflowEventType {
   CASE_MESSAGE_SENT
   PROVIDER_MESSAGE_SENT
   INTERNAL_NOTE_ADDED
+  CARE_SEEKER_ACCESS_GRANTED
+  CARE_SEEKER_ACCESS_REVOKED
+  CARE_SEEKER_MESSAGE_SENT
+  DOCUMENT_REQUESTED
+  DOCUMENT_UPLOADED
+  DOCUMENT_ACCEPTED
+  DOCUMENT_UPDATE_REQUESTED
+  APPOINTMENT_REQUESTED
+  APPOINTMENT_SCHEDULED
+  APPOINTMENT_RESCHEDULE_REQUESTED
+  APPOINTMENT_COMPLETED
+  APPOINTMENT_CANCELLED
 }
 
 /// Lifecycle of a discrete case requirement.
@@ -331,16 +343,19 @@ model Case {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization                  Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  patient                       Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  originatingFacility           Facility          @relation(fields: [originatingFacilityId], references: [id], onDelete: Restrict)
-  assignedDischargeProfessional User?             @relation("CaseAssignedProfessional", fields: [assignedDischargeProfessionalId], references: [id], onDelete: SetNull)
+  organization                  Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  patient                       Patient                @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  originatingFacility           Facility               @relation(fields: [originatingFacilityId], references: [id], onDelete: Restrict)
+  assignedDischargeProfessional User?                  @relation("CaseAssignedProfessional", fields: [assignedDischargeProfessionalId], references: [id], onDelete: SetNull)
   requirements                  CaseRequirement[]
   serviceRequests               ServiceRequest[]
   workflowEvents                WorkflowEvent[]
   referrals                     Referral[]
   tasks                         Task[]
   messages                      Message[]
+  careSeekerAccess              CareSeekerCaseAccess[]
+  documents                     CaseDocument[]
+  appointments                  CaseAppointment[]
 
   @@index([organizationId])
   @@index([patientId])
@@ -510,6 +525,8 @@ model User {
   workflowEvents        WorkflowEvent[]
   auditEvents           AuditEvent[]
   capacityUpdates       ProviderCapacity[]       @relation("CapacityUpdatedBy")
+  careSeekerAccess      CareSeekerCaseAccess[]   @relation("CareSeekerAccessUser")
+  careSeekerGrants      CareSeekerCaseAccess[]   @relation("CareSeekerAccessGrantedBy")
 
   @@index([status])
   @@map("users")
@@ -527,8 +544,9 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  permissions RolePermission[]
-  memberships OrganizationMembership[]
+  permissions      RolePermission[]
+  memberships      OrganizationMembership[]
+  careSeekerAccess CareSeekerCaseAccess[]
 
   @@map("roles")
 }
@@ -688,6 +706,7 @@ model Provider {
   hours         ProviderHours[]
   capacity      ProviderCapacity[]
   referrals     Referral[]
+  appointments  CaseAppointment[]
 
   @@index([status])
   @@index([state])
@@ -1075,6 +1094,7 @@ model Referral {
   responses      ReferralResponse[]
   placement      Placement?
   messages       Message[]
+  appointments   CaseAppointment[]
 
   @@index([caseId])
   @@index([serviceRequestId])
@@ -1146,11 +1166,13 @@ enum TaskPriority {
 
 /// Communication/note visibility. CASE_TEAM = case org + Nonnis; NONNIS_INTERNAL
 /// = Nonnis staff only; PROVIDER_REFERRAL = scoped to one referral's provider
-/// plus the case/Nonnis side.
+/// plus the case/Nonnis side; CARE_SEEKER = the family thread — the authorized
+/// family members on the case plus the case/Nonnis side, never a provider.
 enum MessageScope {
   CASE_TEAM
   NONNIS_INTERNAL
   PROVIDER_REFERRAL
+  CARE_SEEKER
 }
 
 /// A concrete, manually-created action tied to a case. Overdue is DERIVED at
@@ -2073,4 +2095,203 @@ model CommunicationSmsCampaignRecipient {
   /// Drives expired-lease recovery scans.
   @@index([deliveryStatus, leaseExpiresAt])
   @@map("communication_sms_campaign_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Care Seeker (family) portal
+//
+// A family member is scoped to a CASE, not to an organization. Staff, provider
+// and discharge users reach the platform through OrganizationMembership; that
+// mechanism is untouched. This section adds the parallel, case-scoped one, plus
+// the two case sub-resources the family view needs and the platform did not
+// previously have: documents and appointments.
+//
+// Nothing here changes an existing table's columns. Every model below is new,
+// and every field added to an existing model is a back-relation.
+// ---------------------------------------------------------------------------
+
+/// Lifecycle of one person's authorization to view one case.
+enum CareSeekerAccessStatus {
+  /// Granted, but the user has not signed in and accepted yet.
+  INVITED
+  ACTIVE
+  /// Withdrawn. The row is kept so the grant remains auditable.
+  REVOKED
+}
+
+/// Explicit authorization linking an authenticated user to ONE case as a family
+/// member or authorized representative.
+///
+/// Access is ALWAYS explicit. It is never inferred from a matching email or
+/// phone number on the case — `Case.representativeContact` and friends are
+/// free text captured from a referring facility, not verified identity, and
+/// treating them as authorization would hand a case to whoever could guess the
+/// value. One case may have several rows (patient, spouse, adult child,
+/// power of attorney); the unique constraint only stops the same person being
+/// granted the same case twice.
+model CareSeekerCaseAccess {
+  id     String                 @id @default(uuid()) @db.Uuid
+  userId String                 @db.Uuid
+  caseId String                 @db.Uuid
+  /// The role whose permissions this grant carries. Always CARE_SEEKER today;
+  /// stored rather than assumed so permissions keep coming from the RBAC tables
+  /// like every other grant, and so a narrower family role can be introduced
+  /// later without a second migration.
+  roleId String                 @db.Uuid
+  status CareSeekerAccessStatus @default(INVITED)
+
+  /// How this person relates to the care recipient, e.g. "Daughter". Display
+  /// only — it never affects what they can see.
+  relationship String?
+
+  grantedByUserId String?   @db.Uuid
+  grantedAt       DateTime?
+  revokedAt       DateTime?
+  revokedReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User  @relation("CareSeekerAccessUser", fields: [userId], references: [id], onDelete: Cascade)
+  case      Case  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  role      Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  grantedBy User? @relation("CareSeekerAccessGrantedBy", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, caseId])
+  @@index([caseId])
+  @@index([userId])
+  @@index([status])
+  @@map("care_seeker_case_access")
+}
+
+/// Review state of a document attached to a case.
+enum CaseDocumentStatus {
+  /// Staff have asked for it; nothing has been uploaded yet.
+  REQUESTED
+  /// A file is present and is waiting for staff review.
+  UPLOADED
+  ACCEPTED
+  /// Reviewed and rejected — a replacement is expected.
+  NEEDS_UPDATE
+}
+
+/// Who may see a case document. Defaults to staff-only so a document is never
+/// exposed to a family member by omission.
+enum CaseDocumentVisibility {
+  CASE_TEAM
+  CARE_SEEKER
+}
+
+/// A document belonging to a case — either requested from the family, or shared
+/// with them.
+///
+/// File bytes live in the existing PRIVATE Supabase bucket; only the object key
+/// is stored, and it is never returned to a browser. Downloads go through a
+/// short-lived signed URL, the same mechanism website form submissions use.
+model CaseDocument {
+  id          String                 @id @default(uuid()) @db.Uuid
+  caseId      String                 @db.Uuid
+  title       String
+  description String?
+  status      CaseDocumentStatus     @default(REQUESTED)
+  visibility  CaseDocumentVisibility @default(CASE_TEAM)
+
+  /// True when this row exists because staff asked the family to supply it.
+  /// Drives the seeker's "documents still required" list.
+  requestedFromSeeker Boolean @default(false)
+
+  // File metadata. All null while the document is only a request.
+  fileName    String?
+  contentType String?
+  sizeBytes   Int?
+  /// Object key inside the private bucket. Never returned to a browser.
+  storagePath String?
+
+  requestedByUserId String?   @db.Uuid
+  uploadedByUserId  String?   @db.Uuid
+  uploadedAt        DateTime?
+  reviewedByUserId  String?   @db.Uuid
+  reviewedAt        DateTime?
+  /// Shown to the family when a document needs replacing, so "Needs update"
+  /// always comes with a reason.
+  reviewNote        String?
+  dueAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([status])
+  @@index([visibility])
+  @@map("case_documents")
+}
+
+/// What kind of appointment this is.
+enum CaseAppointmentType {
+  TOUR
+  ASSESSMENT
+  MEETING
+  MOVE_IN
+  OTHER
+}
+
+/// Lifecycle of a tour or appointment.
+enum CaseAppointmentStatus {
+  /// The family asked for one; staff have not scheduled it yet.
+  REQUESTED
+  SCHEDULED
+  CONFIRMED
+  /// The family asked to move a scheduled appointment.
+  RESCHEDULE_REQUESTED
+  COMPLETED
+  CANCELLED
+}
+
+/// A tour, assessment or meeting on a case, optionally at a specific provider.
+///
+/// Separate from Task: a task is internal work for staff, while this is a
+/// scheduled event the family attends and can see. Linking to a referral is
+/// optional so a tour can be arranged before any referral exists.
+model CaseAppointment {
+  id         String                @id @default(uuid()) @db.Uuid
+  caseId     String                @db.Uuid
+  providerId String?               @db.Uuid
+  referralId String?               @db.Uuid
+  type       CaseAppointmentType   @default(TOUR)
+  status     CaseAppointmentStatus @default(REQUESTED)
+
+  scheduledAt     DateTime?
+  durationMinutes Int?
+  /// Where to go. Falls back to the provider's address in the UI when unset.
+  locationText    String?
+  /// Practical instructions for the family (parking, entrance, who to ask for).
+  instructions    String?
+  /// The family's own note when requesting or asking to move an appointment.
+  seekerNote      String?
+  /// Staff's family-visible outcome summary. Internal commentary belongs in
+  /// internal notes, which the family can never see.
+  outcomeNote     String?
+
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  requestedByUserId String? @db.Uuid
+  createdByUserId   String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case     Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  referral Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([providerId])
+  @@index([referralId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("case_appointments")
 }

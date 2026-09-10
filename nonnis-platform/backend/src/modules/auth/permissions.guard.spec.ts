@@ -33,6 +33,7 @@ function user(permissions: string[]): RequestUser {
     displayName: null,
     status: "ACTIVE",
     memberships: [],
+    caseAccess: [],
     activeOrganizationId: "org",
     activePermissions: new Set(permissions),
   };

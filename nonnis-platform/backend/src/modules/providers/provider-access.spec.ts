@@ -30,6 +30,7 @@ function makeUser(permissions: string[], orgIds: string[] = [], overrides: Parti
       isPrimary: true,
       permissions,
     })),
+    caseAccess: [],
     activeOrganizationId: orgIds[0] ?? null,
     activePermissions: new Set(permissions),
     ...overrides,

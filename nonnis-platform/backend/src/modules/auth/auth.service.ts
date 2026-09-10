@@ -23,6 +23,19 @@ export interface MeResponse {
     permissions: string[];
   }>;
   organizations: Array<{ id: string; name: string; type: string }>;
+  /**
+   * Cases this user is authorized for as a family member. Empty for every
+   * organization user, so the existing client contract is unchanged: nothing
+   * that reads `memberships` or `organizations` sees a different value.
+   */
+  caseAccess: Array<{
+    caseId: string;
+    caseNumber: string;
+    careRecipientName: string;
+    relationship: string | null;
+    roleCode: string;
+    roleName: string;
+  }>;
   permissions: string[];
 }
 
@@ -44,6 +57,7 @@ export class AuthService {
         activeOrganizationId: null,
         memberships: [],
         organizations: [],
+        caseAccess: [],
         permissions: [],
       };
     }
@@ -73,6 +87,14 @@ export class AuthService {
         id: m.organizationId,
         name: m.organizationName,
         type: m.organizationType,
+      })),
+      caseAccess: user.caseAccess.map((a) => ({
+        caseId: a.caseId,
+        caseNumber: a.caseNumber,
+        careRecipientName: a.careRecipientName,
+        relationship: a.relationship,
+        roleCode: a.roleCode,
+        roleName: a.roleName,
       })),
       permissions: [...user.activePermissions],
     };

@@ -22,6 +22,7 @@ function me(orgType: string, activeOrganizationId = "org-1", permissions: string
       },
     ],
     organizations: [{ id: "org-1", name: "Org", type: orgType }],
+    caseAccess: [],
     permissions,
   };
 }
@@ -95,6 +96,7 @@ describe("organization switching", () => {
         membership("hosp", "HOSPITAL", "DISCHARGE_PROFESSIONAL"),
       ],
       organizations: [],
+      caseAccess: [],
       // The backend returns the ACTIVE membership's permissions, not a union.
       permissions,
     };

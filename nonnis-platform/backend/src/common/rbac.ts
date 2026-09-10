@@ -47,6 +47,29 @@ export const PERMISSIONS = {
   COMMUNICATIONS_MANAGE: "communications.manage",
   COMMUNICATIONS_IMPORT: "communications.import",
   COMMUNICATIONS_SEND: "communications.send",
+
+  // --- Case sub-resources introduced for the family portal -----------------
+  // Staff-side. Documents and appointments follow the same shape as tasks:
+  // their own permission pair rather than riding on cases.read/update, so a
+  // role can be given case access without automatically gaining either.
+  CASE_DOCUMENTS_READ: "case_documents.read",
+  CASE_DOCUMENTS_MANAGE: "case_documents.manage",
+  CASE_APPOINTMENTS_READ: "case_appointments.read",
+  CASE_APPOINTMENTS_MANAGE: "case_appointments.manage",
+  /// Grant, edit and revoke a family member's access to a case.
+  CARE_SEEKERS_MANAGE: "care_seekers.manage",
+
+  // --- Care Seeker (family) portal ----------------------------------------
+  // Deliberately a separate namespace from the staff permissions above. A
+  // seeker holds ONLY these, so every staff and provider route is closed to
+  // them by the permission guard alone, before any row-level check runs.
+  SEEKER_CASE_READ: "seeker_case.read",
+  SEEKER_DOCUMENTS_READ: "seeker_documents.read",
+  SEEKER_DOCUMENTS_UPLOAD: "seeker_documents.upload",
+  SEEKER_MESSAGES_READ: "seeker_messages.read",
+  SEEKER_MESSAGES_SEND: "seeker_messages.send",
+  SEEKER_APPOINTMENTS_READ: "seeker_appointments.read",
+  SEEKER_APPOINTMENTS_REQUEST: "seeker_appointments.request",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -94,6 +117,18 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.COMMUNICATIONS_MANAGE]: "Create, edit, archive communications contacts, lists, tags, consent and suppressions",
   [PERMISSIONS.COMMUNICATIONS_IMPORT]: "Import communications contacts (paste/CSV/TXT)",
   [PERMISSIONS.COMMUNICATIONS_SEND]: "Queue and send bulk email campaigns and test emails",
+  [PERMISSIONS.CASE_DOCUMENTS_READ]: "Read documents attached to authorized cases",
+  [PERMISSIONS.CASE_DOCUMENTS_MANAGE]: "Request, upload, review and remove case documents",
+  [PERMISSIONS.CASE_APPOINTMENTS_READ]: "Read tours and appointments for authorized cases",
+  [PERMISSIONS.CASE_APPOINTMENTS_MANAGE]: "Schedule, reschedule and complete tours and appointments",
+  [PERMISSIONS.CARE_SEEKERS_MANAGE]: "Grant, edit and revoke family (Care Seeker) access to a case",
+  [PERMISSIONS.SEEKER_CASE_READ]: "Read the family-facing view of an authorized case",
+  [PERMISSIONS.SEEKER_DOCUMENTS_READ]: "Read documents shared with the family on an authorized case",
+  [PERMISSIONS.SEEKER_DOCUMENTS_UPLOAD]: "Upload requested documents to an authorized case",
+  [PERMISSIONS.SEEKER_MESSAGES_READ]: "Read the family message thread on an authorized case",
+  [PERMISSIONS.SEEKER_MESSAGES_SEND]: "Send a message to Nonnis on an authorized case",
+  [PERMISSIONS.SEEKER_APPOINTMENTS_READ]: "Read tours and appointments on an authorized case",
+  [PERMISSIONS.SEEKER_APPOINTMENTS_REQUEST]: "Request or ask to change a tour on an authorized case",
 };
 
 export const ROLES = {
@@ -102,6 +137,7 @@ export const ROLES = {
   DISCHARGE_PROFESSIONAL: "DISCHARGE_PROFESSIONAL",
   PROVIDER_ADMIN: "PROVIDER_ADMIN",
   PROVIDER_STAFF: "PROVIDER_STAFF",
+  CARE_SEEKER: "CARE_SEEKER",
 } as const;
 
 export type RoleCode = (typeof ROLES)[keyof typeof ROLES];
@@ -147,6 +183,11 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.MESSAGES_SEND,
       PERMISSIONS.MESSAGES_READ_ALL,
       PERMISSIONS.INTERNAL_NOTES_MANAGE,
+      PERMISSIONS.CASE_DOCUMENTS_READ,
+      PERMISSIONS.CASE_DOCUMENTS_MANAGE,
+      PERMISSIONS.CASE_APPOINTMENTS_READ,
+      PERMISSIONS.CASE_APPOINTMENTS_MANAGE,
+      PERMISSIONS.CARE_SEEKERS_MANAGE,
       PERMISSIONS.CONTENT_READ,
       PERMISSIONS.CONTENT_MANAGE,
       PERMISSIONS.REPORTS_READ,
@@ -174,6 +215,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.TASKS_MANAGE,
       PERMISSIONS.MESSAGES_READ,
       PERMISSIONS.MESSAGES_SEND,
+      PERMISSIONS.CASE_DOCUMENTS_READ,
+      PERMISSIONS.CASE_DOCUMENTS_MANAGE,
+      PERMISSIONS.CASE_APPOINTMENTS_READ,
+      PERMISSIONS.CASE_APPOINTMENTS_MANAGE,
     ],
   },
   [ROLES.PROVIDER_ADMIN]: {
@@ -210,6 +255,23 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.MESSAGES_SEND,
     ],
   },
+  [ROLES.CARE_SEEKER]: {
+    name: "Care Seeker",
+    description: "A family member or authorized representative, scoped to the cases they are explicitly granted.",
+    // Holds none of the staff or provider permissions. Every operations,
+    // provider-portal and administration route is therefore refused by the
+    // permission guard before any handler runs — the case-level check that
+    // follows only decides WHICH case, never WHETHER the portal is reachable.
+    permissions: [
+      PERMISSIONS.SEEKER_CASE_READ,
+      PERMISSIONS.SEEKER_DOCUMENTS_READ,
+      PERMISSIONS.SEEKER_DOCUMENTS_UPLOAD,
+      PERMISSIONS.SEEKER_MESSAGES_READ,
+      PERMISSIONS.SEEKER_MESSAGES_SEND,
+      PERMISSIONS.SEEKER_APPOINTMENTS_READ,
+      PERMISSIONS.SEEKER_APPOINTMENTS_REQUEST,
+    ],
+  },
 };
 
 /**
@@ -220,7 +282,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
  */
 export function assignableRoleCodes(actorPermissions: ReadonlySet<string>): RoleCode[] {
   if (actorPermissions.has(PERMISSIONS.USERS_MANAGE)) {
-    return Object.values(ROLES);
+    // Organization roles only. CARE_SEEKER is deliberately absent: it is not
+    // granted by adding someone to an organization, and offering it here would
+    // produce a member with no case and no console.
+    return [...ORGANIZATION_ROLES];
   }
   if (actorPermissions.has(PERMISSIONS.USERS_MANAGE_OWN_ORGANIZATION)) {
     return [ROLES.PROVIDER_ADMIN, ROLES.PROVIDER_STAFF];
@@ -255,6 +320,13 @@ export const ROLE_ALLOWED_ORGANIZATION_TYPES: Record<RoleCode, readonly Organiza
   [ROLES.DISCHARGE_PROFESSIONAL]: ["HOSPITAL", "REHABILITATION_CENTER", "SKILLED_NURSING_FACILITY", "PARTNER"],
   [ROLES.PROVIDER_ADMIN]: ["PROVIDER"],
   [ROLES.PROVIDER_STAFF]: ["PROVIDER"],
+  // Empty on purpose, and the only role for which that is true. A family member
+  // is scoped to a CASE, not to an organization: their access lives in
+  // CareSeekerCaseAccess, not in an OrganizationMembership. Listing no type
+  // means `isRoleAllowedForOrganizationType` refuses it for every organization,
+  // so it can never be granted through the organization invite path — which is
+  // exactly the intent, not an oversight.
+  [ROLES.CARE_SEEKER]: [],
 };
 
 /** Every organization type in the schema's `OrganizationType` enum. */
@@ -265,6 +337,21 @@ export type OrganizationTypeCode =
   | "SKILLED_NURSING_FACILITY"
   | "PROVIDER"
   | "PARTNER";
+
+/**
+ * Roles granted through an OrganizationMembership.
+ *
+ * Every role except CARE_SEEKER. Kept as a derived list rather than a second
+ * hand-written one so a future role cannot appear in `ROLES` and be silently
+ * omitted here.
+ */
+export const ORGANIZATION_ROLES: readonly RoleCode[] = (Object.keys(ROLE_ALLOWED_ORGANIZATION_TYPES) as RoleCode[])
+  .filter((code) => ROLE_ALLOWED_ORGANIZATION_TYPES[code].length > 0);
+
+/** True when this role is granted through organization membership at all. */
+export function isOrganizationRole(roleCode: string): boolean {
+  return (ORGANIZATION_ROLES as readonly string[]).includes(roleCode);
+}
 
 /** True when `roleCode` may be held inside an organization of `organizationType`. */
 export function isRoleAllowedForOrganizationType(roleCode: string, organizationType: string): boolean {

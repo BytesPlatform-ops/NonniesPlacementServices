@@ -28,7 +28,38 @@ function userRec(overrides: Record<string, unknown> = {}) {
     status: "ACTIVE",
     supabaseAuthUserId: "sb-1",
     memberships: [],
+    careSeekerAccess: [],
     ...overrides,
+  };
+}
+
+/** A family member's grant on one case, as the include shape returns it. */
+function seekerAccess(
+  caseId: string,
+  opts: { status?: string; caseStatus?: string; perms?: string[]; relationship?: string } = {},
+) {
+  const {
+    status = "ACTIVE",
+    caseStatus = "MATCHING",
+    perms = ["seeker_case.read"],
+    relationship = "Daughter",
+  } = opts;
+  return {
+    id: `acc-${caseId}`,
+    caseId,
+    status,
+    relationship,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    case: {
+      caseNumber: `CASE-${caseId}`,
+      status: caseStatus,
+      patient: { firstName: "Rose", lastName: "Miller" },
+    },
+    role: {
+      code: "CARE_SEEKER",
+      name: "Care Seeker",
+      permissions: perms.map((p) => ({ permission: { code: p } })),
+    },
   };
 }
 
@@ -106,5 +137,115 @@ describe("AuthContextService", () => {
     expect(result?.status).toBe("ACTIVE");
     expect(result?.activeOrganizationId).toBe("orgA");
     expect(result?.activePermissions.has("facilities.read")).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Case-scoped (family) access
+  //
+  // The organization path above must stay byte-for-byte unchanged; these cover
+  // the parallel path added for the family portal.
+  // ---------------------------------------------------------------------------
+
+  describe("care seeker (case-scoped) access", () => {
+    function resolveWith(user: Record<string, unknown>) {
+      const prisma = { user: { findUnique: jest.fn().mockResolvedValue(user) } } as unknown as PrismaService;
+      return new AuthContextService(prisma).resolve(identity);
+    }
+
+    it("resolves a family member who belongs to no organization at all", async () => {
+      const result = await resolveWith(userRec({ careSeekerAccess: [seekerAccess("case-a")] }));
+
+      expect(result).not.toBeNull();
+      expect(result?.memberships).toEqual([]);
+      expect(result?.activeOrganizationId).toBeNull();
+      expect(result?.caseAccess).toHaveLength(1);
+      expect(result?.caseAccess[0]?.caseId).toBe("case-a");
+      expect(result?.caseAccess[0]?.careRecipientName).toBe("Rose Miller");
+      expect(result?.caseAccess[0]?.relationship).toBe("Daughter");
+      // Without this the guard would refuse every seeker route.
+      expect(result?.activePermissions.has("seeker_case.read")).toBe(true);
+    });
+
+    it("still returns null for a user with neither a membership nor a grant", async () => {
+      // The pre-existing contract: authenticated but unprovisioned means no
+      // access. Adding case access must not turn this into a usable session.
+      const result = await resolveWith(userRec({ memberships: [], careSeekerAccess: [] }));
+      expect(result?.memberships).toEqual([]);
+      expect(result?.caseAccess).toEqual([]);
+      expect([...(result?.activePermissions ?? [])]).toEqual([]);
+    });
+
+    it("ignores a revoked grant", async () => {
+      const result = await resolveWith(
+        userRec({ careSeekerAccess: [seekerAccess("case-a", { status: "REVOKED" })] }),
+      );
+      expect(result?.caseAccess).toEqual([]);
+      expect([...(result?.activePermissions ?? [])]).toEqual([]);
+    });
+
+    it("ignores a grant that has not been accepted yet", async () => {
+      const result = await resolveWith(
+        userRec({ careSeekerAccess: [seekerAccess("case-a", { status: "INVITED" })] }),
+      );
+      expect(result?.caseAccess).toEqual([]);
+    });
+
+    it("drops a grant once its case is cancelled", async () => {
+      const result = await resolveWith(
+        userRec({ careSeekerAccess: [seekerAccess("case-a", { caseStatus: "CANCELLED" })] }),
+      );
+      expect(result?.caseAccess).toEqual([]);
+    });
+
+    it("gives a suspended user no access through a grant", async () => {
+      const result = await resolveWith(
+        userRec({ status: "SUSPENDED", careSeekerAccess: [seekerAccess("case-a")] }),
+      );
+      expect(result?.caseAccess).toEqual([]);
+    });
+
+    it("carries every authorized case for a relative granted more than one", async () => {
+      const result = await resolveWith(
+        userRec({ careSeekerAccess: [seekerAccess("case-a"), seekerAccess("case-b")] }),
+      );
+      expect(result?.caseAccess.map((a) => a.caseId)).toEqual(["case-a", "case-b"]);
+    });
+
+    it("unions permissions across grants without duplicating them", async () => {
+      const result = await resolveWith(
+        userRec({
+          careSeekerAccess: [
+            seekerAccess("case-a", { perms: ["seeker_case.read", "seeker_messages.read"] }),
+            seekerAccess("case-b", { perms: ["seeker_case.read"] }),
+          ],
+        }),
+      );
+      expect([...(result?.activePermissions ?? [])].sort()).toEqual(["seeker_case.read", "seeker_messages.read"]);
+    });
+
+    it("never lets a grant add permissions to an organization user", async () => {
+      // A user with both is not a supported state, but if one ever existed the
+      // organization context must win rather than silently merging the two.
+      const result = await resolveWith(
+        userRec({
+          memberships: [member("orgA", { perms: ["cases.read"] })],
+          careSeekerAccess: [seekerAccess("case-a", { perms: ["seeker_case.read"] })],
+        }),
+      );
+      expect(result?.activeOrganizationId).toBe("orgA");
+      expect(result?.activePermissions.has("cases.read")).toBe(true);
+      expect(result?.activePermissions.has("seeker_case.read")).toBe(false);
+    });
+
+    it("leaves a multi-organization user with no permissions until they pick one", async () => {
+      // The documented pre-existing behaviour, re-asserted because the new
+      // fallback runs in exactly this "no active organization" situation and
+      // must not start filling the set.
+      const result = await resolveWith(
+        userRec({ memberships: [member("orgA"), member("orgB")], careSeekerAccess: [] }),
+      );
+      expect(result?.activeOrganizationId).toBeNull();
+      expect([...(result?.activePermissions ?? [])]).toEqual([]);
+    });
   });
 });

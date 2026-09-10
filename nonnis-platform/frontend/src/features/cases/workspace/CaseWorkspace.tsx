@@ -26,16 +26,37 @@ import { TasksTab } from "./TasksTab";
 import { CommunicationTab } from "./CommunicationTab";
 import { ReadinessTab } from "./ReadinessTab";
 import { ActivityTab } from "./ActivityTab";
+import { DocumentsTab } from "./DocumentsTab";
+import { AppointmentsTab } from "./AppointmentsTab";
+import { FamilyAccessTab } from "./FamilyAccessTab";
 import { CaseHeaderActions } from "./CaseHeaderActions";
 
-const TABS = ["Overview", "Assessment", "Service Requests", "Referrals", "Requirements", "Tasks", "Communication", "Readiness", "Activity"] as const;
-type Tab = (typeof TABS)[number];
+const BASE_TABS = ["Overview", "Assessment", "Service Requests", "Referrals", "Requirements", "Tasks", "Communication", "Readiness", "Activity"] as const;
+/**
+ * Tabs added for the family portal. Appended rather than interleaved so the
+ * existing nine keep their order and their default, and each is shown only to a
+ * role that holds the matching permission — a provider or a role without them
+ * sees exactly the tabs it saw before.
+ */
+const OPTIONAL_TABS = {
+  Documents: PERMISSIONS.CASE_DOCUMENTS_READ,
+  Tours: PERMISSIONS.CASE_APPOINTMENTS_READ,
+  "Family Access": PERMISSIONS.CARE_SEEKERS_MANAGE,
+} as const;
+type Tab = (typeof BASE_TABS)[number] | keyof typeof OPTIONAL_TABS;
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
   const { activeOrganizationId, hasPermission } = useAuth();
   const { data, loading, error, reload } = useAsync(() => getCase(caseId), [caseId, activeOrganizationId]);
   const readinessAsync = useAsync(() => getCaseReadiness(caseId), [caseId, activeOrganizationId]);
   const [tab, setTab] = useState<Tab>("Overview");
+
+  const visibleTabs: Tab[] = [
+    ...BASE_TABS,
+    ...(Object.keys(OPTIONAL_TABS) as Array<keyof typeof OPTIONAL_TABS>).filter((t) =>
+      hasPermission(OPTIONAL_TABS[t]),
+    ),
+  ];
 
   const reloadAll = async () => {
     await Promise.all([reload(), readinessAsync.reload()]);
@@ -101,7 +122,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
       <div>
         <div className="flex flex-wrap gap-1 border-b border-sage">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t}
               type="button"
@@ -136,6 +157,9 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             />
           ) : null}
           {tab === "Activity" ? <ActivityTab caseDetail={data} /> : null}
+          {tab === "Documents" ? <DocumentsTab caseDetail={data} /> : null}
+          {tab === "Tours" ? <AppointmentsTab caseDetail={data} /> : null}
+          {tab === "Family Access" ? <FamilyAccessTab caseDetail={data} /> : null}
         </div>
       </div>
     </div>
