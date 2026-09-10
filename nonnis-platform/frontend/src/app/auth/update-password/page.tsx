@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { authFragmentType, isPasswordSetupFragment } from "@/lib/auth-recovery";
+import { establishPasswordSetupSession } from "@/lib/auth-session-setup";
 
 type Phase = "checking" | "ready" | "expired";
 
@@ -17,20 +18,20 @@ const inputCls =
  * Sets a password for an invited user, or for someone who followed a password
  * recovery link.
  *
- * Both arrive here holding a Supabase session that authorizes exactly one thing:
- * changing their own password. The page therefore proves that session exists
- * before showing the form — otherwise `updateUser` fails and the only feedback
- * is a generic error on a form the visitor should never have seen.
+ * Both arrive holding a Supabase session that authorises exactly one thing:
+ * changing their own password. The page therefore establishes and confirms that
+ * session before showing the form — otherwise `updateUser` fails and the only
+ * feedback is a generic error on a form the visitor should never have seen.
  *
- * A recovery link can arrive two ways, and both are handled:
- *  - `?code=` (PKCE), which `/auth/callback` exchanges server-side before
- *    redirecting here with a session cookie already set;
- *  - `#access_token=…&type=recovery` (implicit), which only the browser can
- *    read. The Supabase browser client consumes that fragment on creation and
- *    emits PASSWORD_RECOVERY, which is what the listener below waits for.
+ * Establishing it is explicit, not hopeful. `createBrowserClient` pins
+ * `flowType: "pkce"`, and auth-js refuses an implicit callback in that mode —
+ * so a Supabase invitation, which is always implicit, is never picked up by
+ * `detectSessionInUrl` no matter how fresh its tokens are. The token pair is
+ * read from the fragment and handed to `setSession` instead; see
+ * `auth-session-setup`.
  *
- * Nothing here is ever logged: not the password, not the tokens, not the
- * fragment that carries them.
+ * Nothing here is logged: not the password, not the tokens, not the fragment
+ * that carries them.
  */
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -40,63 +41,54 @@ export default function UpdatePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // React runs effects twice in development. Establishing the session is not
+  // idempotent-free — the second run would find the fragment already cleared —
+  // so it happens once per mount cycle.
+  const started = useRef(false);
 
   useEffect(() => {
-    const supabase = supabaseBrowser();
-    let settled = false;
+    if (started.current) return;
+    started.current = true;
 
-    // Reading the fragment before any await: creating the client consumes it, so
-    // this is the last moment the link type is still visible.
-    //
-    // A fragment that is neither an invitation nor a recovery — a magic link,
-    // say — still carries a session but is not a request to choose a password,
-    // so it is handed straight on to `/home` rather than interrupted here.
-    if (typeof window !== "undefined") {
-      const hash = window.location.hash;
-      const fragmentType = authFragmentType(hash);
-      if (fragmentType && !isPasswordSetupFragment(hash)) {
-        router.replace("/home");
-        return;
-      }
-      if (fragmentType === "recovery") setIsRecovery(true);
+    // Captured before the client is touched, and before anything clears it.
+    // Read straight off `window` rather than through `useSearchParams`: both
+    // values are client-only, this effect already needs the fragment that no
+    // hook exposes, and the hook would force a Suspense boundary around a page
+    // that has nothing to stream.
+    const hash = typeof window === "undefined" ? "" : window.location.hash;
+    const flowParam =
+      typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("flow");
+
+    // A fragment declaring some other type — a magic link — carries a session
+    // but is not a request to choose a password, so it is passed straight on
+    // rather than interrupted here.
+    const fragmentType = authFragmentType(hash);
+    if (fragmentType && !isPasswordSetupFragment(hash)) {
+      router.replace("/home");
+      return;
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setIsRecovery(true);
-        settled = true;
-        setPhase("ready");
+    let active = true;
+    void (async () => {
+      const outcome = await establishPasswordSetupSession(supabaseBrowser().auth, { hash, flowParam });
+      if (!active) return;
+
+      if (outcome.status === "invalid") {
+        setPhase("expired");
         return;
       }
-      if (session) {
-        settled = true;
-        setPhase("ready");
-      }
-    });
 
-    // An invite handled by `/auth/callback` already has a session cookie, so
-    // there is no event to wait for — check directly as well.
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        settled = true;
-        setPhase("ready");
+      setIsRecovery(outcome.flow === "recovery");
+      // Cleared only now that the session exists. Doing it earlier destroyed
+      // the one copy of the tokens, leaving nothing to retry with.
+      if (outcome.fragmentConsumed && typeof window !== "undefined" && window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
-    });
-
-    // No session and no recovery event means the link was already used, has
-    // expired, or the page was opened directly.
-    const timer = setTimeout(() => {
-      if (!settled) setPhase("expired");
-    }, 2500);
+      setPhase("ready");
+    })();
 
     return () => {
-      clearTimeout(timer);
-      sub.subscription.unsubscribe();
-      // The fragment is cleared from the address bar so the tokens do not sit
-      // in history or get copied out of the URL bar.
-      if (typeof window !== "undefined" && window.location.hash) {
-        window.history.replaceState(null, "", window.location.pathname);
-      }
+      active = false;
     };
   }, [router]);
 

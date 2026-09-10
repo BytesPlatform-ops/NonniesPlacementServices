@@ -150,9 +150,11 @@ describe("callbackDestination", () => {
     expect(callbackDestination({ hasCode: false, type: "invite" })).toBe("/auth/update-password");
   });
 
-  it("sends a PKCE password flow to the set-a-password screen", () => {
-    expect(callbackDestination({ hasCode: true, type: "invite" })).toBe("/auth/update-password");
-    expect(callbackDestination({ hasCode: true, type: "recovery" })).toBe("/auth/update-password");
+  it("sends a PKCE password flow to the set-a-password screen, carrying the type", () => {
+    // There is no fragment on the far side of a code exchange, so the type has
+    // to travel in the query or the page cannot tell the two flows apart.
+    expect(callbackDestination({ hasCode: true, type: "invite" })).toBe("/auth/update-password?flow=invite");
+    expect(callbackDestination({ hasCode: true, type: "recovery" })).toBe("/auth/update-password?flow=recovery");
   });
 
   it("sends any other PKCE flow to the role-aware landing", () => {

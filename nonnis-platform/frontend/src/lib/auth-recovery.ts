@@ -65,6 +65,15 @@ export function isRecoveryFragment(hash: string | null | undefined): boolean {
  * useful move is to hand the browser to the client page that can read it.
  */
 export function callbackDestination(input: { hasCode: boolean; type: string | null }): string {
+  // No code: the implicit form. The tokens are in a fragment this route cannot
+  // see, and the fragment also carries the type, so nothing needs passing on.
   if (!input.hasCode) return "/auth/update-password";
-  return input.type === "invite" || input.type === "recovery" ? "/auth/update-password" : "/home";
+  if (input.type === "invite" || input.type === "recovery") {
+    // PKCE: the code is exchanged here and the session becomes a cookie, so
+    // there is no fragment on the far side. `flow` carries the type across the
+    // redirect — without it the page cannot tell an invitation from a recovery,
+    // and the two differ in what happens after the password is saved.
+    return `/auth/update-password?flow=${input.type}`;
+  }
+  return "/home";
 }
