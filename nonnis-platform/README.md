@@ -306,12 +306,12 @@ change can be rolled out without re-running the seed's demo CMS content.
 `/home` is a role-aware dispatcher; the destination comes from one `landingPath()`
 helper, which organization switching also reuses so the two can never disagree.
 
-| Role | Lands on |
-| ---- | -------- |
+| Role                                    | Lands on        |
+| --------------------------------------- | --------------- |
 | `NONNIS_ADMIN`, `NONNIS_OPERATIONS` | `/operations` |
-| `DISCHARGE_PROFESSIONAL` | `/cases` |
-| `PROVIDER_ADMIN`, `PROVIDER_STAFF` | `/provider` |
-| `CARE_SEEKER` | `/seeker` |
+| `DISCHARGE_PROFESSIONAL`              | `/cases`      |
+| `PROVIDER_ADMIN`, `PROVIDER_STAFF`  | `/provider`   |
+| `CARE_SEEKER`                         | `/seeker`     |
 
 Provider-portal selection is decided by `Organization.type`, never by the role code.
 Organization switching and `X-Organization-Id` behavior are unchanged, and a Care
@@ -801,6 +801,7 @@ model, and this phase makes **no** live provider calls and sends nothing.
 ## Communications — Email Templates & Campaigns (Phase 15B)
 
 Outbound email built on the 15A foundation. Adds `communications.send` (Nonnis Admin
+
 + Operations), which gates **all** campaign queueing and test sends.
 
 - **Templates + visual builder:** reusable templates with a block builder (text /
@@ -1029,17 +1030,17 @@ suite:
 
 ### Family routes
 
-| Route | Shows |
-| ----- | ----- |
-| `/seeker` | Placement journey, care-recipient summary, next required action, latest update, and counts for matches / documents needed / new replies / next appointment |
-| `/seeker/care-plan` | Requested services with what has actually been arranged, care requirements with their real mandatory flag, and the recorded funding, location, language, accessibility and equipment needs |
-| `/seeker/matches` | Only the providers referred for **this** case, with services supported vs requested and a case-safe availability status |
-| `/seeker/matches/[referralId]` | One matched provider: photo, description, services, languages, funding, coverage, case-specific status, and a tour request |
-| `/seeker/appointments` | Tours and assessments, with confirm / ask-to-reschedule / cancel |
-| `/seeker/documents` | Documents requested from the family and documents shared with them, with upload |
-| `/seeker/messages` | The family's thread with the care team |
-| `/seeker/progress` | Family-friendly milestones derived from the case's workflow history |
-| `/seeker/account` | Own profile fields, sign-in email, and the cases this account may see |
+| Route                            | Shows                                                                                                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/seeker`                      | Placement journey, care-recipient summary, next required action, latest update, and counts for matches / documents needed / new replies / next appointment                                 |
+| `/seeker/care-plan`            | Requested services with what has actually been arranged, care requirements with their real mandatory flag, and the recorded funding, location, language, accessibility and equipment needs |
+| `/seeker/matches`              | Only the providers referred for**this** case, with services supported vs requested and a case-safe availability status                                                               |
+| `/seeker/matches/[referralId]` | One matched provider: photo, description, services, languages, funding, coverage, case-specific status, and a tour request                                                                 |
+| `/seeker/appointments`         | Tours and assessments, with confirm / ask-to-reschedule / cancel                                                                                                                           |
+| `/seeker/documents`            | Documents requested from the family and documents shared with them, with upload                                                                                                            |
+| `/seeker/messages`             | The family's thread with the care team                                                                                                                                                     |
+| `/seeker/progress`             | Family-friendly milestones derived from the case's workflow history                                                                                                                        |
+| `/seeker/account`              | Own profile fields, sign-in email, and the cases this account may see                                                                                                                      |
 
 ### What the family view will and will not say
 
@@ -1104,11 +1105,11 @@ permissions), and no existing role lost a permission.
 The Care Seeker module and the password-recovery fix are **implemented and verified by
 test**, and the migration and RBAC sync are applied. Verified suite totals:
 
-| Suite | Tests |
-| ----- | ----- |
-| Backend (Jest) | **828** across 93 suites |
-| CRM frontend (Vitest) | **140** across 22 files |
-| Public website (Vitest) | **26** across 5 files |
+| Suite                   | Tests                          |
+| ----------------------- | ------------------------------ |
+| Backend (Jest)          | **828** across 93 suites |
+| CRM frontend (Vitest)   | **140** across 22 files  |
+| Public website (Vitest) | **26** across 5 files    |
 
 Backend and CRM typecheck, lint and production build pass; the website's tests, lint and
 build pass. Cross-role and cross-case authorization is covered by an HTTP-level suite over
