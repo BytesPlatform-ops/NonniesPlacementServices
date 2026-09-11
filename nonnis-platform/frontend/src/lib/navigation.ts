@@ -17,6 +17,7 @@ const NAV: NavGroup[] = [
     items: [
       { label: "Operations", href: "/operations", permission: PERMISSIONS.CASES_READ_ALL },
       { label: "Form Submissions", href: "/operations/form-submissions", permission: PERMISSIONS.FORM_SUBMISSIONS_READ },
+      { label: "Marketplace", href: "/operations/marketplace", permission: PERMISSIONS.MARKETPLACE_ADMIN_READ },
       { label: "Dashboard", href: "/dashboard", permission: PERMISSIONS.CASES_READ },
       { label: "Cases", href: "/cases", permission: PERMISSIONS.CASES_READ },
       { label: "Tasks", href: "/tasks", permission: PERMISSIONS.TASKS_READ },
@@ -68,6 +69,10 @@ const PROVIDER_NAV: NavGroup[] = [
     items: [
       { label: "Overview", href: "/provider", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Referrals", href: "/provider/referrals", permission: PERMISSIONS.REFERRALS_READ },
+      // The marketplace is a parallel offering to referrals, not a replacement:
+      // beds a provider lists and sells or rents directly.
+      { label: "Listings", href: "/provider/listings", permission: PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN },
+      { label: "Marketplace Orders", href: "/provider/marketplace-orders", permission: PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN },
       { label: "Profile", href: "/provider/profile", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Services", href: "/provider/services", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Coverage", href: "/provider/coverage", permission: PERMISSIONS.PROVIDERS_READ },
@@ -94,6 +99,10 @@ const SEEKER_NAV: NavGroup[] = [
       { label: "Dashboard", href: "/seeker", permission: PERMISSIONS.SEEKER_CASE_READ },
       { label: "My Care Plan", href: "/seeker/care-plan", permission: PERMISSIONS.SEEKER_CASE_READ },
       { label: "My Matches", href: "/seeker/matches", permission: PERMISSIONS.SEEKER_CASE_READ },
+      // Distinct from Matches: Matches are providers being considered through
+      // the case, the Marketplace is open browsing with no referral needed.
+      { label: "Marketplace", href: "/seeker/marketplace", permission: PERMISSIONS.SEEKER_MARKETPLACE_BROWSE },
+      { label: "My Orders", href: "/seeker/orders", permission: PERMISSIONS.SEEKER_MARKETPLACE_BROWSE },
       { label: "Tours & Appointments", href: "/seeker/appointments", permission: PERMISSIONS.SEEKER_APPOINTMENTS_READ },
       { label: "Documents", href: "/seeker/documents", permission: PERMISSIONS.SEEKER_DOCUMENTS_READ },
       { label: "Messages", href: "/seeker/messages", permission: PERMISSIONS.SEEKER_MESSAGES_READ },

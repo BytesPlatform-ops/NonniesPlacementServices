@@ -70,6 +70,21 @@ export const PERMISSIONS = {
   SEEKER_MESSAGES_SEND: "seeker_messages.send",
   SEEKER_APPOINTMENTS_READ: "seeker_appointments.read",
   SEEKER_APPOINTMENTS_REQUEST: "seeker_appointments.request",
+  /// Browse the marketplace and place an order. Deliberately separate from the
+  /// case-scoped permissions above: marketplace listings are public to every
+  /// family, while everything else a seeker can reach is bounded to one case.
+  SEEKER_MARKETPLACE_BROWSE: "seeker_marketplace.browse",
+  SEEKER_MARKETPLACE_ORDER: "seeker_marketplace.order",
+
+  // --- Marketplace (provider + platform) -----------------------------------
+  // A parallel domain to referrals: a provider lists a bed or room on its own
+  // initiative and a family buys or rents it directly. None of these touch the
+  // clinical workflow, so they are their own namespace rather than an
+  // extension of the referral permissions.
+  MARKETPLACE_LISTINGS_MANAGE_OWN: "marketplace_listings.manage_own",
+  MARKETPLACE_ORDERS_MANAGE_OWN: "marketplace_orders.manage_own",
+  MARKETPLACE_ADMIN_READ: "marketplace_admin.read",
+  MARKETPLACE_ADMIN_MANAGE: "marketplace_admin.manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -129,6 +144,12 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.SEEKER_MESSAGES_SEND]: "Send a message to Nonnis on an authorized case",
   [PERMISSIONS.SEEKER_APPOINTMENTS_READ]: "Read tours and appointments on an authorized case",
   [PERMISSIONS.SEEKER_APPOINTMENTS_REQUEST]: "Request or ask to change a tour on an authorized case",
+  [PERMISSIONS.SEEKER_MARKETPLACE_BROWSE]: "Browse published marketplace listings and read own orders",
+  [PERMISSIONS.SEEKER_MARKETPLACE_ORDER]: "Request to buy or rent a marketplace listing",
+  [PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN]: "Create and manage marketplace listings for own provider",
+  [PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN]: "Read and act on marketplace orders for own provider",
+  [PERMISSIONS.MARKETPLACE_ADMIN_READ]: "Read every marketplace listing and order",
+  [PERMISSIONS.MARKETPLACE_ADMIN_MANAGE]: "Moderate marketplace listings and record offline payments",
 };
 
 export const ROLES = {
@@ -196,6 +217,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.COMMUNICATIONS_MANAGE,
       PERMISSIONS.COMMUNICATIONS_IMPORT,
       PERMISSIONS.COMMUNICATIONS_SEND,
+      PERMISSIONS.MARKETPLACE_ADMIN_READ,
+      PERMISSIONS.MARKETPLACE_ADMIN_MANAGE,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
@@ -238,6 +261,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.REFERRALS_RESPOND_OWN,
       PERMISSIONS.MESSAGES_READ,
       PERMISSIONS.MESSAGES_SEND,
+      PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN,
+      PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
     ],
   },
   [ROLES.PROVIDER_STAFF]: {
@@ -253,6 +278,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.REFERRALS_RESPOND_OWN,
       PERMISSIONS.MESSAGES_READ,
       PERMISSIONS.MESSAGES_SEND,
+      // Operational, like responding to a referral. Creating listings is a
+      // commercial act and stays with the Provider Administrator, who is also
+      // the only provider role that may edit the provider profile.
+      PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
     ],
   },
   [ROLES.CARE_SEEKER]: {
@@ -270,6 +299,8 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.SEEKER_MESSAGES_SEND,
       PERMISSIONS.SEEKER_APPOINTMENTS_READ,
       PERMISSIONS.SEEKER_APPOINTMENTS_REQUEST,
+      PERMISSIONS.SEEKER_MARKETPLACE_BROWSE,
+      PERMISSIONS.SEEKER_MARKETPLACE_ORDER,
     ],
   },
 };

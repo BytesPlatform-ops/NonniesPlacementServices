@@ -53,4 +53,10 @@ export const PERMISSIONS = {
   SEEKER_MESSAGES_SEND: "seeker_messages.send",
   SEEKER_APPOINTMENTS_READ: "seeker_appointments.read",
   SEEKER_APPOINTMENTS_REQUEST: "seeker_appointments.request",
+  SEEKER_MARKETPLACE_BROWSE: "seeker_marketplace.browse",
+  SEEKER_MARKETPLACE_ORDER: "seeker_marketplace.order",
+  MARKETPLACE_LISTINGS_MANAGE_OWN: "marketplace_listings.manage_own",
+  MARKETPLACE_ORDERS_MANAGE_OWN: "marketplace_orders.manage_own",
+  MARKETPLACE_ADMIN_READ: "marketplace_admin.read",
+  MARKETPLACE_ADMIN_MANAGE: "marketplace_admin.manage",
 } as const;

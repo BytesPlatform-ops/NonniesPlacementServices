@@ -698,15 +698,17 @@ model Provider {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  services      ProviderService[]
-  coverageAreas ProviderCoverageArea[]
-  paymentTypes  ProviderPaymentType[]
-  languages     ProviderLanguage[]
-  hours         ProviderHours[]
-  capacity      ProviderCapacity[]
-  referrals     Referral[]
-  appointments  CaseAppointment[]
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services          ProviderService[]
+  coverageAreas     ProviderCoverageArea[]
+  paymentTypes      ProviderPaymentType[]
+  languages         ProviderLanguage[]
+  hours             ProviderHours[]
+  capacity          ProviderCapacity[]
+  listings          ProviderListing[]
+  marketplaceOrders MarketplaceOrder[]
+  referrals         Referral[]
+  appointments      CaseAppointment[]
 
   @@index([status])
   @@index([state])
@@ -730,6 +732,7 @@ model ServiceCategory {
   providerServices ProviderService[]
   serviceRequests  ServiceRequest[]
   capacityRows     ProviderCapacity[]
+  listings         ProviderListing[]
 
   @@index([active])
   @@map("service_categories")
@@ -2294,4 +2297,199 @@ model CaseAppointment {
   @@index([status])
   @@index([scheduledAt])
   @@map("case_appointments")
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace — a PARALLEL domain to the clinical referral workflow.
+//
+// Nothing here participates in Case → ServiceRequest → Referral → Placement.
+// A provider lists a bed, room or unit on its own initiative and a family buys
+// or rents it directly; no referral, no staff brokering, no case required.
+//
+// `ProviderListing.availableQuantity` is the marketplace's OWN inventory and is
+// unrelated to `ProviderCapacity`, which stays exactly what it was: a
+// self-declared clinical availability hint that is never decremented.
+// ---------------------------------------------------------------------------
+
+enum MarketplaceListingType {
+  BED
+  PRIVATE_ROOM
+  SHARED_ROOM
+  UNIT
+  OTHER
+}
+
+enum MarketplaceTransactionType {
+  RENT
+  SALE
+}
+
+/// How a rental price is quoted. Null for a SALE.
+enum MarketplaceBillingPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum MarketplaceListingStatus {
+  DRAFT
+  PUBLISHED
+  /// Temporarily off the marketplace; the listing and its inventory are kept.
+  UNAVAILABLE
+  ARCHIVED
+}
+
+/// Sold-out is DERIVED from availableQuantity = 0, never stored, so the two can
+/// never disagree.
+model ProviderListing {
+  id         String @id @default(uuid()) @db.Uuid
+  providerId String @db.Uuid
+
+  title       String
+  description String?
+
+  listingType     MarketplaceListingType     @default(BED)
+  transactionType MarketplaceTransactionType
+  /// Money is NEVER floating point. Quoted per unit, per billing period for a rental.
+  price           Decimal                    @db.Decimal(12, 2)
+  currency        String                     @default("USD")
+  /// Required for RENT, always null for SALE.
+  billingPeriod   MarketplaceBillingPeriod?
+  /// Informational only in this phase — no deposit is collected.
+  depositAmount   Decimal?                   @db.Decimal(12, 2)
+
+  /// Marketplace inventory. Decremented only when a provider accepts an order.
+  availableQuantity Int @default(0)
+
+  addressLine1 String?
+  city         String?
+  state        String?
+  postalCode   String?
+
+  availableFrom     DateTime? @db.Date
+  /// Free-form features, one per entry ("Ensuite", "Ground floor").
+  amenities         String[]  @default([])
+  /// Optional link to the admin-managed service catalog, for filtering.
+  serviceCategoryId String?   @db.Uuid
+  /// Occupancy restrictions as plain text ("Female residents only").
+  restrictions      String?
+
+  status      MarketplaceListingStatus @default(DRAFT)
+  publishedAt DateTime?
+
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  provider        Provider               @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  serviceCategory ServiceCategory?       @relation(fields: [serviceCategoryId], references: [id], onDelete: SetNull)
+  images          ProviderListingImage[]
+  orders          MarketplaceOrder[]
+
+  @@index([providerId])
+  @@index([status])
+  @@index([transactionType])
+  @@map("provider_listings")
+}
+
+model ProviderListingImage {
+  id        String @id @default(uuid()) @db.Uuid
+  listingId String @db.Uuid
+
+  /// Public CDN URL from the shared content bucket.
+  imageUrl    String
+  /// Object key, kept so the file can be removed. Never returned to a browser.
+  storagePath String?
+  altText     String?
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  listing ProviderListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
+  @@map("provider_listing_images")
+}
+
+enum MarketplacePaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  INVOICE
+}
+
+enum MarketplacePaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum MarketplaceOrderStatus {
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  /// A rental that has started.
+  ACTIVE
+  COMPLETED
+}
+
+/// A family's request to buy or rent a listing.
+///
+/// Commercial terms are SNAPSHOTTED at request time: editing or deleting a
+/// listing afterwards must never change what was agreed, and the snapshot is
+/// also everything a future invoice needs.
+model MarketplaceOrder {
+  id          String @id @default(uuid()) @db.Uuid
+  /// Human-readable reference (MKT-<year>-XXXXXX), like Referral.reference.
+  orderNumber String @unique
+
+  listingId    String  @db.Uuid
+  providerId   String  @db.Uuid
+  seekerUserId String  @db.Uuid
+  /// Optional link to a case the family already holds access to.
+  caseId       String? @db.Uuid
+
+  // ---- snapshot ----
+  transactionType MarketplaceTransactionType
+  listingTitle    String
+  quantity        Int
+  unitPrice       Decimal                    @db.Decimal(12, 2)
+  totalAmount     Decimal                    @db.Decimal(12, 2)
+  currency        String
+  billingPeriod   MarketplaceBillingPeriod?
+
+  requestedStartDate DateTime? @db.Date
+  requestedEndDate   DateTime? @db.Date
+
+  paymentMethod MarketplacePaymentMethod @default(CASH)
+  paymentStatus MarketplacePaymentStatus @default(UNPAID)
+  status        MarketplaceOrderStatus   @default(REQUESTED)
+
+  seekerNote    String?
+  declineReason String?
+
+  /// Set once inventory has been taken for this order, so a cancellation can
+  /// return it exactly once and never twice.
+  quantityReleasedAt DateTime?
+
+  acceptedAt   DateTime?
+  declinedAt   DateTime?
+  cancelledAt  DateTime?
+  paidAt       DateTime?
+  /// Who recorded the cash payment — a provider user or an authorized Nonnis user.
+  paidByUserId String?   @db.Uuid
+  completedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listing  ProviderListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  provider Provider        @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@index([providerId, status])
+  @@index([seekerUserId])
+  @@index([listingId])
+  @@map("marketplace_orders")
 }
