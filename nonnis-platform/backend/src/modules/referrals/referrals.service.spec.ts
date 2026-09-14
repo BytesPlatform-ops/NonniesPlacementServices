@@ -6,6 +6,7 @@ import type { RequestUser } from "../auth/request-user";
 import { ReferralsService } from "./referrals.service";
 import type { ReferralAccessService } from "./referral-access";
 import type { ReferralMailService } from "./referral-mail.service";
+import type { NotificationsService } from "../notifications/notifications.service";
 import type { CreateReferralDto } from "./dto/referrals.dto";
 
 const user = { id: "user-1" } as unknown as RequestUser;
@@ -13,11 +14,16 @@ const workflowEvents = { record: async () => undefined } as unknown as WorkflowE
 const audit = { record: async () => undefined } as unknown as AuditService;
 const mail = {} as unknown as ReferralMailService;
 const access = { ensureCaseForCreate: async () => "org-1" } as unknown as ReferralAccessService;
+// A side effect of referral actions, never a precondition for them.
+const notifications = {
+  raise: async () => null,
+  for: { providerUsers: async () => [], providerOrganizationId: async () => null, caseTeamUsers: async () => [] },
+} as unknown as NotificationsService;
 
 const PROVIDER_ID = "22222222-2222-2222-2222-222222222222";
 
 function build(prisma: unknown) {
-  return new ReferralsService(prisma as PrismaService, workflowEvents, audit, access, mail);
+  return new ReferralsService(prisma as PrismaService, workflowEvents, notifications, audit, access, mail);
 }
 
 describe("ReferralsService.create validation", () => {

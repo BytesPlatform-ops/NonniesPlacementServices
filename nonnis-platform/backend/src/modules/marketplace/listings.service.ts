@@ -4,6 +4,9 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
+import { PERMISSIONS } from "../../common/rbac";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 import { MarketplaceAccessService } from "./marketplace-access";
 import { listingInclude, toListingView, type ListingView } from "./marketplace.serializer";
 import type {
@@ -37,6 +40,7 @@ export class MarketplaceListingsService {
     private readonly prisma: PrismaService,
     private readonly access: MarketplaceAccessService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -322,6 +326,22 @@ export class MarketplaceListingsService {
       organizationId: existing.provider.organizationId,
       actorUserId: user.id,
       metadata: { from: existing.status, to: dto.status },
+    });
+    // The provider needs to know their listing came down, and why to look.
+    await this.notifications.raise({
+      type: NOTIFICATION_TYPES.MARKETPLACE_LISTING_MODERATED,
+      title: "A listing was taken down",
+      message: `${row.title} was set to ${dto.status.toLowerCase()} by Nonnis.`,
+      recipientUserIds: await this.notifications.for.providerUsers(
+        row.providerId,
+        PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN,
+      ),
+      eventKey: eventKey(NOTIFICATION_TYPES.MARKETPLACE_LISTING_MODERATED, row.id, dto.status),
+      route: ROUTES.providerListings(),
+      entityType: "ProviderListing",
+      entityId: row.id,
+      organizationId: existing.provider.organizationId,
+      actorUserId: user.id,
     });
     return toListingView(row);
   }

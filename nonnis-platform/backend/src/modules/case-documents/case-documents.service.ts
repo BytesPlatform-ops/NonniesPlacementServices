@@ -6,6 +6,8 @@ import { PrismaService } from "../../database/prisma.service";
 import { PrivateFileStorageService } from "../../common/storage/private-file-storage.service";
 import type { AppConfig } from "../../config/configuration";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 // The platform already has one definition of what it accepts as an uploaded
 // file — MIME allowlist, size cap, filename sanitising. Case documents reuse it
 // rather than introducing a second, divergent policy.
@@ -67,6 +69,7 @@ export class CaseDocumentsService {
     private readonly storage: PrivateFileStorageService,
     private readonly config: ConfigService<AppConfig, true>,
     private readonly workflowEvents: WorkflowEventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   static toView(row: {
@@ -160,6 +163,23 @@ export class CaseDocumentsService {
       source: "MANUAL",
       metadata: { documentId: row.id, title: row.title, fromFamily: row.requestedFromSeeker },
     });
+    // Only a request addressed TO the family is theirs to hear about; an
+    // internal case document is not.
+    if (row.requestedFromSeeker) {
+      await this.notifications.raise({
+        type: NOTIFICATION_TYPES.DOCUMENT_REQUESTED,
+        title: "A document was requested",
+        message: `${row.title} is needed for your case.`,
+        recipientUserIds: await this.notifications.for.caseFamilyUsers(input.caseId),
+        eventKey: eventKey(NOTIFICATION_TYPES.DOCUMENT_REQUESTED, row.id),
+        route: ROUTES.seekerDocuments(),
+        entityType: "CaseDocument",
+        entityId: row.id,
+        caseId: input.caseId,
+        organizationId: input.organizationId,
+        actorUserId,
+      });
+    }
     return CaseDocumentsService.toView(row);
   }
 

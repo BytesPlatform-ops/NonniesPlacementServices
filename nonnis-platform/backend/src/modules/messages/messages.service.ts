@@ -4,6 +4,9 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import type { RequestUser } from "../auth/request-user";
 import { MessageAccessService } from "./message-access";
+import { PERMISSIONS } from "../../common/rbac";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 import { toMessageView, type MessageView } from "./messages.serializer";
 import type { ListMessagesDto, SendMessageDto } from "./dto/messages.dto";
 
@@ -19,6 +22,7 @@ export class MessagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: MessageAccessService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async resolveNames(ids: string[]): Promise<Map<string, string | null>> {
@@ -106,7 +110,9 @@ export class MessagesService {
 
   async sendFamilyForStaff(user: RequestUser, caseId: string, dto: SendMessageDto): Promise<MessageView> {
     await this.access.caseTeamAccess(user, caseId);
-    return this.create(caseId, "CARE_SEEKER", user.id, dto.body);
+    const message = await this.create(caseId, "CARE_SEEKER", user.id, dto.body);
+    await this.notifyFamilyThread(caseId, message.id, user.id, true);
+    return message;
   }
 
   /**
@@ -122,6 +128,50 @@ export class MessagesService {
   }
 
   async sendFamilyForSeeker(caseId: string, senderUserId: string, dto: SendMessageDto): Promise<MessageView> {
-    return this.create(caseId, "CARE_SEEKER", senderUserId, dto.body);
+    const message = await this.create(caseId, "CARE_SEEKER", senderUserId, dto.body);
+    await this.notifyFamilyThread(caseId, message.id, senderUserId, false);
+    return message;
+  }
+
+  /**
+   * Tells the other side of the family thread that a message arrived.
+   *
+   * Staff writing notifies the family; a family member writing notifies the
+   * case team AND the other relatives on the case, who share the thread. The
+   * sender is dropped by the notification service itself.
+   *
+   * The message id is the discriminator: every message is a real, separate
+   * event, so these are never collapsed into one the way a repeated status
+   * change is.
+   */
+  private async notifyFamilyThread(
+    caseId: string,
+    messageId: string,
+    senderUserId: string,
+    fromStaff: boolean,
+  ): Promise<void> {
+    const family = await this.notifications.for.caseFamilyUsers(caseId);
+    const recipients = fromStaff
+      ? family
+      : [...family, ...(await this.notifications.for.caseTeamUsers(caseId, PERMISSIONS.MESSAGES_READ))];
+    await this.notifications.raise({
+      type: fromStaff
+        ? NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_STAFF
+        : NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_FAMILY,
+      title: fromStaff ? "New message from your care team" : "New message from a family member",
+      // The body is deliberately not copied into the notification: it is read
+      // in the thread, behind the case check.
+      message: "Open Messages to read it.",
+      recipientUserIds: recipients,
+      eventKey: eventKey(
+        fromStaff ? NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_STAFF : NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_FAMILY,
+        messageId,
+      ),
+      route: fromStaff ? ROUTES.seekerMessages() : ROUTES.staffCase(caseId),
+      entityType: "Message",
+      entityId: messageId,
+      caseId,
+      actorUserId: senderUserId,
+    });
   }
 }

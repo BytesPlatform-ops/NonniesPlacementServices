@@ -4,6 +4,9 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
+import { PERMISSIONS } from "../../common/rbac";
 import { MarketplaceAccessService, generateOrderNumber } from "./marketplace-access";
 import { orderInclude, toOrderView, type OrderView } from "./marketplace.serializer";
 import type { CreateOrderDto, DeclineOrderDto, OrdersQueryDto } from "./dto/marketplace.dto";
@@ -31,7 +34,93 @@ export class MarketplaceOrdersService {
     private readonly prisma: PrismaService,
     private readonly access: MarketplaceAccessService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Tell the provider organization about something on one of its orders.
+   *
+   * The audience is resolved from the order's own provider and the permission
+   * that governs acting on orders, so Provider A is structurally incapable of
+   * receiving Provider B's notifications, and a provider role without that
+   * permission is simply not in the list.
+   */
+  private async notifyProvider(
+    order: { id: string; providerId: string; orderNumber: string; listingTitle: string },
+    type: (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES],
+    title: string,
+    message: string,
+    actorUserId: string,
+  ): Promise<void> {
+    const recipients = await this.notifications.for.providerUsers(
+      order.providerId,
+      PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
+    );
+    await this.notifications.raise({
+      type,
+      title,
+      message,
+      recipientUserIds: recipients,
+      eventKey: eventKey(type, order.id),
+      route: ROUTES.providerOrder(),
+      entityType: "MarketplaceOrder",
+      entityId: order.id,
+      organizationId: await this.notifications.for.providerOrganizationId(order.providerId),
+      actorUserId,
+      metadata: { orderNumber: order.orderNumber },
+    });
+  }
+
+  /**
+   * Loads an order and notifies the family member who placed it.
+   *
+   * The message is built from the loaded row rather than passed in, so every
+   * caller names the provider and order the same way.
+   */
+  private async notifySeekerFor(
+    orderId: string,
+    type: (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES],
+    title: string,
+    message: (order: { orderNumber: string; provider: { displayName: string } }) => string,
+    actorUserId: string,
+  ): Promise<void> {
+    const order = await this.prisma.marketplaceOrder.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        seekerUserId: true,
+        orderNumber: true,
+        listingTitle: true,
+        caseId: true,
+        provider: { select: { displayName: true } },
+      },
+    });
+    if (!order) return;
+    await this.notifySeeker(order, type, title, message(order), actorUserId);
+  }
+
+  /** Tell the family member who placed the order. */
+  private async notifySeeker(
+    order: { id: string; seekerUserId: string; orderNumber: string; listingTitle: string; caseId?: string | null },
+    type: (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES],
+    title: string,
+    message: string,
+    actorUserId: string,
+  ): Promise<void> {
+    await this.notifications.raiseForUser({
+      type,
+      title,
+      message,
+      recipientUserId: order.seekerUserId,
+      eventKey: eventKey(type, order.id),
+      route: ROUTES.seekerOrders(),
+      entityType: "MarketplaceOrder",
+      entityId: order.id,
+      caseId: order.caseId ?? null,
+      actorUserId,
+      metadata: { orderNumber: order.orderNumber },
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Family side
@@ -106,6 +195,13 @@ export class MarketplaceOrdersService {
       actorUserId: user.id,
       metadata: { orderNumber: row.orderNumber, listingId: listing.id, quantity: dto.quantity },
     });
+    await this.notifyProvider(
+      row,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_REQUESTED,
+      "New marketplace request",
+      `A family asked to ${listing.transactionType === "RENT" ? "rent" : "buy"} ${dto.quantity} × ${listing.title}.`,
+      user.id,
+    );
     return toOrderView(row);
   }
 
@@ -159,6 +255,17 @@ export class MarketplaceOrdersService {
       actorUserId: user.id,
       metadata: { by: "seeker" },
     });
+    const cancelled = await this.prisma.marketplaceOrder.findUniqueOrThrow({
+      where: { id: existing.id },
+      select: { id: true, providerId: true, orderNumber: true, listingTitle: true },
+    });
+    await this.notifyProvider(
+      cancelled,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_CANCELLED_BY_SEEKER,
+      "Request withdrawn",
+      `${cancelled.orderNumber} for ${cancelled.listingTitle} was withdrawn by the family.`,
+      user.id,
+    );
     return this.getOwn(user, existing.id);
   }
 
@@ -242,6 +349,13 @@ export class MarketplaceOrdersService {
       );
     });
 
+    await this.notifySeekerFor(
+      order.id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_ACCEPTED,
+      "Provider accepted your request",
+      (o) => `${o.provider.displayName} accepted ${o.orderNumber}. Payment is arranged directly with them in cash.`,
+      user.id,
+    );
     return this.getForProvider(user, order.id);
   }
 
@@ -265,6 +379,13 @@ export class MarketplaceOrdersService {
       actorUserId: user.id,
       metadata: { hasReason: Boolean(dto.reason) },
     });
+    await this.notifySeekerFor(
+      id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_DECLINED,
+      "Provider could not accept",
+      (o) => `${o.provider.displayName} was unable to accept ${o.orderNumber}.`,
+      user.id,
+    );
     return this.getForProvider(user, id);
   }
 
@@ -303,6 +424,13 @@ export class MarketplaceOrdersService {
       // The agreed total, not payment instrument detail — there is none to hold.
       metadata: { method: "CASH", amount: row.totalAmount.toFixed(2), currency: row.currency, byAdmin: asAdmin },
     });
+    await this.notifySeekerFor(
+      id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_PAYMENT_RECORDED,
+      "Payment received",
+      (o) => `${o.provider.displayName} recorded your cash payment for ${o.orderNumber}.`,
+      user.id,
+    );
     return toOrderView(row);
   }
 
@@ -324,6 +452,13 @@ export class MarketplaceOrdersService {
       organizationId: provider.organizationId,
       actorUserId: user.id,
     });
+    await this.notifySeekerFor(
+      id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_RENTAL_STARTED,
+      "Your rental has started",
+      (o) => `${o.orderNumber} with ${o.provider.displayName} is now active.`,
+      user.id,
+    );
     return this.getForProvider(user, id);
   }
 
@@ -345,6 +480,13 @@ export class MarketplaceOrdersService {
       organizationId: provider.organizationId,
       actorUserId: user.id,
     });
+    await this.notifySeekerFor(
+      id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_COMPLETED,
+      "Order completed",
+      (o) => `${o.orderNumber} with ${o.provider.displayName} is complete.`,
+      user.id,
+    );
     return this.getForProvider(user, id);
   }
 
@@ -401,6 +543,13 @@ export class MarketplaceOrdersService {
       );
     });
 
+    await this.notifySeekerFor(
+      order.id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_CANCELLED_BY_PROVIDER,
+      "Your order was cancelled",
+      (o) => `${o.provider.displayName} cancelled ${o.orderNumber}. Contact them or Nonnis if you need help.`,
+      user.id,
+    );
     return this.getForProvider(user, order.id);
   }
 

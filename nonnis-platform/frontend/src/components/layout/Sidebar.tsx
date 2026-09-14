@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUnreadMessages } from "@/providers/unread-messages-provider";
+import { useNotifications } from "@/providers/notifications-provider";
 import {
   Activity,
   List,
@@ -80,6 +81,8 @@ const ICONS: Record<string, LucideIcon> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { count: unread } = useUnreadMessages();
+  // The same context the header bell reads, so the two counts cannot drift.
+  const { unread: unreadNotifications } = useNotifications();
   const { permissions, me, activeOrganizationId } = useAuth();
   // A family member is checked first: they have no organization, so the
   // provider check below would fall through to the staff navigation.
@@ -130,6 +133,14 @@ export function Sidebar() {
                       <span className="flex-1">{item.label}</span>
                       {/* A persistent count answers "is anything waiting?" at a
                           glance; the toast only fires at the moment of arrival. */}
+                      {item.href === "/notifications" && unreadNotifications !== null && unreadNotifications > 0 ? (
+                        <span
+                          aria-label={`${unreadNotifications} unread notification${unreadNotifications === 1 ? "" : "s"}`}
+                          className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                        >
+                          {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                        </span>
+                      ) : null}
                       {item.href === "/communications/inbox" && unread !== null && unread > 0 ? (
                         <span
                           aria-label={`${unread} unread conversation${unread === 1 ? "" : "s"}`}

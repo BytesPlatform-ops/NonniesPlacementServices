@@ -4,6 +4,21 @@ import type { PrismaService } from "../../database/prisma.service";
 import type { PrivateFileStorageService } from "../../common/storage/private-file-storage.service";
 import type { WorkflowEventsService } from "../workflow-events/workflow-events.service";
 import type { ConfigService } from "@nestjs/config";
+import type { NotificationsService } from "../notifications/notifications.service";
+
+// Notifications are a side effect of these operations, never a precondition.
+const notificationsDouble = {
+  raise: jest.fn().mockResolvedValue(null),
+  raiseForUser: jest.fn().mockResolvedValue(null),
+  for: {
+    providerUsers: jest.fn().mockResolvedValue([]),
+    providerOrganizationId: jest.fn().mockResolvedValue(null),
+    caseFamilyUsers: jest.fn().mockResolvedValue([]),
+    caseTeamUsers: jest.fn().mockResolvedValue([]),
+    organizationUsers: jest.fn().mockResolvedValue([]),
+    platformUsers: jest.fn().mockResolvedValue([]),
+  },
+} as unknown as NotificationsService;
 
 function doc(overrides: Record<string, unknown> = {}) {
   return {
@@ -47,7 +62,7 @@ function build(overrides: { findMany?: unknown; findFirst?: unknown; update?: un
   } as unknown as PrivateFileStorageService;
   const events = { record: jest.fn().mockResolvedValue(undefined) } as unknown as WorkflowEventsService;
   const config = { get: jest.fn().mockReturnValue(300) } as unknown as ConfigService<never, true>;
-  const svc = new CaseDocumentsService(prisma, storage, config as never, events);
+  const svc = new CaseDocumentsService(prisma, storage, config as never, events, notificationsDouble);
   return { svc, prisma, storage, events, findMany, findFirst, update, create };
 }
 

@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type { CaseAppointmentStatus, CaseAppointmentType } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
+import { PERMISSIONS } from "../../common/rbac";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 
 export interface CaseAppointmentView {
   id: string;
@@ -76,6 +79,7 @@ export class CaseAppointmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflowEvents: WorkflowEventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   static toView(row: AppointmentRow, now = new Date()): CaseAppointmentView {
@@ -266,6 +270,20 @@ export class CaseAppointmentsService {
       actorUserId,
       source: "MANUAL",
       metadata: { appointmentId: row.id, requestedByFamily: true },
+    });
+    // The case team has something to arrange.
+    await this.notifications.raise({
+      type: NOTIFICATION_TYPES.APPOINTMENT_REQUESTED,
+      title: "A family requested a tour",
+      message: input.note?.trim() ? `"${input.note.trim()}"` : "A family asked to visit a provider.",
+      recipientUserIds: await this.notifications.for.caseTeamUsers(input.caseId, PERMISSIONS.CASE_APPOINTMENTS_MANAGE),
+      eventKey: eventKey(NOTIFICATION_TYPES.APPOINTMENT_REQUESTED, row.id),
+      route: ROUTES.staffCase(input.caseId),
+      entityType: "CaseAppointment",
+      entityId: row.id,
+      caseId: input.caseId,
+      organizationId: input.organizationId,
+      actorUserId,
     });
     return CaseAppointmentsService.toView(row);
   }

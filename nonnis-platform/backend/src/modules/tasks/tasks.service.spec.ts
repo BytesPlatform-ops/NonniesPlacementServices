@@ -5,6 +5,21 @@ import type { WorkflowEventsService } from "../workflow-events/workflow-events.s
 import type { RequestUser } from "../auth/request-user";
 import { TasksService } from "./tasks.service";
 import type { TaskAccessService } from "./task-access";
+import type { NotificationsService } from "../notifications/notifications.service";
+
+// Notifications are a side effect of these operations, never a precondition.
+const notificationsDouble = {
+  raise: jest.fn().mockResolvedValue(null),
+  raiseForUser: jest.fn().mockResolvedValue(null),
+  for: {
+    providerUsers: jest.fn().mockResolvedValue([]),
+    providerOrganizationId: jest.fn().mockResolvedValue(null),
+    caseFamilyUsers: jest.fn().mockResolvedValue([]),
+    caseTeamUsers: jest.fn().mockResolvedValue([]),
+    organizationUsers: jest.fn().mockResolvedValue([]),
+    platformUsers: jest.fn().mockResolvedValue([]),
+  },
+} as unknown as NotificationsService;
 
 const user = { id: "user-1" } as unknown as RequestUser;
 const workflowEvents = { record: async () => undefined } as unknown as WorkflowEventsService;
@@ -35,7 +50,7 @@ describe("TasksService.create", () => {
   it("rejects an ineligible assignee", async () => {
     const access = { ensureCaseAccess: async () => "org-1", isEligibleAssignee: async () => false } as unknown as TaskAccessService;
     const prisma = {} as unknown as PrismaService;
-    const svc = new TasksService(prisma, workflowEvents, audit, access);
+    const svc = new TasksService(prisma, workflowEvents, audit, access, notificationsDouble);
     await expect(svc.create(user, "case-1", { title: "x", assigneeUserId: ASSIGNEE })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
@@ -44,7 +59,7 @@ describe("TasksService.transition", () => {
   it("rejects an illegal transition", async () => {
     const access = { loadTask: async () => task({ status: "COMPLETED" }) } as unknown as TaskAccessService;
     const prisma = {} as unknown as PrismaService;
-    const svc = new TasksService(prisma, workflowEvents, audit, access);
+    const svc = new TasksService(prisma, workflowEvents, audit, access, notificationsDouble);
     await expect(svc.transition(user, "task-1", "IN_PROGRESS", "TASK_STARTED")).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
@@ -63,7 +78,7 @@ describe("TasksService.transition", () => {
         }),
       user: { findMany: async () => [] },
     } as unknown as PrismaService;
-    const svc = new TasksService(prisma, workflowEvents, audit, access);
+    const svc = new TasksService(prisma, workflowEvents, audit, access, notificationsDouble);
     const r = await svc.transition(user, "task-1", "COMPLETED", "TASK_COMPLETED");
     expect(r.status).toBe("COMPLETED");
     expect(updateArg!.data.completedByUserId).toBe("user-1");

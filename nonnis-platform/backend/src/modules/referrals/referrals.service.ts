@@ -5,6 +5,8 @@ import type { PaginatedResult } from "../../common/types/api-response";
 import { PERMISSIONS } from "../../common/rbac";
 import { AuditService } from "../audit/audit.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 import type { RequestUser } from "../auth/request-user";
 import { ReferralAccessService, type ReferralRef } from "./referral-access";
 import { ReferralMailService } from "./referral-mail.service";
@@ -50,6 +52,7 @@ export class ReferralsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflowEvents: WorkflowEventsService,
+    private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
     private readonly access: ReferralAccessService,
     private readonly mail: ReferralMailService,
@@ -206,7 +209,78 @@ export class ReferralsService {
       await applyCaseStatus(tx, this.workflowEvents, ref.caseId, "REFERRAL_SENT", ["READY_FOR_REVIEW", "MATCHING"], user.id, "Referral sent");
     });
     await this.notify(user, ref);
+    await this.notifyReferralSent(user, referralId);
     return this.loadStaffDetail(referralId);
+  }
+
+  /**
+   * In-app notification for the provider a referral was just sent to.
+   *
+   * Separate from `notify()`, which sends the provider an EMAIL. The two serve
+   * different readers — the mailbox and the portal — and neither should depend
+   * on the other succeeding.
+   */
+  private async notifyReferralSent(user: RequestUser, referralId: string): Promise<void> {
+    const referral = await this.prisma.referral.findUnique({
+      where: { id: referralId },
+      select: { id: true, reference: true, providerId: true, caseId: true },
+    });
+    if (!referral) return;
+    const recipients = await this.notifications.for.providerUsers(
+      referral.providerId,
+      PERMISSIONS.REFERRALS_RESPOND_OWN,
+    );
+    await this.notifications.raise({
+      type: NOTIFICATION_TYPES.REFERRAL_RECEIVED,
+      title: "New referral to review",
+      // No patient or clinical detail: the portal is where that is read.
+      message: `Referral ${referral.reference} is waiting for your response.`,
+      recipientUserIds: recipients,
+      eventKey: eventKey(NOTIFICATION_TYPES.REFERRAL_RECEIVED, referral.id),
+      route: ROUTES.providerReferral(referral.id),
+      entityType: "Referral",
+      entityId: referral.id,
+      organizationId: await this.notifications.for.providerOrganizationId(referral.providerId),
+      actorUserId: user.id,
+      metadata: { reference: referral.reference },
+    });
+  }
+
+  /**
+   * In-app notification for the case team when a provider answers.
+   *
+   * The audience is the case's own organization plus its assigned
+   * professional, so a Discharge Professional hears about their own case and
+   * about no one else's.
+   */
+  private async notifyReferralResponded(
+    user: RequestUser,
+    referralId: string,
+    action: string,
+  ): Promise<void> {
+    const referral = await this.prisma.referral.findUnique({
+      where: { id: referralId },
+      select: { id: true, reference: true, caseId: true, provider: { select: { displayName: true } } },
+    });
+    if (!referral) return;
+    const recipients = await this.notifications.for.caseTeamUsers(referral.caseId, PERMISSIONS.REFERRALS_READ);
+    const verb =
+      action === "ACCEPT" ? "accepted" : action === "DECLINE" ? "was unable to accept" : "asked for more information on";
+    await this.notifications.raise({
+      type: NOTIFICATION_TYPES.REFERRAL_RESPONDED,
+      title: `Provider ${action === "ACCEPT" ? "accepted a referral" : "responded to a referral"}`,
+      message: `${referral.provider.displayName} ${verb} referral ${referral.reference}.`,
+      recipientUserIds: recipients,
+      // The action is part of the key: a provider may legitimately request
+      // information and then accept, and both are worth hearing about.
+      eventKey: eventKey(NOTIFICATION_TYPES.REFERRAL_RESPONDED, referral.id, action),
+      route: ROUTES.staffCase(referral.caseId),
+      entityType: "Referral",
+      entityId: referral.id,
+      caseId: referral.caseId,
+      actorUserId: user.id,
+      metadata: { reference: referral.reference, action },
+    });
   }
 
   /** Fire the transactional notification (outside the DB transaction) and record its outcome. */
@@ -365,6 +439,7 @@ export class ReferralsService {
         await this.event(tx, ref.caseOrganizationId, ref.caseId, "REFERRAL_DECLINED", user.id, { referralId, declineReason: dto.declineReason });
       }
     });
+    await this.notifyReferralResponded(user, referralId, dto.action);
     return this.loadProviderDetail(referralId);
   }
 

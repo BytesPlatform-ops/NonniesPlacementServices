@@ -2,6 +2,21 @@ import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { CaseAppointmentsService } from "./case-appointments.service";
 import type { PrismaService } from "../../database/prisma.service";
 import type { WorkflowEventsService } from "../workflow-events/workflow-events.service";
+import type { NotificationsService } from "../notifications/notifications.service";
+
+// Notifications are a side effect of these operations, never a precondition.
+const notificationsDouble = {
+  raise: jest.fn().mockResolvedValue(null),
+  raiseForUser: jest.fn().mockResolvedValue(null),
+  for: {
+    providerUsers: jest.fn().mockResolvedValue([]),
+    providerOrganizationId: jest.fn().mockResolvedValue(null),
+    caseFamilyUsers: jest.fn().mockResolvedValue([]),
+    caseTeamUsers: jest.fn().mockResolvedValue([]),
+    organizationUsers: jest.fn().mockResolvedValue([]),
+    platformUsers: jest.fn().mockResolvedValue([]),
+  },
+} as unknown as NotificationsService;
 
 function appt(overrides: Record<string, unknown> = {}) {
   return {
@@ -34,7 +49,7 @@ function build(existing = appt()) {
     caseAppointment: { findFirst, update, create, findMany: jest.fn().mockResolvedValue([existing]) },
   } as unknown as PrismaService;
   const events = { record: jest.fn().mockResolvedValue(undefined) } as unknown as WorkflowEventsService;
-  return { svc: new CaseAppointmentsService(prisma, events), findFirst, update, create, events };
+  return { svc: new CaseAppointmentsService(prisma, events, notificationsDouble), findFirst, update, create, events };
 }
 
 describe("CaseAppointmentsService", () => {
@@ -101,7 +116,7 @@ describe("CaseAppointmentsService", () => {
     it("404s for an appointment on another case", async () => {
       const findFirst = jest.fn().mockResolvedValue(null);
       const prisma = { caseAppointment: { findFirst } } as unknown as PrismaService;
-      const svc = new CaseAppointmentsService(prisma, { record: jest.fn() } as unknown as WorkflowEventsService);
+      const svc = new CaseAppointmentsService(prisma, { record: jest.fn() } as unknown as WorkflowEventsService, notificationsDouble);
       await expect(
         svc.update({ caseId: "case-b", organizationId: "org", appointmentId: "appt-1" }, "staff-1"),
       ).rejects.toBeInstanceOf(NotFoundException);

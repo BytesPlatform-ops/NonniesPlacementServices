@@ -527,6 +527,7 @@ model User {
   capacityUpdates       ProviderCapacity[]       @relation("CapacityUpdatedBy")
   careSeekerAccess      CareSeekerCaseAccess[]   @relation("CareSeekerAccessUser")
   careSeekerGrants      CareSeekerCaseAccess[]   @relation("CareSeekerAccessGrantedBy")
+  notifications         NotificationRecipient[]  @relation("UserNotifications")
 
   @@index([status])
   @@map("users")
@@ -2492,4 +2493,89 @@ model MarketplaceOrder {
   @@index([seekerUserId])
   @@index([listingId])
   @@map("marketplace_orders")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+//
+// One `Notification` holds the payload once; a `NotificationRecipient` row per
+// person carries only the delivery and read state. Fan-out to a whole provider
+// organization therefore costs one payload and N small rows, and "unread" is
+// `readAt IS NULL` on the recipient row — never a client-side flag.
+//
+// `eventKey` is the idempotency handle: a business event builds a stable key
+// (e.g. "marketplace_order.accepted:<orderId>"), so replaying the same event —
+// a retried request, a double-clicked button — updates nothing rather than
+// notifying the same people again.
+// ---------------------------------------------------------------------------
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+model Notification {
+  id       String               @id @default(uuid()) @db.Uuid
+  /// Stable event code, e.g. "marketplace_order.requested". Kept as a string
+  /// rather than an enum so a new notification type needs no migration.
+  type     String
+  priority NotificationPriority @default(NORMAL)
+
+  title   String
+  message String
+
+  /// What the notification is about, for grouping and for the deep link.
+  entityType String?
+  entityId   String? @db.Uuid
+  /// Where the user should land. Advisory only — every destination re-checks
+  /// authorization when it is opened; this is never itself a grant.
+  route      String?
+
+  /// Scope the event happened in, used only for operational filtering.
+  organizationId String? @db.Uuid
+  caseId         String? @db.Uuid
+  /// Who caused it, when a person did. Null for system-generated events.
+  actorUserId    String? @db.Uuid
+
+  metadata Json?
+  /// One occurrence of one business event. Unique, so a replay is a no-op.
+  eventKey String? @unique
+
+  /// Optional housekeeping horizon for transient notices.
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients NotificationRecipient[]
+
+  @@index([type])
+  @@index([priority])
+  @@index([entityType, entityId])
+  @@index([organizationId])
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  id              String @id @default(uuid()) @db.Uuid
+  notificationId  String @db.Uuid
+  recipientUserId String @db.Uuid
+
+  /// Null means unread. The single source of truth for every badge and list.
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  recipient    User         @relation("UserNotifications", fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  /// A person is notified once per event, whatever path reached them.
+  @@unique([notificationId, recipientUserId])
+  /// Serves the two hot reads: the unread badge, and the newest-first list.
+  @@index([recipientUserId, readAt])
+  @@index([recipientUserId, createdAt])
+  @@map("notification_recipients")
 }

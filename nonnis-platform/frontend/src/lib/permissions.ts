@@ -59,4 +59,5 @@ export const PERMISSIONS = {
   MARKETPLACE_ORDERS_MANAGE_OWN: "marketplace_orders.manage_own",
   MARKETPLACE_ADMIN_READ: "marketplace_admin.read",
   MARKETPLACE_ADMIN_MANAGE: "marketplace_admin.manage",
+  NOTIFICATIONS_READ: "notifications.read",
 } as const;

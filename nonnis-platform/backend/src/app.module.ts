@@ -20,6 +20,7 @@ import { ProviderPortalModule } from "./modules/provider-portal/provider-portal.
 import { ReadinessModule } from "./modules/readiness/readiness.module";
 import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { ReportsModule } from "./modules/reports/reports.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { MarketplaceModule } from "./modules/marketplace/marketplace.module";
 import { CommunicationsModule } from "./modules/communications/communications.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
@@ -54,6 +55,7 @@ import { UsersModule } from "./modules/users/users.module";
     ContentModule,
     ReportsModule,
     CommunicationsModule,
+    NotificationsModule,
     MarketplaceModule,
   ],
 })

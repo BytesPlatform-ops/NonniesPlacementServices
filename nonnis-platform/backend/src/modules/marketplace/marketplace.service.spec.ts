@@ -7,6 +7,8 @@ import type { PrismaService } from "../../database/prisma.service";
 import type { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
 import { PERMISSIONS } from "../../common/rbac";
+import type { NotificationsService } from "../notifications/notifications.service";
+import type { NotificationAudienceService } from "../notifications/notification-audience.service";
 
 // ---------------------------------------------------------------------------
 // Actors
@@ -100,13 +102,24 @@ function harness(over: Record<string, unknown> = {}) {
     );
 
   const audit = { record: jest.fn().mockResolvedValue(undefined) } as unknown as AuditService;
+  // Notifications are a side effect of these operations, never a precondition:
+  // the double records what would be raised without affecting any outcome.
+  const notifications = {
+    raise: jest.fn().mockResolvedValue({ notificationId: "n1", delivered: 1 }),
+    raiseForUser: jest.fn().mockResolvedValue({ notificationId: "n1", delivered: 1 }),
+    for: {
+      providerUsers: jest.fn().mockResolvedValue(["prov-user-a"]),
+      providerOrganizationId: jest.fn().mockResolvedValue("org-a"),
+    } as unknown as NotificationAudienceService,
+  } as unknown as NotificationsService;
   const typed = prisma as unknown as PrismaService;
   const access = new MarketplaceAccessService(typed);
   return {
     prisma,
     audit,
-    listings: new MarketplaceListingsService(typed, access, audit),
-    orders: new MarketplaceOrdersService(typed, access, audit),
+    notifications,
+    listings: new MarketplaceListingsService(typed, access, audit, notifications),
+    orders: new MarketplaceOrdersService(typed, access, audit, notifications),
     listingUpdateMany,
     listingUpdate,
     orderUpdateMany,
@@ -562,6 +575,15 @@ describe("Marketplace orders — recording the cash payment", () => {
           provider: { id: "provider-a", displayName: "Sunrise", city: null, state: null, phone: null },
         }),
         findFirst: jest.fn().mockResolvedValue({ id: "order-1" }),
+        // Read back by the seeker notification that follows a recorded payment.
+        findUnique: jest.fn().mockResolvedValue({
+          id: "order-1",
+          seekerUserId: "seeker-1",
+          orderNumber: "MKT-2026-ABCDEF",
+          listingTitle: "Private room",
+          caseId: null,
+          provider: { displayName: "Sunrise" },
+        }),
         findMany: jest.fn(),
         count: jest.fn(),
       },

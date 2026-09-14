@@ -18,6 +18,7 @@ const NAV: NavGroup[] = [
       { label: "Operations", href: "/operations", permission: PERMISSIONS.CASES_READ_ALL },
       { label: "Form Submissions", href: "/operations/form-submissions", permission: PERMISSIONS.FORM_SUBMISSIONS_READ },
       { label: "Marketplace", href: "/operations/marketplace", permission: PERMISSIONS.MARKETPLACE_ADMIN_READ },
+      { label: "Notifications", href: "/notifications", permission: PERMISSIONS.NOTIFICATIONS_READ },
       { label: "Dashboard", href: "/dashboard", permission: PERMISSIONS.CASES_READ },
       { label: "Cases", href: "/cases", permission: PERMISSIONS.CASES_READ },
       { label: "Tasks", href: "/tasks", permission: PERMISSIONS.TASKS_READ },
@@ -81,6 +82,7 @@ const PROVIDER_NAV: NavGroup[] = [
       { label: "Hours", href: "/provider/hours", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Capacity", href: "/provider/capacity", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Team", href: "/provider/team", permission: PERMISSIONS.USERS_READ },
+      { label: "Notifications", href: "/notifications", permission: PERMISSIONS.NOTIFICATIONS_READ },
     ],
   },
 ];
@@ -107,6 +109,7 @@ const SEEKER_NAV: NavGroup[] = [
       { label: "Documents", href: "/seeker/documents", permission: PERMISSIONS.SEEKER_DOCUMENTS_READ },
       { label: "Messages", href: "/seeker/messages", permission: PERMISSIONS.SEEKER_MESSAGES_READ },
       { label: "Progress", href: "/seeker/progress", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "Notifications", href: "/notifications", permission: PERMISSIONS.NOTIFICATIONS_READ },
       { label: "Account", href: "/seeker/account", permission: PERMISSIONS.SEEKER_CASE_READ },
     ],
   },

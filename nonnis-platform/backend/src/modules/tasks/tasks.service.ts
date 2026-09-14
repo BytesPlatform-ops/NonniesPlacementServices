@@ -4,6 +4,8 @@ import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import { WorkflowEventsService } from "../workflow-events/workflow-events.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 import type { RequestUser } from "../auth/request-user";
 import { TaskAccessService } from "./task-access";
 import { toTaskView, type CaseTaskView } from "./tasks.serializer";
@@ -24,7 +26,39 @@ export class TasksService {
     private readonly workflowEvents: WorkflowEventsService,
     private readonly audit: AuditService,
     private readonly access: TaskAccessService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Tell someone a task is now theirs.
+   *
+   * Only the assignee is notified — a task is one person's work, and telling a
+   * whole organization about it would be noise for everyone but them.
+   */
+  private async notifyAssignee(
+    taskId: string,
+    assigneeUserId: string,
+    caseId: string,
+    organizationId: string,
+    title: string,
+    actorUserId: string,
+  ): Promise<void> {
+    await this.notifications.raiseForUser({
+      type: NOTIFICATION_TYPES.TASK_ASSIGNED,
+      title: "A task was assigned to you",
+      message: title,
+      recipientUserId: assigneeUserId,
+      // The assignee is part of the key: reassigning to someone else is a new
+      // event for the new person, not a replay of the old one.
+      eventKey: eventKey(NOTIFICATION_TYPES.TASK_ASSIGNED, taskId, assigneeUserId),
+      route: ROUTES.staffTasks(),
+      entityType: "Task",
+      entityId: taskId,
+      caseId,
+      organizationId,
+      actorUserId,
+    });
+  }
 
   private async resolveNames(ids: Array<string | null | undefined>): Promise<Map<string, string | null>> {
     const list = Array.from(new Set(ids.filter((v): v is string => Boolean(v))));
@@ -69,6 +103,11 @@ export class TasksService {
       if (dto.assigneeUserId) await this.event(tx, organizationId, caseId, "TASK_ASSIGNED", user.id, { taskId: created.id, assigneeUserId: dto.assigneeUserId });
       return created;
     });
+    // Notified after the transaction commits: nobody should be told about a
+    // task that a rollback then un-creates.
+    if (task.assigneeUserId) {
+      await this.notifyAssignee(task.id, task.assigneeUserId, caseId, organizationId, task.title, user.id);
+    }
     return this.view(task);
   }
 
@@ -149,6 +188,10 @@ export class TasksService {
       }
       return next;
     });
+    // After the commit, and only for the person it was just handed to.
+    if (reassigning && updated.assigneeUserId) {
+      await this.notifyAssignee(updated.id, updated.assigneeUserId, task.caseId, task.organizationId, updated.title, user.id);
+    }
     return this.view(updated);
   }
 

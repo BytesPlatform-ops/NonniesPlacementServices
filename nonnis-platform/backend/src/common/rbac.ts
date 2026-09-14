@@ -85,6 +85,12 @@ export const PERMISSIONS = {
   MARKETPLACE_ORDERS_MANAGE_OWN: "marketplace_orders.manage_own",
   MARKETPLACE_ADMIN_READ: "marketplace_admin.read",
   MARKETPLACE_ADMIN_MANAGE: "marketplace_admin.manage",
+
+  // --- Notifications -------------------------------------------------------
+  // Every role holds this. It grants a person their OWN notification feed and
+  // nothing else — which records reach that feed is decided when a
+  // notification is created, from the permissions the recipient already holds.
+  NOTIFICATIONS_READ: "notifications.read",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -150,6 +156,7 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN]: "Read and act on marketplace orders for own provider",
   [PERMISSIONS.MARKETPLACE_ADMIN_READ]: "Read every marketplace listing and order",
   [PERMISSIONS.MARKETPLACE_ADMIN_MANAGE]: "Moderate marketplace listings and record offline payments",
+  [PERMISSIONS.NOTIFICATIONS_READ]: "Read and manage own notifications",
 };
 
 export const ROLES = {
@@ -219,6 +226,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.COMMUNICATIONS_SEND,
       PERMISSIONS.MARKETPLACE_ADMIN_READ,
       PERMISSIONS.MARKETPLACE_ADMIN_MANAGE,
+      PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },
   [ROLES.DISCHARGE_PROFESSIONAL]: {
@@ -242,6 +250,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.CASE_DOCUMENTS_MANAGE,
       PERMISSIONS.CASE_APPOINTMENTS_READ,
       PERMISSIONS.CASE_APPOINTMENTS_MANAGE,
+      PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },
   [ROLES.PROVIDER_ADMIN]: {
@@ -263,6 +272,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.MESSAGES_SEND,
       PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN,
       PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
+      PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },
   [ROLES.PROVIDER_STAFF]: {
@@ -282,6 +292,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       // commercial act and stays with the Provider Administrator, who is also
       // the only provider role that may edit the provider profile.
       PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
+      PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },
   [ROLES.CARE_SEEKER]: {
@@ -301,6 +312,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.SEEKER_APPOINTMENTS_REQUEST,
       PERMISSIONS.SEEKER_MARKETPLACE_BROWSE,
       PERMISSIONS.SEEKER_MARKETPLACE_ORDER,
+      PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },
 };

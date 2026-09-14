@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
 
 export function TopBar() {
   const { me, activeOrganizationId, switchOrganization, signOut } = useAuth();
@@ -39,6 +40,9 @@ export function TopBar() {
         ) : null}
       </div>
 
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+
       <div className="relative">
         <button
           type="button"
@@ -72,6 +76,7 @@ export function TopBar() {
             </button>
           </div>
         ) : null}
+      </div>
       </div>
     </header>
   );
