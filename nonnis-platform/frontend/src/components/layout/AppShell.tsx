@@ -13,11 +13,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* One notification state for the whole shell: the bell in the top bar
           and the sidebar badge both read it, so they cannot disagree. */}
       <NotificationsProvider>
-        <div className="flex min-h-screen bg-porcelain text-ink">
+        {/*
+          `h-screen overflow-hidden` is the whole fix: the document itself no
+          longer scrolls, so nothing can carry the sidebar out of view or reset
+          it on a route change. The two columns own their own scrolling — the
+          navigation inside the sidebar, and the main region here.
+        */}
+        <div className="flex h-screen overflow-hidden bg-porcelain text-ink">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
-            <main className="mx-auto w-full max-w-7xl flex-1 px-5 py-6 sm:px-8">{children}</main>
+            <main className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-8">{children}</div>
+            </main>
           </div>
         </div>
       </NotificationsProvider>

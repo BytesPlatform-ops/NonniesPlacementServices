@@ -1,162 +1,27 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useUnreadMessages } from "@/providers/unread-messages-provider";
-import { useNotifications } from "@/providers/notifications-provider";
-import {
-  Activity,
-  List,
-  BarChart3,
-  Boxes,
-  Building2,
-  Contact,
-  LayoutTemplate,
-  MessageSquare,
-  MessagesSquare,
-  SlidersHorizontal,
-  TriangleAlert,
-  Upload,
-  Clock,
-  CreditCard,
-  Gauge,
-  IdCard,
-  LayoutDashboard,
-  Languages as LanguagesIcon,
-  MapPin,
-  ClipboardList,
-  CheckSquare,
-  FileText,
-  Inbox,
-  Quote,
-  Radar,
-  Send,
-  Stethoscope,
-  Tags,
-  Users,
-  Video,
-  type LucideIcon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { visibleNav, visibleProviderNav, visibleSeekerNav } from "@/lib/navigation";
-import { activeOrgIsProvider, isCareSeeker } from "@/lib/landing";
-import { useAuth } from "@/providers/auth-provider";
+import { Activity } from "lucide-react";
+import { SidebarNav } from "./SidebarNav";
 
-const ICONS: Record<string, LucideIcon> = {
-  Operations: Radar,
-  "Form Submissions": Inbox,
-  Tasks: CheckSquare,
-  Cases: ClipboardList,
-  Providers: Stethoscope,
-  Reports: BarChart3,
-  Inbox: Inbox,
-  Contacts: Contact,
-  Lists: List,
-  "Email Templates": LayoutTemplate,
-  "Email Campaigns": Send,
-  "SMS Templates": MessageSquare,
-  "SMS Campaigns": MessagesSquare,
-  Imports: Upload,
-  Delivery: TriangleAlert,
-  Configuration: SlidersHorizontal,
-  Blog: FileText,
-  "Short Videos": Video,
-  Testimonials: Quote,
-  Organizations: Building2,
-  Users,
-  Facilities: Boxes,
-  "Service Categories": Tags,
-  Overview: LayoutDashboard,
-  Referrals: Send,
-  Profile: IdCard,
-  Services: Stethoscope,
-  Coverage: MapPin,
-  "Payment / Insurance": CreditCard,
-  Languages: LanguagesIcon,
-  Hours: Clock,
-  Capacity: Gauge,
-  Team: Users,
-};
-
+/**
+ * The desktop sidebar.
+ *
+ * Fixed for the life of the session: it is a full-height column beside the
+ * scrolling content, not a block inside the page, so the page scrolling can no
+ * longer carry it away. The brand bar is pinned; only the navigation inside
+ * scrolls, and it keeps its position because this component stays mounted
+ * across route changes.
+ */
 export function Sidebar() {
-  const pathname = usePathname();
-  const { count: unread } = useUnreadMessages();
-  // The same context the header bell reads, so the two counts cannot drift.
-  const { unread: unreadNotifications } = useNotifications();
-  const { permissions, me, activeOrganizationId } = useAuth();
-  // A family member is checked first: they have no organization, so the
-  // provider check below would fall through to the staff navigation.
-  const seeker = isCareSeeker(me);
-  const isProvider = !seeker && activeOrgIsProvider(me, activeOrganizationId);
-  const groups = seeker
-    ? visibleSeekerNav(permissions)
-    : isProvider
-      ? visibleProviderNav(permissions)
-      : visibleNav(permissions);
-
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-sage bg-ivory lg:flex">
-      <div className="flex h-14 items-center gap-2 border-b border-sage px-5">
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-sage bg-ivory lg:flex">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-sage px-5">
         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-700 text-white">
           <Activity className="h-4 w-4" aria-hidden />
         </span>
-        <span className="text-sm font-semibold tracking-tight text-umber">Nonnis Platform</span>
+        <span className="truncate text-sm font-semibold tracking-tight text-umber">Nonnis Platform</span>
       </div>
-
-      <nav className="flex-1 space-y-6 px-3 py-4">
-        {groups.map((group, index) => (
-          <div key={group.title ?? `group-${index}`}>
-            {group.title ? (
-              <p className="px-2 pb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-400">
-                {group.title}
-              </p>
-            ) : null}
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = ICONS[item.label] ?? ClipboardList;
-                // "/provider" is the portal root; match it exactly so it doesn't
-                // stay highlighted on its sub-routes.
-                const active =
-                  item.href === "/provider"
-                    ? pathname === "/provider"
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
-                        active ? "bg-brand-50 text-brand-800" : "text-slate-ink hover:bg-brand-50 hover:text-umber",
-                      )}
-                    >
-                      <Icon className="h-4 w-4" aria-hidden />
-                      <span className="flex-1">{item.label}</span>
-                      {/* A persistent count answers "is anything waiting?" at a
-                          glance; the toast only fires at the moment of arrival. */}
-                      {item.href === "/notifications" && unreadNotifications !== null && unreadNotifications > 0 ? (
-                        <span
-                          aria-label={`${unreadNotifications} unread notification${unreadNotifications === 1 ? "" : "s"}`}
-                          className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                        >
-                          {unreadNotifications > 99 ? "99+" : unreadNotifications}
-                        </span>
-                      ) : null}
-                      {item.href === "/communications/inbox" && unread !== null && unread > 0 ? (
-                        <span
-                          aria-label={`${unread} unread conversation${unread === 1 ? "" : "s"}`}
-                          className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                        >
-                          {unread > 99 ? "99+" : unread}
-                        </span>
-                      ) : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
+      <SidebarNav />
     </aside>
   );
 }

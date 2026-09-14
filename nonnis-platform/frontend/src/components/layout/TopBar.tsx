@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
+import { MobileNav } from "./MobileNav";
 
 export function TopBar() {
   const { me, activeOrganizationId, switchOrganization, signOut } = useAuth();
@@ -19,7 +20,8 @@ export function TopBar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-sage bg-ivory px-5">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <MobileNav />
         {memberships.length > 1 ? (
           <label className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Organization</span>
