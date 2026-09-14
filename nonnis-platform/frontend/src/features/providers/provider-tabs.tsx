@@ -29,6 +29,7 @@ import { CAPACITY_STATUSES, COVERAGE_TYPES, DAYS_OF_WEEK, LEVELS_OF_CARE } from 
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, LoadingState } from "@/components/ui/states";
+import { CoverageMap } from "./CoverageMap";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
@@ -217,6 +218,10 @@ export function CoverageTab({ provider, reload }: TabProps) {
           ))}
         </ul>
       )}
+
+      {/* The same areas, seen at a glance. Rendered under the list so the
+          authoritative detail is read first and the map only supports it. */}
+      <CoverageMap areas={provider.coverageAreas} />
 
       {editable ? (
         <form onSubmit={add} className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">

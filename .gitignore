@@ -47,4 +47,5 @@ nonnis-platform/**/dist/
 nonnis-platform/**/.next/
 nonnis-platform/**/out/
 nonnis-platform/**/build/
-nonnis-platform/**/coverage/
+nonnis-platform/backend/coverage/
+nonnis-platform/frontend/coverage/
