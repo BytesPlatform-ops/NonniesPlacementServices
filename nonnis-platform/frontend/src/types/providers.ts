@@ -1,6 +1,7 @@
 export type ProviderStatus = "ACTIVE" | "INACTIVE" | "PAUSED";
 export type CapacityStatus = "AVAILABLE" | "LIMITED" | "UNAVAILABLE" | "UNKNOWN";
-export type CoverageType = "CITY" | "COUNTY" | "STATE" | "POSTAL_CODE" | "RADIUS";
+// Widest to narrowest. A narrow area never implies a wider one.
+export type CoverageType = "COUNTRY" | "STATE" | "COUNTY" | "CITY" | "POSTAL_CODE" | "ADDRESS" | "RADIUS";
 export type DayOfWeek =
   | "MONDAY"
   | "TUESDAY"
@@ -45,13 +46,38 @@ export interface ProviderServiceView {
 export interface CoverageAreaView {
   id: string;
   coverageType: CoverageType;
+  country: string;
   city: string | null;
   county: string | null;
   state: string | null;
   postalCode: string | null;
+  /** Every postal code this area covers. */
+  postalCodes: string[];
+  street: string | null;
+  addressLine: string | null;
+  latitude: number | null;
+  longitude: number | null;
   radiusMiles: number | null;
   notes: string | null;
   active: boolean;
+}
+
+export type StateCoverageStatus = "FULL" | "PARTIAL" | "NONE";
+
+export interface CoverageSummaryView {
+  summary: {
+    states: number;
+    counties: number;
+    cities: number;
+    postalCodes: number;
+    addresses: number;
+    radiusAreas: number;
+    totalActive: number;
+    countrywide: boolean;
+  };
+  states: Array<{ state: string; status: StateCoverageStatus; areaCount: number }>;
+  /** Pairs of area ids whose radii reach each other. Never merged. */
+  overlaps: Array<[string, string]>;
 }
 
 export interface ProviderPaymentTypeView {
@@ -162,7 +188,7 @@ export const DAYS_OF_WEEK: DayOfWeek[] = [
   "SUNDAY",
 ];
 
-export const COVERAGE_TYPES: CoverageType[] = ["CITY", "COUNTY", "STATE", "POSTAL_CODE", "RADIUS"];
+export const COVERAGE_TYPES: CoverageType[] = ["COUNTRY", "STATE", "COUNTY", "CITY", "POSTAL_CODE", "ADDRESS", "RADIUS"];
 export const CAPACITY_STATUSES: CapacityStatus[] = ["AVAILABLE", "LIMITED", "UNAVAILABLE", "UNKNOWN"];
 export const PROVIDER_STATUSES: ProviderStatus[] = ["ACTIVE", "INACTIVE", "PAUSED"];
 export const LEVELS_OF_CARE: LevelOfCare[] = ["INDEPENDENT", "SUPPORTIVE", "INTERMEDIATE", "SKILLED", "COMPLEX"];

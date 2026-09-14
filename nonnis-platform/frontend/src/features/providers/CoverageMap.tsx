@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { CoverageAreaView } from "@/types/providers";
+import { coverageSummary } from "@/services/providers.service";
+import type { CoverageAreaView, CoverageSummaryView, StateCoverageStatus } from "@/types/providers";
 
 /**
  * Where a provider covers, as a drill-down.
@@ -32,6 +33,21 @@ const GRID: Record<string, [row: number, col: number]> = {
   HI: [7, 0], TX: [7, 3], FL: [7, 8],
 };
 
+/**
+ * A two-letter code from either a code or a full state name.
+ *
+ * Rows arrive written both ways, and the grid keys on the code — without this
+ * an area saved as "Illinois" would land on no tile at all. Mirrors the same
+ * normalisation the server applies when matching.
+ */
+function toStateCode(value: string | null | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  if (raw.length === 2) return raw.toUpperCase();
+  const match = Object.entries(STATE_NAMES).find(([, name]) => name.toLowerCase() === raw.toLowerCase());
+  return match ? match[0] : raw.toUpperCase();
+}
+
 const STATE_NAMES: Record<string, string> = {
   AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado",
   CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho",
@@ -56,24 +72,26 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * Heat is the number of coverage entries in a state, in four bands.
+ * How a state is shaded.
  *
- * Banded rather than continuous: an eye reads "more than that one" far better
- * from four steps than from fifty shades, and the darkest band still holds
- * white text legibly.
+ * FULL and PARTIAL are different promises, so they are different colours, not
+ * different intensities of one: "we serve all of Illinois" and "we serve
+ * Chicago" must never look like more and less of the same thing. Within
+ * PARTIAL, the tint deepens with how many areas are inside — that is the heat.
  */
-function heatClasses(count: number): string {
-  if (count >= 7) return "bg-brand-800 text-white hover:bg-brand-900";
-  if (count >= 4) return "bg-brand-700 text-white hover:bg-brand-800";
-  if (count >= 2) return "bg-brand-500 text-white hover:bg-brand-600";
-  return "bg-brand-200 text-brand-900 hover:bg-brand-500 hover:text-white";
+function tileClasses(status: StateCoverageStatus, count: number): string {
+  if (status === "FULL") return "bg-brand-800 text-white hover:bg-brand-900 ring-1 ring-inset ring-brand-900";
+  if (count >= 4) return "bg-brand-500 text-white hover:bg-brand-600";
+  if (count >= 2) return "bg-brand-200 text-brand-900 hover:bg-brand-500 hover:text-white";
+  return "bg-brand-100 text-brand-900 hover:bg-brand-500 hover:text-white";
 }
 
-const HEAT_LEGEND = [
-  { label: "1", className: "bg-brand-200" },
-  { label: "2–3", className: "bg-brand-500" },
-  { label: "4–6", className: "bg-brand-700" },
-  { label: "7+", className: "bg-brand-800" },
+const LEGEND = [
+  { label: "Fully covered", className: "bg-brand-800" },
+  { label: "Partial · 1", className: "bg-brand-100" },
+  { label: "2–3", className: "bg-brand-200" },
+  { label: "4+", className: "bg-brand-500" },
+  { label: "Not covered", className: "bg-slate-100" },
 ];
 
 /** The place an entry names inside its state — the second level of the tree. */
@@ -102,16 +120,43 @@ function areaLabel(area: CoverageAreaView): string {
   }
 }
 
-export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
+export function CoverageMap({ providerId, areas }: { providerId: string; areas: CoverageAreaView[] }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [openPlace, setOpenPlace] = useState<string | null>(null);
+  // Status and counts come from the server, which owns the rule that decides
+  // FULL versus PARTIAL. Keeping a second copy of that rule here is exactly how
+  // the map would start disagreeing with the data.
+  const [coverage, setCoverage] = useState<CoverageSummaryView | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void coverageSummary(providerId)
+      .then((result) => {
+        if (active) setCoverage(result);
+      })
+      .catch(() => {
+        if (active) setCoverage(null);
+      });
+    return () => {
+      active = false;
+    };
+    // Re-read whenever the areas change, so adding one updates the map.
+  }, [providerId, areas]);
+
+  const statusByState = useMemo(() => {
+    const map = new Map<string, { status: StateCoverageStatus; areaCount: number }>();
+    for (const entry of coverage?.states ?? []) {
+      map.set(entry.state, { status: entry.status, areaCount: entry.areaCount });
+    }
+    return map;
+  }, [coverage]);
 
   const { byState, unplaced, active } = useMemo(() => {
     const active = areas.filter((a) => a.active);
     const byState = new Map<string, CoverageAreaView[]>();
     let unplaced = 0;
     for (const area of active) {
-      const code = area.state?.trim().toUpperCase();
+      const code = toStateCode(area.state);
       if (!code || !(code in GRID)) {
         unplaced += 1;
         continue;
@@ -141,14 +186,38 @@ export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
 
   return (
     <div className="mt-4 border-t border-slate-100 pt-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-slate-700">Where you cover</p>
-        <p className="text-xs text-slate-500">
-          {byState.size} {byState.size === 1 ? "state" : "states"} · {active.length}{" "}
-          {active.length === 1 ? "area" : "areas"}
-          {unplaced > 0 ? ` · ${unplaced} without a state` : ""}
+      <p className="text-sm font-medium text-slate-700">Where you cover</p>
+
+      {/* The counts the provider is actually asked about, derived server-side
+          from the same rows the list below shows. */}
+      <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+        {[
+          { label: coverage?.summary.states === 1 ? "state" : "states", value: coverage?.summary.states },
+          { label: coverage?.summary.counties === 1 ? "county" : "counties", value: coverage?.summary.counties },
+          { label: coverage?.summary.cities === 1 ? "city" : "cities", value: coverage?.summary.cities },
+          { label: coverage?.summary.postalCodes === 1 ? "ZIP code" : "ZIP codes", value: coverage?.summary.postalCodes },
+          { label: coverage?.summary.addresses === 1 ? "address" : "addresses", value: coverage?.summary.addresses },
+          { label: coverage?.summary.radiusAreas === 1 ? "radius area" : "radius areas", value: coverage?.summary.radiusAreas },
+          { label: "active areas", value: coverage?.summary.totalActive ?? active.length },
+        ].map((stat) => (
+          <div key={stat.label} className="flex items-baseline gap-1">
+            <dt className="order-2 text-slate-500">{stat.label}</dt>
+            <dd className="order-1 font-semibold tabular-nums text-umber">{stat.value ?? "—"}</dd>
+          </div>
+        ))}
+        {coverage?.summary.countrywide ? (
+          <div className="font-medium text-brand-700">Nationwide coverage</div>
+        ) : null}
+        {unplaced > 0 ? <div className="text-slate-400">{unplaced} without a state</div> : null}
+      </dl>
+
+      {/* Overlaps are reported, never resolved: both records stay. */}
+      {coverage && coverage.overlaps.length > 0 ? (
+        <p className="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {coverage.overlaps.length} overlapping radius {coverage.overlaps.length === 1 ? "pair" : "pairs"} — the
+          areas reach the same ground. Both records are kept exactly as entered.
         </p>
-      </div>
+      ) : null}
 
       <div className="mt-3 grid gap-4 lg:grid-cols-5">
         {/* ---- level 1: the states ---- */}
@@ -160,6 +229,7 @@ export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
             {Object.entries(GRID).map(([code, [row, col]]) => {
               const list = byState.get(code);
               const count = list?.length ?? 0;
+              const status = statusByState.get(code)?.status ?? (count > 0 ? "PARTIAL" : "NONE");
               const isSelected = selected === code;
               const style = { gridRow: row + 1, gridColumn: col + 1 };
               const shared =
@@ -181,10 +251,10 @@ export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
                   style={style}
                   onClick={() => open(code)}
                   aria-pressed={isSelected}
-                  title={`${STATE_NAMES[code]} — ${count} ${count === 1 ? "area" : "areas"}`}
+                  title={`${STATE_NAMES[code]} — ${status === "FULL" ? "fully covered" : "partially covered"}, ${count} ${count === 1 ? "area" : "areas"}`}
                   className={cn(
                     shared,
-                    heatClasses(count),
+                    tileClasses(status, count),
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-700 focus-visible:ring-offset-1",
                     isSelected && "ring-2 ring-brand-900 ring-offset-1",
                   )}
@@ -196,18 +266,12 @@ export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              Areas
-              {HEAT_LEGEND.map((band) => (
-                <span key={band.label} className="flex items-center gap-1">
-                  <span className={cn("h-3 w-3 rounded-[3px]", band.className)} aria-hidden />
-                  {band.label}
-                </span>
-              ))}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-[3px] bg-slate-100" aria-hidden /> None
-            </span>
+            {LEGEND.map((band) => (
+              <span key={band.label} className="flex items-center gap-1.5">
+                <span className={cn("h-3 w-3 rounded-[3px]", band.className)} aria-hidden />
+                {band.label}
+              </span>
+            ))}
           </div>
           <p className="mt-1 text-xs text-slate-400">Schematic — one tile per state, not to scale. Select a state for detail.</p>
         </div>
@@ -224,6 +288,7 @@ export function CoverageMap({ areas }: { areas: CoverageAreaView[] }) {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-umber">{STATE_NAMES[selected] ?? selected}</p>
                   <p className="text-xs text-slate-500">
+                    {statusByState.get(selected)?.status === "FULL" ? "Fully covered" : "Partially covered"} ·{" "}
                     {places.length} {places.length === 1 ? "place" : "places"} ·{" "}
                     {byState.get(selected)?.length ?? 0} areas
                   </p>

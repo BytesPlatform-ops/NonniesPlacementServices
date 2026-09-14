@@ -75,6 +75,13 @@ export class ProviderCoverageController {
     return this.coverage.list(user, providerId);
   }
 
+  /** Counts, per-state status and detected overlaps, derived from the rows. */
+  @Get("summary")
+  @RequirePermissions(PERMISSIONS.PROVIDERS_READ)
+  summary(@CurrentUser() user: RequestUser, @Param("providerId", uuid()) providerId: string) {
+    return this.coverage.summary(user, providerId);
+  }
+
   @Post()
   @RequireAnyPermission(...WRITE)
   create(

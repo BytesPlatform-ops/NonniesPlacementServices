@@ -5,6 +5,7 @@ import type { PaginatedResult } from "../../common/types/api-response";
 import { AuditService } from "../audit/audit.service";
 import type { RequestUser } from "../auth/request-user";
 import { PERMISSIONS } from "../../common/rbac";
+import { matchCoverage, type SeekerLocation } from "../providers/coverage-matching";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notification-catalog";
 import { MarketplaceAccessService } from "./marketplace-access";
@@ -276,7 +277,64 @@ export class MarketplaceListingsService {
           }
         : {}),
     };
-    return this.page(where, query);
+    const page = await this.page(where, query);
+    return this.restrictToCoverage(page, query);
+  }
+
+  /**
+   * Drops listings whose provider does not actually serve where care is needed.
+   *
+   * Applied after the page is fetched rather than inside the query, because
+   * coverage is a rule — a radius, a county, a postal-code list — not a column
+   * comparison, and it is the same rule the provider's own map and the staff
+   * search use. Sending no location asks for everything, which is what a family
+   * browsing without a place in mind means.
+   *
+   * Coverage lives on the PROVIDER, never copied onto a listing: one provider,
+   * one set of service areas, however many listings they publish.
+   */
+  private async restrictToCoverage(
+    page: PaginatedResult<ListingView>,
+    query: ListingsQueryDto,
+  ): Promise<PaginatedResult<ListingView>> {
+    const location: SeekerLocation = {
+      city: query.nearCity ?? null,
+      state: query.nearState ?? null,
+      county: query.nearCounty ?? null,
+      postalCode: query.nearPostalCode ?? null,
+      latitude: query.nearLatitude ?? null,
+      longitude: query.nearLongitude ?? null,
+    };
+    const asked = Object.values(location).some((v) => v !== null && v !== undefined && v !== "");
+    if (!asked || page.items.length === 0) return page;
+
+    const providerIds = [...new Set(page.items.map((item) => item.provider.id))];
+    const areas = await this.prisma.providerCoverageArea.findMany({
+      where: { providerId: { in: providerIds }, active: true },
+    });
+    const byProvider = new Map<string, typeof areas>();
+    for (const area of areas) {
+      byProvider.set(area.providerId, [...(byProvider.get(area.providerId) ?? []), area]);
+    }
+
+    const eligible = new Set(
+      providerIds.filter((id) =>
+        matchCoverage(
+          (byProvider.get(id) ?? []).map((a) => ({
+            ...a,
+            latitude: a.latitude === null ? null : Number(a.latitude),
+            longitude: a.longitude === null ? null : Number(a.longitude),
+          })),
+          location,
+        ).eligible,
+      ),
+    );
+
+    const items = page.items.filter((item) => eligible.has(item.provider.id));
+    // `total` is the unfiltered page count; the filtered length is what was
+    // actually offered. Reporting both would be a lie in one direction or the
+    // other, so the honest reading is: this page, after the rule.
+    return { ...page, items, total: page.total - (page.items.length - items.length) };
   }
 
   /** One published listing, or 404 — a draft id cannot be guessed into view. */

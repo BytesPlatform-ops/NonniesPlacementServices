@@ -1,16 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/lib/api-client";
 import type { PaginatedResult } from "@/types/api";
-import type {
-  CoverageAreaView,
-  ProviderCapacityView,
-  ProviderDetailView,
-  ProviderHoursView,
-  ProviderLanguageView,
-  ProviderPaymentTypeView,
-  ProviderServiceView,
-  ProviderSummaryView,
-  ProviderUserView,
-} from "@/types/providers";
+import type { CoverageAreaView, CoverageSummaryView, ProviderCapacityView, ProviderDetailView, ProviderHoursView, ProviderLanguageView, ProviderPaymentTypeView, ProviderServiceView, ProviderSummaryView, ProviderUserView } from "@/types/providers";
 
 export interface ProviderFilters {
   page?: number;
@@ -100,6 +90,10 @@ export function removeProviderService(providerId: string, serviceId: string): Pr
 }
 
 // ---- Coverage ----
+
+export function coverageSummary(providerId: string): Promise<CoverageSummaryView> {
+  return apiGet<CoverageSummaryView>(`/api/v1/providers/${providerId}/coverage/summary`);
+}
 
 export function createCoverage(providerId: string, body: Record<string, unknown>): Promise<CoverageAreaView> {
   return apiPost<CoverageAreaView>(`/api/v1/providers/${providerId}/coverage`, body);

@@ -5,6 +5,8 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsLatitude,
+  IsLongitude,
   IsOptional,
   IsString,
   IsUUID,
@@ -80,6 +82,39 @@ export class CreateCoverageAreaDto {
   @IsString()
   @MaxLength(20)
   postalCode?: string;
+
+  /** Every postal code this area covers. Authoritative over `postalCode`. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  postalCodes?: string[];
+
+  /** ISO-3166-1 alpha-2. Defaults to US when omitted. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  addressLine?: string;
+
+  /** Only set when a real coordinate is known; never derived from a name. */
+  @IsOptional()
+  @IsLatitude()
+  latitude?: number;
+
+  @IsOptional()
+  @IsLongitude()
+  longitude?: number;
 
   @IsOptional()
   @IsInt()

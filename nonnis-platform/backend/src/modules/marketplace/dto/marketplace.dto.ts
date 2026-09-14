@@ -6,6 +6,8 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsLatitude,
+  IsLongitude,
   IsOptional,
   IsString,
   IsUUID,
@@ -130,6 +132,17 @@ export class ListingsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() @MaxLength(16) minPrice?: string;
   @IsOptional() @IsString() @MaxLength(16) maxPrice?: string;
   @IsOptional() @IsUUID() providerId?: string;
+
+  // ---- seeker location, for geographic eligibility ----
+  // A listing is only offered when the provider's own ACTIVE coverage reaches
+  // the place care is needed. Sent by the family; never trusted as anything
+  // other than a place to test against.
+  @IsOptional() @IsString() @MaxLength(120) nearCity?: string;
+  @IsOptional() @IsString() @MaxLength(120) nearState?: string;
+  @IsOptional() @IsString() @MaxLength(120) nearCounty?: string;
+  @IsOptional() @IsString() @MaxLength(20) nearPostalCode?: string;
+  @IsOptional() @IsLatitude() @Type(() => Number) nearLatitude?: number;
+  @IsOptional() @IsLongitude() @Type(() => Number) nearLongitude?: number;
 }
 
 export class CreateOrderDto {

@@ -76,6 +76,15 @@ function coverageLabel(area: { coverageType: CoverageType; city: string | null; 
       return area.postalCode ?? "";
     case "RADIUS":
       return area.radiusMiles ? `Within ${area.radiusMiles} mi of ${[area.city, area.state].filter(Boolean).join(", ")}` : "";
+    case "COUNTRY":
+      // Country-wide is a real promise and worth saying plainly.
+      return "Nationwide";
+    case "ADDRESS":
+      // The street itself is not published — only the area it serves, so a
+      // provider's exact premises are not advertised by the directory.
+      return area.radiusMiles
+        ? `Within ${area.radiusMiles} mi of ${[area.city, area.state].filter(Boolean).join(", ")}`
+        : [area.city, area.state].filter(Boolean).join(", ");
     default:
       return "";
   }

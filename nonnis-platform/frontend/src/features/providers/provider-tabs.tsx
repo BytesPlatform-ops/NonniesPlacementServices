@@ -22,14 +22,16 @@ import {
   removeProviderService,
   setProviderCapacity,
   setProviderHours,
+  updateCoverage,
   updateProviderService,
 } from "@/services/providers.service";
-import type { ProviderDetailView } from "@/types/providers";
+import type { CoverageAreaView, CoverageType, ProviderDetailView } from "@/types/providers";
 import { CAPACITY_STATUSES, COVERAGE_TYPES, DAYS_OF_WEEK, LEVELS_OF_CARE } from "@/types/providers";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, LoadingState } from "@/components/ui/states";
 import { CoverageMap } from "./CoverageMap";
+import { cn } from "@/lib/utils";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
@@ -167,25 +169,74 @@ export function ServicesTab({ provider, reload }: TabProps) {
 
 export function CoverageTab({ provider, reload }: TabProps) {
   const editable = provider.editable;
-  const [form, setForm] = useState({ coverageType: "CITY", city: "", county: "", state: "", postalCode: "", radiusMiles: "", notes: "" });
+  const [form, setForm] = useState({
+    coverageType: "CITY" as CoverageType,
+    country: "US",
+    city: "",
+    county: "",
+    state: "",
+    postalCodes: "",
+    street: "",
+    addressLine: "",
+    latitude: "",
+    longitude: "",
+    radiusMiles: "",
+    notes: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * Which levels of the hierarchy this type actually needs.
+   *
+   * A narrower type asks for more, never less — but nothing is hidden that the
+   * provider might legitimately want to record, so a city area can still carry
+   * postal codes and a radius.
+   */
+  const shows = (field: "state" | "county" | "city" | "postalCodes" | "street" | "point") => {
+    switch (form.coverageType) {
+      case "COUNTRY":
+        return false;
+      case "STATE":
+        return field === "state";
+      case "COUNTY":
+        return field === "state" || field === "county";
+      case "CITY":
+        return field !== "street";
+      case "POSTAL_CODE":
+        return field !== "street";
+      case "ADDRESS":
+        return true;
+      case "RADIUS":
+        return field !== "street";
+      default:
+        return true;
+    }
+  };
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const codes = form.postalCodes.split(/[,\s]+/).map((c) => c.trim()).filter(Boolean);
+    // A coordinate is only sent when both halves are present: half a point is
+    // not a location, and the server would reject it anyway.
+    const hasPoint = form.latitude.trim() !== "" && form.longitude.trim() !== "";
     setBusy(true);
     try {
       await createCoverage(provider.id, {
         coverageType: form.coverageType,
+        country: form.country.trim().toUpperCase() || undefined,
         city: form.city || undefined,
         county: form.county || undefined,
         state: form.state || undefined,
-        postalCode: form.postalCode || undefined,
+        postalCodes: codes.length > 0 ? codes : undefined,
+        street: form.street || undefined,
+        addressLine: form.addressLine || undefined,
+        ...(hasPoint ? { latitude: Number(form.latitude), longitude: Number(form.longitude) } : {}),
         radiusMiles: form.radiusMiles ? Number(form.radiusMiles) : undefined,
         notes: form.notes || undefined,
       });
-      setForm({ coverageType: "CITY", city: "", county: "", state: "", postalCode: "", radiusMiles: "", notes: "" });
+      setForm({ ...form, city: "", county: "", postalCodes: "", street: "", addressLine: "", latitude: "", longitude: "", radiusMiles: "", notes: "" });
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add coverage area.");
@@ -193,51 +244,102 @@ export function CoverageTab({ provider, reload }: TabProps) {
       setBusy(false);
     }
   };
+
   return (
-    <Panel title="Geographic coverage" description="Areas this provider serves.">
+    <Panel title="Geographic coverage" description="Every area this provider serves. A narrower area never implies a wider one.">
       <ErrorLine message={error} />
+
       {provider.coverageAreas.length === 0 ? (
         <EmptyState title="No coverage areas" message="No coverage has been defined yet." />
       ) : (
         <ul className="divide-y divide-slate-100">
           {provider.coverageAreas.map((c) => (
-            <li key={c.id} className="flex items-center justify-between gap-3 py-3">
-              <div>
+            <li key={c.id} className={cn("flex flex-wrap items-start justify-between gap-3 py-3", !c.active && "opacity-60")}>
+              <div className="min-w-0">
                 <p className="font-medium text-slate-800">
-                  {[c.city, c.county, c.state, c.postalCode].filter(Boolean).join(", ") || humanizeEnum(c.coverageType)}
-                  {c.radiusMiles ? ` · ${c.radiusMiles} mi` : ""}
+                  {coverageHeadline(c)}
+                  {!c.active ? <span className="ml-2 text-xs font-normal text-slate-500">Inactive</span> : null}
                 </p>
-                <p className="text-xs text-slate-500">{humanizeEnum(c.coverageType)}{c.notes ? ` · ${c.notes}` : ""}</p>
+                <p className="text-xs text-slate-500">
+                  {humanizeEnum(c.coverageType)}
+                  {c.radiusMiles ? ` · ${c.radiusMiles} mi radius` : ""}
+                  {c.postalCodes.length > 0 ? ` · ZIP ${c.postalCodes.join(", ")}` : ""}
+                  {c.latitude !== null && c.longitude !== null ? " · centre set" : ""}
+                  {c.notes ? ` · ${c.notes}` : ""}
+                </p>
               </div>
               {editable ? (
-                <MutationButton variant="danger-link" className="text-slate-400 hover:text-rose-600" aria-label="Remove coverage area" confirm={{ title: "Remove this coverage area?", description: "This coverage area will be removed from the provider.", confirmLabel: "Remove", variant: "danger" }} action={() => removeCoverage(provider.id, c.id)} successToast="Coverage removed" onSuccess={reload}>
-                  <Trash2 className="h-4 w-4" />
-                </MutationButton>
+                <div className="flex shrink-0 items-center gap-3">
+                  {/* Deactivating keeps the record and its history; deleting is
+                      the separate, destructive choice. */}
+                  <MutationButton
+                    variant="link"
+                    action={() => updateCoverage(provider.id, c.id, { active: !c.active })}
+                    successToast={c.active ? "Coverage deactivated" : "Coverage activated"}
+                    onSuccess={reload}
+                  >
+                    {c.active ? "Deactivate" : "Activate"}
+                  </MutationButton>
+                  <MutationButton
+                    variant="danger-link"
+                    className="text-slate-400 hover:text-rose-600"
+                    aria-label="Remove coverage area"
+                    confirm={{ title: "Remove this coverage area?", description: "Only this area is removed; every other area stays exactly as it is.", confirmLabel: "Remove", variant: "danger" }}
+                    action={() => removeCoverage(provider.id, c.id)}
+                    successToast="Coverage removed"
+                    onSuccess={reload}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </MutationButton>
+                </div>
               ) : null}
             </li>
           ))}
         </ul>
       )}
 
-      {/* The same areas, seen at a glance. Rendered under the list so the
-          authoritative detail is read first and the map only supports it. */}
-      <CoverageMap areas={provider.coverageAreas} />
+      <CoverageMap providerId={provider.id} areas={provider.coverageAreas} />
 
       {editable ? (
         <form onSubmit={add} className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
           <label className="block">
             <span className="text-xs font-medium text-slate-600">Type</span>
-            <select value={form.coverageType} onChange={(e) => setForm({ ...form, coverageType: e.target.value })} className={selectCls}>
+            <select value={form.coverageType} onChange={(e) => setForm({ ...form, coverageType: e.target.value as CoverageType })} className={selectCls}>
               {COVERAGE_TYPES.map((t) => (
                 <option key={t} value={t}>{humanizeEnum(t)}</option>
               ))}
             </select>
           </label>
-          <label className="block"><span className="text-xs font-medium text-slate-600">City</span><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} /></label>
-          <label className="block"><span className="text-xs font-medium text-slate-600">County</span><input value={form.county} onChange={(e) => setForm({ ...form, county: e.target.value })} className={inputCls} /></label>
-          <label className="block"><span className="text-xs font-medium text-slate-600">State</span><input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputCls} /></label>
-          <label className="block"><span className="text-xs font-medium text-slate-600">Postal code</span><input value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} className={inputCls} /></label>
+          <label className="block"><span className="text-xs font-medium text-slate-600">Country</span><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="US" className={inputCls} /></label>
+          {shows("state") ? (
+            <label className="block"><span className="text-xs font-medium text-slate-600">State</span><input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="IL" className={inputCls} /></label>
+          ) : null}
+          {shows("county") ? (
+            <label className="block"><span className="text-xs font-medium text-slate-600">County</span><input value={form.county} onChange={(e) => setForm({ ...form, county: e.target.value })} placeholder="Cook" className={inputCls} /></label>
+          ) : null}
+          {shows("city") ? (
+            <label className="block"><span className="text-xs font-medium text-slate-600">City</span><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Chicago" className={inputCls} /></label>
+          ) : null}
+          {shows("street") ? (
+            <>
+              <label className="block"><span className="text-xs font-medium text-slate-600">Street</span><input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="123 Michigan Avenue" className={inputCls} /></label>
+              <label className="block"><span className="text-xs font-medium text-slate-600">Full address</span><input value={form.addressLine} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} className={inputCls} /></label>
+            </>
+          ) : null}
+          {shows("postalCodes") ? (
+            <label className="block sm:col-span-2"><span className="text-xs font-medium text-slate-600">Postal codes</span><input value={form.postalCodes} onChange={(e) => setForm({ ...form, postalCodes: e.target.value })} placeholder="60601, 60602, 60603" className={inputCls} /></label>
+          ) : null}
           <label className="block"><span className="text-xs font-medium text-slate-600">Radius (mi)</span><input type="number" min={0} value={form.radiusMiles} onChange={(e) => setForm({ ...form, radiusMiles: e.target.value })} className={inputCls} /></label>
+          {shows("point") ? (
+            <>
+              <label className="block"><span className="text-xs font-medium text-slate-600">Centre latitude</span><input value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="41.8781" className={inputCls} /></label>
+              <label className="block"><span className="text-xs font-medium text-slate-600">Centre longitude</span><input value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="-87.6298" className={inputCls} /></label>
+            </>
+          ) : null}
+          <label className="block sm:col-span-3"><span className="text-xs font-medium text-slate-600">Notes</span><input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} /></label>
+          <p className="text-xs text-slate-500 sm:col-span-3">
+            A radius only applies when a centre latitude and longitude are given — a place name is never turned into a coordinate.
+          </p>
           <div className="sm:col-span-3">
             <button type="submit" disabled={busy} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
               {busy ? "Adding…" : "Add coverage area"}
@@ -247,6 +349,16 @@ export function CoverageTab({ provider, reload }: TabProps) {
       ) : null}
     </Panel>
   );
+}
+
+/** The place an area names, in the order a person would say it. */
+function coverageHeadline(c: CoverageAreaView): string {
+  if (c.coverageType === "COUNTRY") return "Nationwide";
+  if (c.addressLine) return c.addressLine;
+  if (c.street) return [c.street, c.city, c.state].filter(Boolean).join(", ");
+  const named = [c.city, c.county ? `${c.county} County` : null, c.state].filter(Boolean).join(", ");
+  if (named) return named;
+  return c.postalCodes[0] ?? humanizeEnum(c.coverageType);
 }
 
 // ---- Payment / insurance ----

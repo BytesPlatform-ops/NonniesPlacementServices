@@ -620,11 +620,15 @@ enum ProviderStatus {
 }
 
 /// The kind of area a coverage row describes.
+/// How broad one coverage area is. Ordered widest to narrowest; a provider may
+/// hold several at once, and a narrow one is never implied by a wide one.
 enum CoverageType {
-  CITY
-  COUNTY
+  COUNTRY
   STATE
+  COUNTY
+  CITY
   POSTAL_CODE
+  ADDRESS
   RADIUS
 }
 
@@ -761,14 +765,34 @@ model ProviderService {
 
 /// A geographic area a provider covers. Plain searchable data — no GIS,
 /// distance scoring, or mapping-API integration.
+/// One place a provider serves.
+///
+/// The geographic hierarchy — country → state → county → city → postal codes →
+/// street → radius — is carried on a single row, with only the levels that
+/// apply filled in. Rows are NOT collapsed into their parent: "Chicago" and
+/// "all of Illinois" are different promises, and a provider may hold both.
 model ProviderCoverageArea {
   id           String       @id @default(uuid()) @db.Uuid
   providerId   String       @db.Uuid
   coverageType CoverageType @default(CITY)
+  /// ISO-3166-1 alpha-2. Defaulted rather than nullable so every area is
+  /// comparable against a seeker location without a null check at each site.
+  country      String       @default("US")
   city         String?
   county       String?
   state        String?
+  /// Legacy single code, kept so existing rows and the provider search that
+  /// reads them keep working. `postalCodes` is the authoritative list.
   postalCode   String?
+  /// Every postal code this area covers. One area may name several.
+  postalCodes  String[]     @default([])
+  street       String?
+  /// The full one-line address, as entered, for display.
+  addressLine  String?
+  /// Centre of a radius. Only meaningful together with `radiusMiles`, and only
+  /// set when a coordinate is actually known — never guessed from a city name.
+  latitude     Decimal?     @db.Decimal(9, 6)
+  longitude    Decimal?     @db.Decimal(9, 6)
   radiusMiles  Int?
   notes        String?
   active       Boolean      @default(true)

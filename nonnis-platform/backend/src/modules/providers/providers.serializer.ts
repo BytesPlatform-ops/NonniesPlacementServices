@@ -1,5 +1,6 @@
 import { Prisma, type CapacityStatus, type CoverageType, type DayOfWeek, type LevelOfCare, type ProviderStatus } from "@prisma/client";
 import { publicListingMissing } from "./public-listing";
+import { effectivePostalCodes } from "./coverage-matching";
 
 // ---- Includes ----
 
@@ -74,10 +75,18 @@ export interface ProviderServiceView {
 export interface CoverageAreaView {
   id: string;
   coverageType: CoverageType;
+  country: string;
   city: string | null;
   county: string | null;
   state: string | null;
+  /** Legacy single code, kept so older rows still read correctly. */
   postalCode: string | null;
+  /** Every postal code this area covers, resolved from the list or the legacy code. */
+  postalCodes: string[];
+  street: string | null;
+  addressLine: string | null;
+  latitude: number | null;
+  longitude: number | null;
   radiusMiles: number | null;
   notes: string | null;
   active: boolean;
@@ -227,10 +236,18 @@ export function toCoverageAreaView(row: ProviderDetailRow["coverageAreas"][numbe
   return {
     id: row.id,
     coverageType: row.coverageType,
+    country: row.country,
     city: row.city,
     county: row.county,
     state: row.state,
     postalCode: row.postalCode,
+    // Resolved here so every consumer sees one list, whatever the row's age.
+    postalCodes: effectivePostalCodes(row),
+    street: row.street,
+    addressLine: row.addressLine,
+    // Decimal is not JSON-native; a coordinate is safe as a number.
+    latitude: row.latitude === null ? null : Number(row.latitude),
+    longitude: row.longitude === null ? null : Number(row.longitude),
     radiusMiles: row.radiusMiles,
     notes: row.notes,
     active: row.active,
