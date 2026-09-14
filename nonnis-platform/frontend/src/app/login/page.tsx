@@ -93,23 +93,46 @@ export default function LoginPage() {
           ) : null}
           {error ? <p className="mt-4 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
-          <form onSubmit={mode === "signin" ? onSignIn : onReset} className="mt-5 space-y-4">
-            <label className="block">
+          {/*
+            Password managers identify a credential from the field's identity,
+            not from its label: a stable `id`/`name` pair plus the autocomplete
+            token. Without a `name` the browser has nothing to key the saved
+            credential on, which is why the save prompt was unreliable even
+            though the autocomplete tokens were already present.
+
+            `username` rather than `email` on the identifier: that is the token
+            the specification defines for a sign-in identifier, and
+            `username` + `current-password` is the pairing Chrome, Safari and
+            1Password look for when deciding a form is a login form. The input
+            stays `type="email"` so mobile keyboards and validation are
+            unchanged.
+          */}
+          <form
+            id={mode === "signin" ? "signin-form" : "reset-form"}
+            name={mode === "signin" ? "signin" : "reset"}
+            onSubmit={mode === "signin" ? onSignIn : onReset}
+            className="mt-5 space-y-4"
+          >
+            <label className="block" htmlFor="email">
               <span className="text-sm font-medium text-slate-700">Email</span>
               <input
+                id="email"
+                name="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
+                autoComplete="username"
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
               />
             </label>
 
             {mode === "signin" ? (
-              <label className="block">
+              <label className="block" htmlFor="current-password">
                 <span className="text-sm font-medium text-slate-700">Password</span>
                 <input
+                  id="current-password"
+                  name="password"
                   type="password"
                   required
                   value={password}

@@ -37,6 +37,11 @@ export default function UpdatePasswordPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("checking");
   const [isRecovery, setIsRecovery] = useState(false);
+  // The account this link belongs to. Rendered into the form as a hidden
+  // `username` field so a password manager knows WHICH saved credential the new
+  // password replaces — without it the form is two anonymous `new-password`
+  // boxes and the browser has nothing to attach them to.
+  const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -85,6 +90,11 @@ export default function UpdatePasswordPage() {
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
       setPhase("ready");
+
+      // Read from the session that was just established — never from the URL,
+      // so it cannot be pointed at another account.
+      const { data } = await supabaseBrowser().auth.getUser();
+      if (active) setAccountEmail(data.user?.email ?? "");
     })();
 
     return () => {
@@ -182,10 +192,30 @@ export default function UpdatePasswordPage() {
                 </p>
               ) : null}
 
-              <form onSubmit={onSubmit} className="mt-5 space-y-4">
-                <label className="block">
+              <form id="set-password-form" name="set-password" onSubmit={onSubmit} className="mt-5 space-y-4">
+                {/*
+                  Visually hidden but present in the layout, so the browser can
+                  read it — `display: none` would be skipped. Readonly and out of
+                  the tab order, so it changes nothing for the person filling the
+                  form while telling the password manager which account these
+                  passwords belong to.
+                */}
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  value={accountEmail}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                />
+                <label className="block" htmlFor="new-password">
                   <span className="text-sm font-medium text-slate-700">New password</span>
                   <input
+                    id="new-password"
+                    name="new-password"
                     type="password"
                     required
                     minLength={MIN_LENGTH}
@@ -195,9 +225,11 @@ export default function UpdatePasswordPage() {
                     className={inputCls}
                   />
                 </label>
-                <label className="block">
+                <label className="block" htmlFor="confirm-password">
                   <span className="text-sm font-medium text-slate-700">Confirm new password</span>
                   <input
+                    id="confirm-password"
+                    name="confirm-password"
                     type="password"
                     required
                     minLength={MIN_LENGTH}
