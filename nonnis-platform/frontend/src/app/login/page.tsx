@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isPasswordSetupFragment } from "@/lib/auth-recovery";
 
@@ -128,19 +129,15 @@ export default function LoginPage() {
             </label>
 
             {mode === "signin" ? (
-              <label className="block" htmlFor="current-password">
-                <span className="text-sm font-medium text-slate-700">Password</span>
-                <input
-                  id="current-password"
-                  name="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
-                />
-              </label>
+              <PasswordField
+                id="current-password"
+                name="password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+                required
+              />
             ) : null}
 
             <button

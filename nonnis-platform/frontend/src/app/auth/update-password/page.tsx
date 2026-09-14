@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { authFragmentType, isPasswordSetupFragment } from "@/lib/auth-recovery";
 import { establishPasswordSetupSession } from "@/lib/auth-session-setup";
@@ -10,9 +11,6 @@ import { establishPasswordSetupSession } from "@/lib/auth-session-setup";
 type Phase = "checking" | "ready" | "expired";
 
 const MIN_LENGTH = 8;
-
-const inputCls =
-  "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 
 /**
  * Sets a password for an invited user, or for someone who followed a password
@@ -211,35 +209,27 @@ export default function UpdatePasswordPage() {
                   aria-hidden="true"
                   className="sr-only"
                 />
-                <label className="block" htmlFor="new-password">
-                  <span className="text-sm font-medium text-slate-700">New password</span>
-                  <input
-                    id="new-password"
-                    name="new-password"
-                    type="password"
-                    required
-                    minLength={MIN_LENGTH}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="new-password"
-                    className={inputCls}
-                  />
-                </label>
-                <label className="block" htmlFor="confirm-password">
-                  <span className="text-sm font-medium text-slate-700">Confirm new password</span>
-                  <input
-                    id="confirm-password"
-                    name="confirm-password"
-                    type="password"
-                    required
-                    minLength={MIN_LENGTH}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
-                    className={inputCls}
-                  />
-                </label>
-                <p className="text-xs text-slate-500">At least {MIN_LENGTH} characters.</p>
+                <PasswordField
+                  id="new-password"
+                  name="new-password"
+                  label="New password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="new-password"
+                  required
+                  minLength={MIN_LENGTH}
+                  hint={`At least ${MIN_LENGTH} characters.`}
+                />
+                <PasswordField
+                  id="confirm-password"
+                  name="confirm-password"
+                  label="Confirm new password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                  required
+                  minLength={MIN_LENGTH}
+                />
                 <button
                   type="submit"
                   disabled={busy}

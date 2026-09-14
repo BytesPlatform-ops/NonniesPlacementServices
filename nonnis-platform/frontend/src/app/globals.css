@@ -56,3 +56,10 @@ h3 {
     break-inside: avoid;
   }
 }
+
+/* Our own show/hide control is the only one: Edge otherwise renders a second
+   native reveal button next to it. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
