@@ -135,6 +135,12 @@ export function areaCovers(area: CoverageArea, location: SeekerLocation): boolea
   // a US-only platform does not have to state it everywhere.
   if (location.country && upper(area.country) !== upper(location.country)) return false;
 
+  // An explicitly listed postal code is covered whatever the row's headline
+  // type. A provider who writes "Chicago" and then enumerates 60601–60603 has
+  // named those codes on purpose, and a case that knows only its ZIP must still
+  // find them. This widens nothing by inference — it honours what was entered.
+  if (location.postalCode && effectivePostalCodes(area).includes(upper(location.postalCode))) return true;
+
   switch (area.coverageType) {
     case "COUNTRY":
       return true;

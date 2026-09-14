@@ -24,6 +24,8 @@ export interface ProviderSummaryView {
   email: string | null;
   servicesCount: number;
   coverageAreasCount: number;
+  /** Whether this provider serves the case being worked. Null when not asked. */
+  servesCaseLocation?: boolean | null;
   languagesCount: number;
   paymentTypesCount: number;
   availabilityStatus: CapacityStatus;

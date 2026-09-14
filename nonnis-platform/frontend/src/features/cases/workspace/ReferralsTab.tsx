@@ -156,6 +156,8 @@ function ProviderPickerModal({ caseId, serviceRequest, onClose, onDone }: { case
   const categories = useAsync(() => listServiceCategories({ activeOnly: true, pageSize: 100 }), []);
   const [serviceCategoryId, setServiceCategoryId] = useState("");
   const [search, setSearch] = useState("");
+  // Off by default: staff see every provider, and opt in to narrowing.
+  const [servesOnly, setServesOnly] = useState(false);
   const [state, setState] = useState(serviceRequest.serviceState ?? "");
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
   const [dueDate, setDueDate] = useState("");
@@ -169,8 +171,18 @@ function ProviderPickerModal({ caseId, serviceRequest, onClose, onDone }: { case
   }, [categories.data, serviceRequest.category]);
 
   const filters = useMemo(
-    () => ({ pageSize: 20, q: search || undefined, serviceCategoryId: serviceCategoryId || undefined, state: state || undefined, status: "ACTIVE" }),
-    [search, serviceCategoryId, state],
+    () => ({
+      pageSize: 20,
+      q: search || undefined,
+      serviceCategoryId: serviceCategoryId || undefined,
+      state: state || undefined,
+      status: "ACTIVE",
+      // The case decides what "serves this location" means; the server resolves
+      // the place from the case's own service requests.
+      caseId,
+      servesCaseOnly: servesOnly || undefined,
+    }),
+    [search, serviceCategoryId, state, caseId, servesOnly],
   );
   const providers = useAsync(() => listProviders(filters), [filters]);
 
@@ -208,6 +220,17 @@ function ProviderPickerModal({ caseId, serviceRequest, onClose, onDone }: { case
             </label>
             <label className="block"><span className="text-xs font-medium text-slate-600">State</span><input value={state} onChange={(e) => setState(e.target.value)} className={inputCls} /></label>
           </div>
+          {/* The one filter that uses the case's own destination rather than
+              something typed here. Opt-in, so nothing is hidden by surprise. */}
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={servesOnly}
+              onChange={(e) => setServesOnly(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
+            />
+            Only providers whose service area covers where this case needs care
+          </label>
           <div className="mt-4 max-h-72 overflow-y-auto">
             {providers.loading ? (
               <LoadingState label="Loading providers…" />
@@ -219,7 +242,17 @@ function ProviderPickerModal({ caseId, serviceRequest, onClose, onDone }: { case
                   <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                     <div>
                       <p className="font-medium text-slate-800">{p.displayName}</p>
-                      <p className="text-xs text-slate-500">{[p.city, p.state].filter(Boolean).join(", ") || "—"} · {p.servicesCount} services</p>
+                      <p className="text-xs text-slate-500">
+                        {[p.city, p.state].filter(Boolean).join(", ") || "—"} · {p.servicesCount} services
+                      </p>
+                      {/* Answered by the provider's own coverage records, judged
+                          against this case's service location. Null means the
+                          case names no location — not that the answer is no. */}
+                      {p.servesCaseLocation === true ? (
+                        <p className="mt-0.5 text-xs font-medium text-emerald-700">Serves this location</p>
+                      ) : p.servesCaseLocation === false ? (
+                        <p className="mt-0.5 text-xs text-slate-400">Outside its service area</p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge label={humanizeEnum(p.status)} tone={statusTone(p.status)} />

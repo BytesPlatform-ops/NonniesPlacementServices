@@ -316,6 +316,23 @@ export class ListProvidersQueryDto extends PaginationQueryDto {
   @IsBoolean()
   noCoverage?: boolean;
 
+  /**
+   * Judge every provider against where THIS case needs care.
+   *
+   * The location is resolved server-side from the case's own service requests,
+   * after re-checking that the caller may read the case — a case id from the
+   * browser is a question, never a grant.
+   */
+  @IsOptional()
+  @IsUUID()
+  caseId?: string;
+
+  /** With `caseId`, return only providers whose coverage reaches that location. */
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  servesCaseOnly?: boolean;
+
   @IsOptional()
   @Transform(({ value }) => (typeof value === "string" ? value : "name"), { toClassOnly: true })
   @IsIn(["name", "updatedAt", "status"])

@@ -53,6 +53,11 @@ export interface ProviderSummaryView {
   email: string | null;
   servicesCount: number;
   coverageAreasCount: number;
+  /**
+   * Whether this provider's coverage reaches the location of the case being
+   * worked. Null when no case was supplied — the question was not asked.
+   */
+  servesCaseLocation?: boolean | null;
   languagesCount: number;
   paymentTypesCount: number;
   availabilityStatus: CapacityStatus;

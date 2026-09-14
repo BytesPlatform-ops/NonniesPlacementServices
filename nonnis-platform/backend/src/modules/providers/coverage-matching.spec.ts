@@ -276,3 +276,48 @@ describe("state names and codes are the same state", () => {
     expect(summary.states).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The two decisions coverage now actually drives: which providers staff are
+// offered for a case, and which listings a family is shown.
+// ---------------------------------------------------------------------------
+
+describe("eligibility as the two portals use it", () => {
+  const chicagoProvider = [
+    area({ id: "c1", coverageType: "CITY", city: "Chicago", county: "Cook", state: "IL", postalCodes: ["60601"] }),
+  ];
+  const statewideProvider = [area({ id: "s1", coverageType: "STATE", state: "Illinois", city: null })];
+  const texasProvider = [area({ id: "t1", coverageType: "CITY", city: "Austin", state: "TX" })];
+
+  it("offers a provider whose city matches the case's service location", () => {
+    const caseLocation = { city: "Chicago", state: "IL", postalCode: "60601" };
+    expect(matchCoverage(chicagoProvider, caseLocation).eligible).toBe(true);
+    expect(matchCoverage(texasProvider, caseLocation).eligible).toBe(false);
+  });
+
+  it("offers a statewide provider for any city in that state", () => {
+    // The row is written "Illinois"; the case says "IL". Same state.
+    expect(matchCoverage(statewideProvider, { city: "Springfield", state: "IL" }).eligible).toBe(true);
+  });
+
+  it("does not offer a city provider for a different city in the same state", () => {
+    expect(matchCoverage(chicagoProvider, { city: "Springfield", state: "IL" }).eligible).toBe(false);
+  });
+
+  it("answers on postal code alone when that is all the case names", () => {
+    expect(matchCoverage(chicagoProvider, { postalCode: "60601" }).eligible).toBe(true);
+    expect(matchCoverage(chicagoProvider, { postalCode: "62701" }).eligible).toBe(false);
+  });
+
+  it("treats a provider with no coverage at all as not eligible", () => {
+    // Which is why an empty service area makes a provider invisible to the
+    // filter — the count on the operations screen is worth watching.
+    expect(matchCoverage([], { city: "Chicago", state: "IL" }).eligible).toBe(false);
+  });
+
+  it("treats a case that names no location as no question asked", () => {
+    // Every field empty: the caller must read this as "unknown", not "no".
+    const nothing = { city: null, state: null, county: null, postalCode: null };
+    expect(matchCoverage(chicagoProvider, nothing).eligible).toBe(false);
+  });
+});

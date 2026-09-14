@@ -90,7 +90,18 @@ export const cancelAcceptedOrder = (id: string, reason?: string) => orderAction(
 // ---- seeker -----------------------------------------------------------------
 
 export function browseMarketplace(
-  params: { page?: number; q?: string; transactionType?: string; listingType?: string; city?: string } = {},
+  params: {
+    page?: number;
+    q?: string;
+    transactionType?: string;
+    listingType?: string;
+    city?: string;
+    /** Only listings whose provider serves where this case needs care. */
+    nearCaseId?: string;
+    nearCity?: string;
+    nearState?: string;
+    nearPostalCode?: string;
+  } = {},
 ): Promise<PaginatedResult<MarketplaceListing>> {
   return apiGet<PaginatedResult<MarketplaceListing>>(`/api/v1/seeker/marketplace/listings${qs(params)}`);
 }

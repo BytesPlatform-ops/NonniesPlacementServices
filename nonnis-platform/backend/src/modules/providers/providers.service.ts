@@ -29,6 +29,8 @@ import type {
   UpdatePublicListingDto,
   UpdateProviderDto,
 } from "./dto/provider.dto";
+import { ensureCaseAccess } from "../cases/case-access";
+import { matchCoverage, type CoverageArea, type SeekerLocation } from "./coverage-matching";
 
 export interface ProviderUserView {
   membershipId: string;
@@ -79,6 +81,18 @@ export class ProvidersService {
     if (city) and.push(this.geoFilter("city", city));
     if (postalCode) and.push(this.geoFilter("postalCode", postalCode));
 
+    // Where this case needs care, if the caller asked the question. Resolved
+    // from the case's own service requests after re-checking they may read it.
+    const caseLocation = query.caseId ? await this.caseLocation(user, query.caseId) : null;
+    if (caseLocation && query.servesCaseOnly) {
+      // Narrowed BEFORE paging, so page 2 is still only eligible providers.
+      // Eligibility is a rule — a radius, a county, a postal-code list — not a
+      // column comparison, so the candidates are resolved in memory. The set is
+      // bounded by providers that have any coverage at all, which is the size of
+      // the directory rather than of the database.
+      and.push({ id: { in: await this.providersServing(caseLocation) } });
+    }
+
     const where: Prisma.ProviderWhereInput = { AND: and };
     const orderBy = this.buildOrderBy(query);
 
@@ -93,13 +107,78 @@ export class ProvidersService {
       this.prisma.provider.count({ where }),
     ]);
 
+    const serving = caseLocation ? await this.servingSet(caseLocation, rows.map((r) => r.id)) : null;
+
     return {
-      items: rows.map((row) => toProviderSummaryView(row, canManageProvider(user, row))),
+      items: rows.map((row) => ({
+        ...toProviderSummaryView(row, canManageProvider(user, row)),
+        // Null means the question was never asked, which is not the same as "no".
+        servesCaseLocation: serving ? serving.has(row.id) : null,
+      })),
       page,
       pageSize,
       total,
       totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
     };
+  }
+
+  /**
+   * Where a case needs care, from its service requests.
+   *
+   * `ensureCaseAccess` runs first: a case id in a query string is a question,
+   * and a caller who may not read that case gets the same 404 they would get
+   * anywhere else. The first request that names a place wins — a case with
+   * several usually repeats the same destination.
+   */
+  private async caseLocation(user: RequestUser, caseId: string): Promise<SeekerLocation | null> {
+    await ensureCaseAccess(this.prisma, user, caseId, false);
+    const requests = await this.prisma.serviceRequest.findMany({
+      where: { caseId, status: { not: "CANCELLED" } },
+      select: { serviceCity: true, serviceState: true, servicePostalCode: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const named = requests.find((r) => r.serviceCity || r.serviceState || r.servicePostalCode);
+    if (!named) return null;
+    return {
+      city: named.serviceCity,
+      state: named.serviceState,
+      postalCode: named.servicePostalCode,
+    };
+  }
+
+  /** Coverage rows for the given providers, as the matcher expects them. */
+  private async coverageFor(providerIds?: string[]): Promise<Map<string, CoverageArea[]>> {
+    const rows = await this.prisma.providerCoverageArea.findMany({
+      where: { active: true, ...(providerIds ? { providerId: { in: providerIds } } : {}) },
+    });
+    const byProvider = new Map<string, CoverageArea[]>();
+    for (const row of rows) {
+      const area: CoverageArea = {
+        ...row,
+        // Decimal is not a number until it is asked to be one.
+        latitude: row.latitude === null ? null : Number(row.latitude),
+        longitude: row.longitude === null ? null : Number(row.longitude),
+      };
+      byProvider.set(row.providerId, [...(byProvider.get(row.providerId) ?? []), area]);
+    }
+    return byProvider;
+  }
+
+  /** Every provider whose coverage reaches this location. */
+  private async providersServing(location: SeekerLocation): Promise<string[]> {
+    const byProvider = await this.coverageFor();
+    return [...byProvider.entries()]
+      .filter(([, areas]) => matchCoverage(areas, location).eligible)
+      .map(([providerId]) => providerId);
+  }
+
+  /** Which of these providers reach the location — for annotating one page. */
+  private async servingSet(location: SeekerLocation, providerIds: string[]): Promise<Set<string>> {
+    if (providerIds.length === 0) return new Set();
+    const byProvider = await this.coverageFor(providerIds);
+    return new Set(
+      providerIds.filter((id) => matchCoverage(byProvider.get(id) ?? [], location).eligible),
+    );
   }
 
   /** Match a provider column OR any of its coverage areas for a geographic term. */

@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { formatDate } from "@/lib/format";
 import { formatListingPrice, listingTypeLabel, transactionLabel } from "@/lib/marketplace";
 import { browseMarketplace } from "@/services/marketplace.service";
+import { useSeekerCaseId } from "@/features/seeker/use-seeker-case";
 import type { MarketplaceListing } from "@/types/marketplace";
 
 const selectCls = "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700";
@@ -53,9 +54,21 @@ export function SeekerMarketplaceView() {
   const [transactionType, setTransactionType] = useState("");
   const [listingType, setListingType] = useState("");
   const [city, setCity] = useState("");
+  const caseId = useSeekerCaseId();
+  // Off by default: browsing shows everything, and the family opts in to
+  // narrowing. Where care is needed is resolved by the server from their own
+  // case, so nothing about their location is assembled in the browser.
+  const [nearMe, setNearMe] = useState(false);
   const state = useAsync(
-    () => browseMarketplace({ page: 1, transactionType: transactionType || undefined, listingType: listingType || undefined, city: city || undefined }),
-    [transactionType, listingType, city],
+    () =>
+      browseMarketplace({
+        page: 1,
+        transactionType: transactionType || undefined,
+        listingType: listingType || undefined,
+        city: city || undefined,
+        nearCaseId: nearMe ? (caseId ?? undefined) : undefined,
+      }),
+    [transactionType, listingType, city, nearMe, caseId],
   );
 
   return (
@@ -86,6 +99,15 @@ export function SeekerMarketplaceView() {
               placeholder="City"
               className="w-28 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm"
             />
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={nearMe}
+                onChange={(e) => setNearMe(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
+              />
+              Serves my area
+            </label>
           </div>
         }
       >
@@ -94,7 +116,14 @@ export function SeekerMarketplaceView() {
         ) : state.error ? (
           <ErrorState message={state.error.message} onRetry={state.reload} />
         ) : (state.data?.items.length ?? 0) === 0 ? (
-          <EmptyState title="Nothing listed right now" message="Providers add beds and rooms here as they become available." />
+          <EmptyState
+            title={nearMe ? "Nothing listed in your area" : "Nothing listed right now"}
+            message={
+              nearMe
+                ? "No provider listing here covers where care is needed. Clear “Serves my area” to see everything."
+                : "Providers add beds and rooms here as they become available."
+            }
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {state.data?.items.map((l) => (

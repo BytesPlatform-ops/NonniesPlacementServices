@@ -141,6 +141,14 @@ export class ListingsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() @MaxLength(120) nearState?: string;
   @IsOptional() @IsString() @MaxLength(120) nearCounty?: string;
   @IsOptional() @IsString() @MaxLength(20) nearPostalCode?: string;
+  /**
+   * Use the family's own case location instead of typed fields.
+   *
+   * Resolved server-side from that case's service requests, and only for a case
+   * this family actually holds — the id is a question, never a grant.
+   */
+  @IsOptional() @IsUUID() nearCaseId?: string;
+
   @IsOptional() @IsLatitude() @Type(() => Number) nearLatitude?: number;
   @IsOptional() @IsLongitude() @Type(() => Number) nearLongitude?: number;
 }

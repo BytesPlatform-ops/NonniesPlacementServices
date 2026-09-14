@@ -16,6 +16,10 @@ export interface ProviderFilters {
   availability?: string;
   sort?: string;
   order?: string;
+  /** Judge each provider against where this case needs care. */
+  caseId?: string;
+  /** With `caseId`, return only providers that reach that location. */
+  servesCaseOnly?: boolean;
 }
 
 export function listProviders(filters: ProviderFilters = {}): Promise<PaginatedResult<ProviderSummaryView>> {

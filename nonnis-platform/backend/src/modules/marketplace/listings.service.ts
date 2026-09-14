@@ -253,7 +253,7 @@ export class MarketplaceListingsService {
    * in the query, so a draft or archived listing is not merely hidden from the
    * list — it cannot be reached at all.
    */
-  async browse(query: ListingsQueryDto): Promise<PaginatedResult<ListingView>> {
+  async browse(query: ListingsQueryDto, user?: RequestUser): Promise<PaginatedResult<ListingView>> {
     const where: Prisma.ProviderListingWhereInput = {
       status: "PUBLISHED",
       availableQuantity: { gt: 0 },
@@ -278,7 +278,7 @@ export class MarketplaceListingsService {
         : {}),
     };
     const page = await this.page(where, query);
-    return this.restrictToCoverage(page, query);
+    return this.restrictToCoverage(page, query, user);
   }
 
   /**
@@ -296,8 +296,12 @@ export class MarketplaceListingsService {
   private async restrictToCoverage(
     page: PaginatedResult<ListingView>,
     query: ListingsQueryDto,
+    user?: RequestUser,
   ): Promise<PaginatedResult<ListingView>> {
-    const location: SeekerLocation = {
+    // A case the family holds outranks typed fields: it is the real answer to
+    // "where is care needed", and it cannot be pointed at someone else's case.
+    const fromCase = user && query.nearCaseId ? await this.caseLocation(user, query.nearCaseId) : null;
+    const location: SeekerLocation = fromCase ?? {
       city: query.nearCity ?? null,
       state: query.nearState ?? null,
       county: query.nearCounty ?? null,
@@ -335,6 +339,25 @@ export class MarketplaceListingsService {
     // actually offered. Reporting both would be a lie in one direction or the
     // other, so the honest reading is: this page, after the rule.
     return { ...page, items, total: page.total - (page.items.length - items.length) };
+  }
+
+  /**
+   * Where care is needed for one of the family's own cases.
+   *
+   * The grant is checked against the request's own resolved access, so a case
+   * id the family does not hold resolves to nothing rather than to a stranger's
+   * location.
+   */
+  private async caseLocation(user: RequestUser, caseId: string): Promise<SeekerLocation | null> {
+    if (!user.caseAccess.some((a) => a.caseId === caseId)) return null;
+    const requests = await this.prisma.serviceRequest.findMany({
+      where: { caseId, status: { not: "CANCELLED" } },
+      select: { serviceCity: true, serviceState: true, servicePostalCode: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const named = requests.find((r) => r.serviceCity || r.serviceState || r.servicePostalCode);
+    if (!named) return null;
+    return { city: named.serviceCity, state: named.serviceState, postalCode: named.servicePostalCode };
   }
 
   /** One published listing, or 404 — a draft id cannot be guessed into view. */

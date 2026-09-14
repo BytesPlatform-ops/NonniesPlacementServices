@@ -193,8 +193,11 @@ export class SeekerMarketplaceController {
 
   @Get("listings")
   @RequirePermissions(PERMISSIONS.SEEKER_MARKETPLACE_BROWSE)
-  browse(@Query() query: ListingsQueryDto): Promise<PaginatedResult<ListingView>> {
-    return this.listings.browse(query);
+  browse(
+    @CurrentUser() user: RequestUser,
+    @Query() query: ListingsQueryDto,
+  ): Promise<PaginatedResult<ListingView>> {
+    return this.listings.browse(query, user);
   }
 
   @Get("listings/:id")
