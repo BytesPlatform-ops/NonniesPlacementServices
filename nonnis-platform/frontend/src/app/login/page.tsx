@@ -108,9 +108,20 @@ export default function LoginPage() {
             stays `type="email"` so mobile keyboards and validation are
             unchanged.
           */}
+          {/*
+            `method="post"` is a security control, not a style: it must never be
+            removed. Submission is handled in JavaScript, but if the form is
+            submitted before React has hydrated — Enter pressed on a slow load —
+            the browser performs a NATIVE submit with the handler not yet
+            attached. A form with no method defaults to GET, which would put
+            every named field, the password included, into the address bar,
+            browser history and any server access log. POST puts them in a body
+            that goes nowhere instead.
+          */}
           <form
             id={mode === "signin" ? "signin-form" : "reset-form"}
             name={mode === "signin" ? "signin" : "reset"}
+            method="post"
             onSubmit={mode === "signin" ? onSignIn : onReset}
             className="mt-5 space-y-4"
           >

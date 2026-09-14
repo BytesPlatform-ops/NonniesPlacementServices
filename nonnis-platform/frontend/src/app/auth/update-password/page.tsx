@@ -190,7 +190,15 @@ export default function UpdatePasswordPage() {
                 </p>
               ) : null}
 
-              <form id="set-password-form" name="set-password" onSubmit={onSubmit} className="mt-5 space-y-4">
+              {/* `method="post"` for the same reason as the sign-in form: a native
+                  submit before hydration must never put a password in the URL. */}
+              <form
+                id="set-password-form"
+                name="set-password"
+                method="post"
+                onSubmit={onSubmit}
+                className="mt-5 space-y-4"
+              >
                 {/*
                   Visually hidden but present in the layout, so the browser can
                   read it — `display: none` would be skipped. Readonly and out of
