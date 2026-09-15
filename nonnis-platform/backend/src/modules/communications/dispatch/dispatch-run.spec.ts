@@ -68,6 +68,26 @@ describe("DispatchRunController", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it("runs the same pass over GET, which is the only method Vercel Cron sends", async () => {
+    const { ctrl, email, sms } = build();
+    const res = makeRes();
+    await ctrl.runScheduled(undefined, undefined, `Bearer ${SECRET}`, res as never);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true, replies: 2, campaigns: 5, sms: 1 });
+    expect(email.runRepliesOnce).toHaveBeenCalled();
+    expect(sms.runOnce).toHaveBeenCalled();
+  });
+
+  it("still requires the secret over GET", async () => {
+    // A GET is trivially reachable by a crawler or a prefetch, so the guard must
+    // hold exactly as it does on POST.
+    const { ctrl, email } = build();
+    const res = makeRes();
+    await ctrl.runScheduled(undefined, undefined, undefined, res as never);
+    expect(res.statusCode).toBe(401);
+    expect(email.runRepliesOnce).not.toHaveBeenCalled();
+  });
+
   it("answers 5xx when a pass fails so the scheduler retries", async () => {
     const { ctrl } = build({ fails: true });
     const res = makeRes();

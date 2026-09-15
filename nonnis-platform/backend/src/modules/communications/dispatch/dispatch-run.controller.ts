@@ -1,4 +1,4 @@
-import { Controller, Headers, Logger, Post, Query, Res } from "@nestjs/common";
+import { Controller, Get, Headers, Logger, Post, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import { timingSafeEqual } from "node:crypto";
@@ -62,6 +62,34 @@ export class DispatchRunController {
     @Headers("x-dispatch-secret") headerSecret: string | undefined,
     @Headers("authorization") authorization: string | undefined,
     @Res() res: Response,
+  ): Promise<void> {
+    await this.pass(secret, headerSecret, authorization, res);
+  }
+
+  /**
+   * The same pass over GET, because Vercel Cron triggers a job with an HTTP GET —
+   * against a POST-only route the scheduler just gets a 404, and queued mail and
+   * SMS would never be sent on a serverless host. The shared secret is still
+   * required, so nothing reaches the work by crawling or prefetching; callers that
+   * can choose their method should still use POST.
+   */
+  @Get("run")
+  @Public()
+  @SkipTransform()
+  async runScheduled(
+    @Query("secret") secret: string | undefined,
+    @Headers("x-dispatch-secret") headerSecret: string | undefined,
+    @Headers("authorization") authorization: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.pass(secret, headerSecret, authorization, res);
+  }
+
+  private async pass(
+    secret: string | undefined,
+    headerSecret: string | undefined,
+    authorization: string | undefined,
+    res: Response,
   ): Promise<void> {
     const bearer = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : undefined;
     if (!this.authorized([bearer, headerSecret, secret])) {

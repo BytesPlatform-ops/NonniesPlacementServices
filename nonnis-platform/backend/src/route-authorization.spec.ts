@@ -38,6 +38,9 @@ const INTENTIONALLY_PUBLIC = new Set([
   // use Supabase auth; it is guarded by the same shared secret as the provider
   // webhooks, compared in constant time.
   "POST /internal/dispatch/run",
+  // Same handler over GET: Vercel Cron triggers jobs with an HTTP GET, and the
+  // shared secret is required on both methods.
+  "GET /internal/dispatch/run",
 ]);
 
 /**
