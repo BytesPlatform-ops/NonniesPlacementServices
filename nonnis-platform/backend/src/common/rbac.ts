@@ -142,7 +142,7 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.CASE_DOCUMENTS_MANAGE]: "Request, upload, review and remove case documents",
   [PERMISSIONS.CASE_APPOINTMENTS_READ]: "Read tours and appointments for authorized cases",
   [PERMISSIONS.CASE_APPOINTMENTS_MANAGE]: "Schedule, reschedule and complete tours and appointments",
-  [PERMISSIONS.CARE_SEEKERS_MANAGE]: "Grant, edit and revoke family (Care Seeker) access to a case",
+  [PERMISSIONS.CARE_SEEKERS_MANAGE]: "Grant, edit and revoke family (Discharge Professional) access to a case",
   [PERMISSIONS.SEEKER_CASE_READ]: "Read the family-facing view of an authorized case",
   [PERMISSIONS.SEEKER_DOCUMENTS_READ]: "Read documents shared with the family on an authorized case",
   [PERMISSIONS.SEEKER_DOCUMENTS_UPLOAD]: "Upload requested documents to an authorized case",
@@ -296,7 +296,7 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
     ],
   },
   [ROLES.CARE_SEEKER]: {
-    name: "Care Seeker",
+    name: "Discharge Professional",
     description: "A family member or authorized representative, scoped to the cases they are explicitly granted.",
     // Holds none of the staff or provider permissions. Every operations,
     // provider-portal and administration route is therefore refused by the

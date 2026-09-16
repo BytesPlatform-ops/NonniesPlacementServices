@@ -17,7 +17,7 @@ import { DataSecurityNotice } from "./DataSecurityNotice";
 import { submitForm, field, optionLabel, readHoneypot } from "@/lib/forms/submitForm";
 
 const INQUIRY_TYPES = [
-  { value: "family", label: "I'm a family / care seeker" },
+  { value: "family", label: "I'm a family / discharge professional" },
   { value: "hospital", label: "I'm a hospital / discharge planner" },
   { value: "provider", label: "I'm a care provider" },
   { value: "general", label: "General question" },

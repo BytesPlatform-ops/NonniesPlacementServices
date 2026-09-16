@@ -220,7 +220,7 @@ export default async function ResidentialProviderDetailPage({ params }: { params
                   Talk to an RN
                 </a>
                 <Link href="/families#find-a-bed" className="block rounded-full border border-navy/15 px-5 py-2.5 text-center text-sm font-semibold text-navy hover:bg-ice">
-                  Request more information
+                  Request Call Or Text
                 </Link>
               </div>
               <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-ink/60">

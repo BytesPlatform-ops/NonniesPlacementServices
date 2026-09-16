@@ -26,7 +26,7 @@ export const FAMILY_FAQS: Faq[] = [
 export const PROVIDER_FAQS: Faq[] = [
   {
     q: "How does listing help fill vacancies?",
-    a: "Your community becomes visible to seekers whose needs match what you offer — care level, specialties, funding accepted, and availability. Better-fit inquiries mean fewer wasted tours.",
+    a: "Your community becomes visible to discharge professionals whose needs match what you offer — care level, specialties, funding accepted, and availability. Better-fit inquiries mean fewer wasted tours.",
   },
   {
     q: "What does it cost to list?",
@@ -34,7 +34,7 @@ export const PROVIDER_FAQS: Faq[] = [
   },
   {
     q: "Who sees my pricing and availability?",
-    a: "You control what's shown. Availability and pricing help the matching surface you to the right seekers, and an RN reviews fit before families are connected.",
+    a: "You control what's shown. Availability and pricing help the matching surface you to the right discharge professionals, and an RN reviews fit before families are connected.",
   },
   {
     q: "Do I have to manage everything manually?",
@@ -57,6 +57,6 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "How do providers and communities work with Nonni's?",
-    a: "Providers can list availability for free and get discovered by the right seekers. For added analytics, priority visibility, and coordination support, just reach out and we'll help.",
+    a: "Providers can list availability for free and get discovered by the right discharge professionals. For added analytics, priority visibility, and coordination support, just reach out and we'll help.",
   },
 ];

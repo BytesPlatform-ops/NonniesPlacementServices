@@ -124,7 +124,7 @@ export class CareSeekerAdminService {
     if (!role) {
       // The role is seeded from the RBAC definitions; a missing row means the
       // deployment has not run `npm run rbac:sync`.
-      throw new ServiceUnavailableException("The Care Seeker role is not available. Run the RBAC sync.");
+      throw new ServiceUnavailableException("The Discharge Professional role is not available. Run the RBAC sync.");
     }
 
     const accessId = await this.prisma.$transaction(async (tx) => {
@@ -238,7 +238,7 @@ export class CareSeekerAdminService {
       where: { id: input.accessId, caseId: input.caseId },
       include: { user: this.userSelect },
     });
-    if (!grant) throw new NotFoundException("Care seeker access not found");
+    if (!grant) throw new NotFoundException("Discharge professional access not found");
     if (grant.status === "REVOKED") {
       throw new BadRequestException("This access is revoked. Restore it before resending the invitation.");
     }
@@ -291,7 +291,7 @@ export class CareSeekerAdminService {
         },
       },
     });
-    if (!grant) throw new NotFoundException("Care seeker access not found");
+    if (!grant) throw new NotFoundException("Discharge professional access not found");
     if (grant.status !== "INVITED") {
       throw new BadRequestException(
         "Only a pending invitation can be removed. Revoke the access instead, which keeps its history.",
@@ -373,7 +373,7 @@ export class CareSeekerAdminService {
     const existing = await this.prisma.careSeekerCaseAccess.findFirst({
       where: { id: input.accessId, caseId: input.caseId },
     });
-    if (!existing) throw new NotFoundException("Care seeker access not found");
+    if (!existing) throw new NotFoundException("Discharge professional access not found");
 
     const row = await this.prisma.careSeekerCaseAccess.update({
       where: { id: existing.id },

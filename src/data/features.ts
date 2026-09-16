@@ -58,7 +58,7 @@ export const DIFFERENTIATORS: Feature[] = [
     icon: Building2,
     title: "Provider visibility",
     description:
-      "Communities showcase specialties, real-time availability, and pricing to reach seekers who are the right fit.",
+      "Communities showcase specialties, real-time availability, and pricing to reach discharge professionals who are the right fit.",
   },
   {
     icon: Truck,

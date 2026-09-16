@@ -110,13 +110,13 @@ function OrderCard({ order, onChanged }: { order: MarketplaceOrder; onChanged: (
             confirm={{
               title: "Record the cash payment?",
               description: `Confirms ${formatMoney(order.totalAmount, order.currency)} was received for ${order.orderNumber}.`,
-              confirmLabel: "Mark cash received",
+              confirmLabel: "Mark placement complete",
             }}
             action={() => recordCashPayment(order.id)}
             successToast="Payment recorded"
             onSuccess={onChanged}
           >
-            Mark cash received
+            Mark placement complete
           </MutationButton>
           <MutationButton
             variant="danger-link"

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 const WHY = [
-  { icon: Target, title: "Better-fit inquiries", description: "Reach seekers whose care level, funding, and timing match what you offer — fewer wasted tours." },
+  { icon: Target, title: "Better-fit inquiries", description: "Reach discharge professionals whose care level, funding, and timing match what you offer — fewer wasted tours." },
   { icon: LineChart, title: "Real-time demand data", description: "See live placement demand, wallet-share analytics, and niche pricing dynamics across the network." },
   { icon: Workflow, title: "Less manual back-and-forth", description: "Digitized intake, synced calendars, and coordination tools cut the phone tag out of admissions." },
   { icon: ShieldCheck, title: "RN-reviewed matches", description: "A nurse confirms fit before families are connected, so the introductions you get are real ones." },
@@ -60,7 +60,7 @@ export default async function ProvidersPage() {
         eyebrow="For Providers"
         tone="dark"
         title="Fill vacancies with residents who truly fit"
-        description="List your Adult Family Home, Assisted Living, Memory Care, Behavioral Health, Hospice, or Skilled Nursing community. Nonni's connects you with seekers whose needs match what you do best — RN-reviewed before they reach you."
+        description="List your Adult Family Home, Assisted Living, Memory Care, Behavioral Health, Hospice, or Skilled Nursing community. Nonni's connects you with discharge professionals whose needs match what you do best — RN-reviewed before they reach you."
         primary={{ label: "List Your Community", href: "#list-your-beds" }}
         secondary={{ label: "How it works", href: "/#how-it-works" }}
         media={

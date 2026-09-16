@@ -53,9 +53,9 @@ export const PRICING: PricingAudience[] = [
   {
     key: "communities",
     label: "For Communities",
-    billing: "Get discovered by the right seekers.",
+    billing: "Get discovered by the right discharge professionals.",
     tiers: [
-      { name: "Intro", price: "$0", cadence: "to start", blurb: "Get discovered by the right seekers.", features: INTRO },
+      { name: "Intro", price: "$0", cadence: "to start", blurb: "Get discovered by the right discharge professionals.", features: INTRO },
     ],
   },
 ];
