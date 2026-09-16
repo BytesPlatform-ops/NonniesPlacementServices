@@ -59,3 +59,32 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Local calendar day for grouping messages under date separators. */
+export function dayKey(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** "Today" / "Yesterday" / "September 14, 2026" for a thread date separator. */
+export function dayLabel(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const today = new Date();
+  if (dayKey(iso) === dayKey(today.toISOString())) return "Today";
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  if (dayKey(iso) === dayKey(yesterday.toISOString())) return "Yesterday";
+  const sameYear = d.getFullYear() === today.getFullYear();
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** Clock time shown under a message bubble. */
+export function clockTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}

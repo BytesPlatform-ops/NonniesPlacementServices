@@ -27,6 +27,10 @@ export function listConversations(f: { view: InboxView; channel?: CommunicationC
 export function getConversation(id: string): Promise<ConversationDetail> {
   return apiGet(`${BASE}/conversations/${id}`);
 }
+/** Older messages in a thread. Cursor-based: `before` is the oldest id already held. */
+export function listThreadMessages(id: string, before: string, limit = 50): Promise<{ items: MessageView[]; hasMore: boolean }> {
+  return apiGet(`${BASE}/conversations/${id}/messages${qs({ before, limit })}`);
+}
 export function unreadCount(): Promise<{ count: number }> {
   return apiGet(`${BASE}/conversations/unread-count`);
 }

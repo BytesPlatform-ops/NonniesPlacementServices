@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { listSeekerMessages, sendSeekerMessage } from "@/services/seeker.service";
+import { SmsSetupPrompt } from "@/features/communications/SmsSetupPrompt";
 import { useSeekerCaseId } from "./use-seeker-case";
 
 /**
@@ -45,6 +46,7 @@ export function SeekerMessagesView() {
   return (
     <div className="space-y-6">
       <PageHeading title="Messages" description="Ask your care team anything about the placement." />
+      <SmsSetupPrompt href="/seeker/communication-preferences" />
 
       <Panel>
         {state.loading ? (

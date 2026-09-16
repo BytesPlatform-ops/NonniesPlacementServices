@@ -24,7 +24,7 @@ import {
   toMessageView,
 } from "./inbox.serializer";
 
-export type InboxView = "all" | "unread" | "needs_reply" | "archived";
+export type InboxView = "all" | "unread" | "needs_reply" | "archived" | "sent" | "received" | "failed";
 
 export interface ListConversationsInput {
   view: InboxView;
@@ -52,7 +52,10 @@ interface ReplyAttachmentInput {
   sizeBytes: number;
 }
 
-const THREAD_MESSAGE_LIMIT = 200;
+/** Newest-first page size for a thread. Older pages are fetched by cursor. */
+const THREAD_PAGE_SIZE = 50;
+/** Hard ceiling on an explicitly requested page, so a client cannot ask for everything. */
+const THREAD_MAX_PAGE_SIZE = 100;
 
 @Injectable()
 export class ConversationService {
@@ -156,9 +159,26 @@ export class ConversationService {
     if (input.view === "needs_reply") {
       conds.push(Prisma.sql`c."lastInboundAt" IS NOT NULL AND (c."lastOutboundAt" IS NULL OR c."lastInboundAt" > c."lastOutboundAt")`);
     }
+    // Direction views read the denormalized latest-direction column rather than
+    // joining messages, so the list query stays a single index scan.
+    if (input.view === "received") conds.push(Prisma.sql`c."latestDirection" = 'INBOUND'`);
+    if (input.view === "sent") conds.push(Prisma.sql`c."latestDirection" = 'OUTBOUND'`);
+    if (input.view === "failed") {
+      conds.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM "communication_messages" fm
+        WHERE fm."conversationId" = c.id
+          AND fm.direction = 'OUTBOUND'
+          AND fm.status IN ('FAILED', 'BOUNCED', 'UNDELIVERED', 'DELIVERY_UNKNOWN')
+      )`);
+    }
     if (input.search && input.search.trim()) {
       const q = `%${input.search.trim().toLowerCase()}%`;
-      conds.push(Prisma.sql`(LOWER(COALESCE(ct.email,'')) LIKE ${q} OR COALESCE(ct.phone,'') LIKE ${q} OR COALESCE(ct."normalizedPhoneE164",'') LIKE ${q} OR LOWER(COALESCE(ct."firstName",'') || ' ' || COALESCE(ct."lastName",'')) LIKE ${q} OR LOWER(COALESCE(c.subject,'')) LIKE ${q})`);
+      // Contact/subject match, plus message body via EXISTS so a conversation is
+      // returned once however many of its messages match.
+      conds.push(Prisma.sql`(LOWER(COALESCE(ct.email,'')) LIKE ${q} OR COALESCE(ct.phone,'') LIKE ${q} OR COALESCE(ct."normalizedPhoneE164",'') LIKE ${q} OR LOWER(COALESCE(ct."firstName",'') || ' ' || COALESCE(ct."lastName",'')) LIKE ${q} OR LOWER(COALESCE(c.subject,'')) LIKE ${q} OR EXISTS (
+        SELECT 1 FROM "communication_messages" sm
+        WHERE sm."conversationId" = c.id AND LOWER(COALESCE(sm."textBody",'')) LIKE ${q}
+      ))`);
     }
     return conds.reduce((acc, cur, i) => (i === 0 ? cur : Prisma.sql`${acc} AND ${cur}`));
   }
@@ -183,7 +203,9 @@ export class ConversationService {
         contact: { include: { preferences: { select: { channel: true, consentStatus: true } }, listMemberships: { include: { list: { select: { name: true } } } }, tagAssignments: { include: { tag: { select: { name: true } } } } } },
         originCampaign: { select: { name: true } },
         originSmsCampaign: { select: { name: true } },
-        messages: { orderBy: { createdAt: "asc" }, take: THREAD_MESSAGE_LIMIT, include: { attachments: true } },
+        // Newest first, then reversed below: a long thread must open on its most
+        // recent messages, never on its oldest.
+        messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: THREAD_PAGE_SIZE + 1, include: { attachments: true } },
       },
     });
     if (!conversation) throw new NotFoundException("Conversation not found");
@@ -225,7 +247,57 @@ export class ConversationService {
       originCampaignId: conversation.originCampaignId ?? conversation.originSmsCampaignId,
       originCampaignName: conversation.originCampaign?.name ?? conversation.originSmsCampaign?.name ?? null,
       createdAt: conversation.createdAt.toISOString(),
-      messages: conversation.messages.map(toMessageView),
+      // Trim the lookahead row before reversing back into reading order.
+      messages: conversation.messages.slice(0, THREAD_PAGE_SIZE).reverse().map(toMessageView),
+      hasMoreMessages: conversation.messages.length > THREAD_PAGE_SIZE,
+    };
+  }
+
+  /**
+   * Older messages in a thread, addressed by cursor rather than page number so
+   * new arrivals never shift the window and duplicate or skip a row.
+   *
+   * `before` is the id of the oldest message the client already holds; the reply
+   * is the page immediately preceding it, in reading order.
+   */
+  async messages(user: RequestUser, id: string, input: { before?: string; limit?: number }): Promise<{ items: MessageView[]; hasMore: boolean }> {
+    // Access is re-checked here: this endpoint must never be a way around the
+    // authorization that `get()` performs.
+    const conversation = await this.prisma.communicationConversation.findUnique({ where: { id }, select: { id: true } });
+    if (!conversation) throw new NotFoundException("Conversation not found");
+
+    const take = Math.min(THREAD_MAX_PAGE_SIZE, Math.max(1, input.limit ?? THREAD_PAGE_SIZE));
+    let cursorRow: { createdAt: Date; id: string } | null = null;
+    if (input.before) {
+      cursorRow = await this.prisma.communicationMessage.findFirst({
+        where: { id: input.before, conversationId: id },
+        select: { createdAt: true, id: true },
+      });
+      // A cursor from another conversation is not an error the caller can exploit —
+      // it simply addresses nothing here.
+      if (!cursorRow) throw new NotFoundException("Message not found");
+    }
+
+    const rows = await this.prisma.communicationMessage.findMany({
+      where: {
+        conversationId: id,
+        ...(cursorRow
+          ? {
+              OR: [
+                { createdAt: { lt: cursorRow.createdAt } },
+                { createdAt: cursorRow.createdAt, id: { lt: cursorRow.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: take + 1,
+      include: { attachments: true },
+    });
+
+    return {
+      items: rows.slice(0, take).reverse().map(toMessageView),
+      hasMore: rows.length > take,
     };
   }
 

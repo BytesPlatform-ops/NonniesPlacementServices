@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Archive, ArchiveRestore, MailOpen, Megaphone, Ban } from "lucide-react";
+import { ArrowLeft, Archive, ArchiveRestore, Info, Loader2, MailOpen, Megaphone, Ban } from "lucide-react";
 import { useAsync } from "@/hooks/use-async";
 import { useAuth } from "@/providers/auth-provider";
 import { PERMISSIONS } from "@/lib/permissions";
 import { LoadingState, ErrorState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MutationButton } from "@/components/ui/MutationButton";
-import { archiveConversation, getConversation, markUnread, restoreConversation } from "@/services/communications-inbox.service";
+import { archiveConversation, getConversation, listThreadMessages, markUnread, restoreConversation } from "@/services/communications-inbox.service";
+import type { MessageView } from "@/types/communications-inbox";
+import { dayKey, dayLabel } from "./inbox-format";
+import { ConversationDetailsPanel } from "./ConversationDetailsPanel";
 import { MessageBubble } from "./MessageBubble";
 import { ReplyComposer } from "./ReplyComposer";
 import { SmsComposer } from "./SmsComposer";
@@ -22,7 +25,37 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
   const canManage = hasPermission(PERMISSIONS.COMMUNICATIONS_MANAGE);
   const { data, loading, error, reload } = useAsync(() => getConversation(conversationId), [conversationId]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const lastCount = useRef(0);
+  // Pages fetched by scrolling up, kept oldest-first ahead of the server page.
+  const [older, setOlder] = useState<MessageView[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // A different conversation starts from a clean history.
+  useEffect(() => { setOlder([]); setLoadingOlder(false); }, [conversationId]);
+  useEffect(() => { if (data) setHasMore(data.hasMoreMessages); }, [data]);
+
+  const loadOlder = useCallback(async () => {
+    const oldest = older[0] ?? data?.messages[0];
+    if (!oldest || loadingOlder || !hasMore) return;
+    setLoadingOlder(true);
+    const el = scrollRef.current;
+    // Anchor on distance from the BOTTOM: prepending rows changes scrollHeight,
+    // and restoring that distance keeps the reader exactly where they were.
+    const anchor = el ? el.scrollHeight - el.scrollTop : 0;
+    try {
+      const page = await listThreadMessages(conversationId, oldest.id);
+      setOlder((prev) => [...page.items, ...prev]);
+      setHasMore(page.hasMore);
+      requestAnimationFrame(() => { if (el) el.scrollTop = el.scrollHeight - anchor; });
+    } catch {
+      // Leave hasMore set so the reader can try again by scrolling.
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [conversationId, data?.messages, older, loadingOlder, hasMore]);
 
   // Light polling; the composer keeps its own state so a refresh never loses a draft.
   useEffect(() => {
@@ -30,6 +63,8 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
     return () => clearInterval(id);
   }, [reload, conversationId]);
 
+  // Jump to the newest message when the server page grows — but never when older
+  // history is prepended, which must leave the scroll position untouched.
   useEffect(() => {
     const count = data?.messages.length ?? 0;
     if (count !== lastCount.current) {
@@ -49,12 +84,15 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
   if (!data) return null;
   const c = data;
   const isSms = c.channel === "SMS";
+  // Older pages sit ahead of the server page; both are already oldest-first.
+  const thread = older.length ? [...older, ...c.messages] : c.messages;
   const afterMutation = () => { reload(); onMutated(); };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0">
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex items-start gap-3 border-b border-sage bg-white px-4 py-3">
+      <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-sage bg-white px-4 py-3">
         {onBack ? <button type="button" onClick={onBack} className="lg:hidden -ml-1 mt-0.5 text-slate-500 hover:text-umber" aria-label="Back to inbox"><ArrowLeft className="h-5 w-5" aria-hidden /></button> : null}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -72,6 +110,9 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 2xl:hidden" aria-label="Contact and conversation details">
+            <Info className="h-4 w-4" aria-hidden />
+          </button>
           <MutationButton variant="secondary" action={() => markUnread(conversationId)} successToast="Marked unread" onSuccess={afterMutation}>
             <span className="inline-flex items-center gap-1"><MailOpen className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Unread</span></span>
           </MutationButton>
@@ -101,8 +142,42 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
       </div>
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-cream px-4 py-4">
-        {c.messages.length === 0 ? <p className="text-sm text-slate-400">No messages yet.</p> : c.messages.map((m) => <MessageBubble key={m.id} message={m} conversationId={conversationId} onChanged={afterMutation} channel={c.channel} />)}
+      <div
+        ref={scrollRef}
+        onScroll={(e) => { if (e.currentTarget.scrollTop < 120) void loadOlder(); }}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-cream px-4 py-4"
+      >
+        {hasMore ? (
+          <div className="flex justify-center pb-1">
+            <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder} className="inline-flex items-center gap-1.5 rounded-full border border-sage bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-sage/20 disabled:opacity-60">
+              {loadingOlder ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+              {loadingOlder ? "Loading earlier messages…" : "Load earlier messages"}
+            </button>
+          </div>
+        ) : thread.length > 0 ? (
+          <p className="pb-1 text-center text-xs text-slate-400">Beginning of this conversation</p>
+        ) : null}
+
+        {thread.length === 0 ? (
+          <p className="text-sm text-slate-400">No messages yet.</p>
+        ) : (
+          thread.map((m, i) => {
+            const time = m.receivedAt ?? m.sentAt ?? m.createdAt;
+            const newDay = i === 0 || dayKey(time) !== dayKey(thread[i - 1]!.receivedAt ?? thread[i - 1]!.sentAt ?? thread[i - 1]!.createdAt);
+            return (
+              <div key={m.id} className="space-y-3">
+                {newDay ? (
+                  <div className="flex items-center gap-3 pt-1" role="separator" aria-label={dayLabel(time)}>
+                    <span className="h-px flex-1 bg-sage" />
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{dayLabel(time)}</span>
+                    <span className="h-px flex-1 bg-sage" />
+                  </div>
+                ) : null}
+                <MessageBubble message={m} conversationId={conversationId} onChanged={afterMutation} channel={c.channel} />
+              </div>
+            );
+          })
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -130,6 +205,20 @@ export function ConversationThread({ conversationId, onMutated, onBack }: { conv
           onSent={afterMutation}
         />
       )}
+      </div>
+
+      {/* Details: a third column on very wide screens, a drawer everywhere else. */}
+      <div className="hidden w-[20rem] shrink-0 border-l border-sage 2xl:block">
+        <ConversationDetailsPanel conversation={c} />
+      </div>
+      {detailsOpen ? (
+        <div className="fixed inset-0 z-30 flex justify-end 2xl:hidden">
+          <button type="button" className="absolute inset-0 bg-umber/30" aria-label="Close details" onClick={() => setDetailsOpen(false)} />
+          <div className="relative h-full w-full max-w-sm border-l border-sage shadow-xl" role="dialog" aria-label="Conversation details">
+            <ConversationDetailsPanel conversation={c} onClose={() => setDetailsOpen(false)} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

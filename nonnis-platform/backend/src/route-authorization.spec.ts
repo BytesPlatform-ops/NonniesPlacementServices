@@ -47,7 +47,14 @@ const INTENTIONALLY_PUBLIC = new Set([
  * Routes that require authentication but intentionally no specific permission,
  * because they only ever return the caller's OWN identity/context.
  */
-const INTENTIONALLY_AUTH_ONLY = new Set(["GET /auth/me"]);
+const INTENTIONALLY_AUTH_ONLY = new Set([
+  "GET /auth/me",
+  // The caller's own mobile number and SMS consent. Neither route takes an id,
+  // so there is no other person's data to authorize against, and gating them
+  // would stop some signed-in people answering a question about themselves.
+  "GET /communications/me/communication-preferences",
+  "PATCH /communications/me/communication-preferences",
+]);
 
 interface RouteInfo {
   key: string;

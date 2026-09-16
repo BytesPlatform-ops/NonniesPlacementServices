@@ -23,6 +23,14 @@ export interface ContactView {
   smsConsent: CommunicationConsentStatus;
   emailConsentSource: string | null;
   smsConsentSource: string | null;
+  /** When SMS consent was given, for the consent record. */
+  smsConsentAt: string | null;
+  /**
+   * True when this contact IS a platform account rather than an imported record.
+   * Deliberately a flag, not the account id: Communications must not become a
+   * second place to look up who someone is on the platform.
+   */
+  accountLinked: boolean;
   emailSuppressed: boolean;
   smsSuppressed: boolean;
   lists: Array<{ id: string; name: string }>;
@@ -36,9 +44,9 @@ export interface ContactSuppressionFlags {
   sms: boolean;
 }
 
-function consentFor(row: ContactRow, channel: CommunicationChannel): { status: CommunicationConsentStatus; source: string | null } {
+function consentFor(row: ContactRow, channel: CommunicationChannel): { status: CommunicationConsentStatus; source: string | null; at: Date | null } {
   const pref = row.preferences.find((p) => p.channel === channel);
-  return { status: pref?.consentStatus ?? "UNKNOWN", source: pref?.consentSource ?? null };
+  return { status: pref?.consentStatus ?? "UNKNOWN", source: pref?.consentSource ?? null, at: pref?.consentAt ?? null };
 }
 
 export function toContactView(row: ContactRow, suppressed: ContactSuppressionFlags): ContactView {
@@ -59,6 +67,8 @@ export function toContactView(row: ContactRow, suppressed: ContactSuppressionFla
     smsConsent: sms.status,
     emailConsentSource: email.source,
     smsConsentSource: sms.source,
+    smsConsentAt: sms.at?.toISOString() ?? null,
+    accountLinked: !!row.userId,
     emailSuppressed: suppressed.email,
     smsSuppressed: suppressed.sms,
     lists: row.listMemberships.map((m) => ({ id: m.list.id, name: m.list.name })),

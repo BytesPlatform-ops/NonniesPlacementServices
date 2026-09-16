@@ -39,6 +39,8 @@ import { SmsConversationService } from "./sms/sms-conversation.service";
 import { SmsStatusService } from "./sms/sms-status.service";
 import { InboundSmsService } from "./sms/inbound-sms.service";
 import { SmsWebhookController } from "./sms/sms-webhook.controller";
+import { MyCommunicationPreferencesController } from "./contacts/my-communication-preferences.controller";
+import { UserContactService } from "./contacts/user-contact.service";
 import { SmsStatusController } from "./sms/sms-status.controller";
 import { DeliveryMaintenanceService } from "./dispatch/delivery-maintenance.service";
 import { DeliveryOperationsService } from "./operations/delivery-operations.service";
@@ -75,6 +77,7 @@ import { CommunicationsOperationsController } from "./operations/communications-
     SmsTemplatesController,
     SmsCampaignsController,
     SmsWebhookController,
+    MyCommunicationPreferencesController,
     SmsStatusController,
     CommunicationsOperationsController,
   ],
@@ -97,6 +100,7 @@ import { CommunicationsOperationsController } from "./operations/communications-
     SmsTemplateService,
     SmsCampaignService,
     SmsDispatcherService,
+    UserContactService,
     SmsConversationService,
     SmsStatusService,
     InboundSmsService,

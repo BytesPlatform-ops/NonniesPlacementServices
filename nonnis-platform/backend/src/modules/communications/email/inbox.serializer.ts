@@ -119,7 +119,10 @@ export interface ConversationDetail {
   originCampaignId: string | null;
   originCampaignName: string | null;
   createdAt: string;
+  /** The newest page of the thread, oldest-first. Older pages come from the cursor endpoint. */
   messages: MessageView[];
+  /** True when messages older than the first item in `messages` exist. */
+  hasMoreMessages: boolean;
 }
 
 /**

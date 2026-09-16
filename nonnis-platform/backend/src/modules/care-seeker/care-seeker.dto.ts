@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { ListMessagesDto } from "../messages/dto/messages.dto";
 
 export class GrantCareSeekerAccessDto {
   @IsEmail()
@@ -34,6 +35,22 @@ export class UpdateCareSeekerAccessDto {
 
 /** Optional case selector, for a relative authorized on more than one case. */
 export class SeekerCaseQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  caseId?: string;
+}
+
+/**
+ * Paged message list for one case.
+ *
+ * A class rather than `ListMessagesDto & SeekerCaseQueryDto`: TypeScript emits
+ * `Object` as the design type of an intersection, and Nest's ValidationPipe skips
+ * anything typed `Object`. That silently disabled both validation AND transform
+ * on this route, so `page` never received its default and `pageSize` stayed a
+ * string — which Prisma rejected as an invalid query.
+ */
+export class ListSeekerMessagesDto extends ListMessagesDto {
   @IsOptional()
   @IsString()
   @MaxLength(64)

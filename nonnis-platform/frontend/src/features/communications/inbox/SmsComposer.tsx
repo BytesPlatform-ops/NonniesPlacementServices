@@ -38,11 +38,13 @@ export function SmsComposer({ conversationId, disabled, disabledReason, onSent }
     }
   };
 
+  // Enter sends, Shift+Enter starts a new line — the convention every messaging
+  // app uses. Cmd/Ctrl+Enter keeps working for anyone already used to it.
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      void send();
-    }
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return;
+    e.preventDefault();
+    void send();
   };
 
   if (disabled) {
@@ -56,7 +58,7 @@ export function SmsComposer({ conversationId, disabled, disabledReason, onSent }
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={onKeyDown}
         rows={3}
-        placeholder="Write an SMS reply…"
+        placeholder="Write a message…"
         className="w-full resize-y rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -68,7 +70,7 @@ export function SmsComposer({ conversationId, disabled, disabledReason, onSent }
           {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />} {sending ? "Sending…" : "Send SMS"}
         </button>
       </div>
-      <p className="mt-1 text-xs text-slate-400">Sends from the configured Nonni&apos;s number to this contact only.</p>
+      <p className="mt-1 text-xs text-slate-400">Enter to send · Shift+Enter for a new line. Sends from the configured Nonni&apos;s number to this contact only.</p>
     </div>
   );
 }

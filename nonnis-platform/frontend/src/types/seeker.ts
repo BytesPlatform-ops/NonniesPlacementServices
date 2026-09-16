@@ -172,3 +172,16 @@ export interface CareSeekerAccess {
   revokedAt: string | null;
   createdAt: string;
 }
+
+/** The seeker's own phone + SMS consent, as the portal sees it. */
+export interface SeekerCommunicationPreferences {
+  phone: string | null;
+  smsConsent: "UNKNOWN" | "OPTED_IN" | "OPTED_OUT";
+  consentSource: string | null;
+  consentAt: string | null;
+  optOutAt: string | null;
+  /** No number yet, or the SMS question has not been answered. */
+  setupRequired: boolean;
+  /** SMS may actually be sent today. */
+  smsEnabled: boolean;
+}

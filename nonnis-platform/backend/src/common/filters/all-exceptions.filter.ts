@@ -26,7 +26,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const { status, code, message, details } = this.resolve(exception);
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    // Anything that is not a deliberate HttpException is a defect, whatever
+    // status it maps to. The old rule only logged 5xx, which meant a malformed
+    // Prisma query — always a bug in our own code — produced a 400 and no server
+    // log at all, leaving nothing to diagnose from.
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException)) {
       this.logger.error(
         `${request.method} ${request.url} -> ${status} ${code}`,
         exception instanceof Error ? exception.stack : String(exception),
@@ -83,7 +87,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (exception instanceof Prisma.PrismaClientValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, code: "DATABASE_VALIDATION_ERROR", message: "Invalid database query." };
+      // 500, not 400: the request was fine — the query WE built was not. This is
+      // a wrong field name, a missing argument, or a value the client could not
+      // have influenced, so blaming the caller sends every investigation the
+      // wrong way. The reason is attached outside production so the developer
+      // sees which query broke instead of a dead end.
+      return {
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        code: "DATABASE_VALIDATION_ERROR",
+        message: "The server built an invalid database query. This is a bug in the API, not in your request.",
+        details: process.env.NODE_ENV === "production" ? undefined : exception.message,
+      };
     }
 
     return {

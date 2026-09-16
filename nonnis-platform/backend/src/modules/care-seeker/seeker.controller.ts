@@ -8,12 +8,12 @@ import { CaseAppointmentsService, type CaseAppointmentView } from "../case-appoi
 import { RequestAppointmentDto, RespondToAppointmentDto } from "../case-appointments/case-appointments.dto";
 import { CaseDocumentsService, type CaseDocumentView } from "../case-documents/case-documents.service";
 import { MessagesService } from "../messages/messages.service";
-import { ListMessagesDto } from "../messages/dto/messages.dto";
 import type { MessageView } from "../messages/messages.serializer";
 import { SeekerCaseAccessService } from "./seeker-case-access";
 import { SeekerService, type SeekerCarePlanView, type SeekerCaseSummary, type SeekerDashboardView } from "./seeker.service";
 import type { SeekerProviderView } from "./seeker.serializer";
 import {
+  ListSeekerMessagesDto,
   SeekerCaseQueryDto,
   SendSeekerMessageDto,
   UpdateSeekerAccountDto,
@@ -188,7 +188,7 @@ export class SeekerController {
   @RequirePermissions(PERMISSIONS.SEEKER_MESSAGES_READ)
   async listMessages(
     @CurrentUser() user: RequestUser,
-    @Query() query: ListMessagesDto & SeekerCaseQueryDto,
+    @Query() query: ListSeekerMessagesDto,
   ): Promise<PaginatedResult<MessageView>> {
     const { caseId } = await this.scope(user, query.caseId);
     return this.messages.listFamilyForSeeker(caseId, query);

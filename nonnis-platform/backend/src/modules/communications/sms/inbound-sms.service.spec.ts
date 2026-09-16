@@ -3,6 +3,8 @@ import type { AuditService } from "../../audit/audit.service";
 import type { SuppressionsService } from "../suppressions/suppressions.service";
 import type { NormalizedInboundSms } from "../providers/sms-inbound-adapter";
 import type { SmsConversationService } from "./sms-conversation.service";
+import type { NotificationsService } from "../../notifications/notifications.service";
+import type { NotificationAudienceService } from "../../notifications/notification-audience.service";
 import { InboundSmsService } from "./inbound-sms.service";
 import { classifyKeywordFallback } from "./sms-keywords";
 
@@ -13,6 +15,7 @@ interface Harness {
   existingMessage?: { id: string } | null;
   existingReview?: { id: string } | null;
   conversation?: Record<string, unknown>;
+  recipients?: string[];
 }
 
 function build(h: Harness = {}) {
@@ -24,14 +27,21 @@ function build(h: Harness = {}) {
   const prisma = {
     communicationMessage: { findUnique: jest.fn().mockResolvedValue(h.existingMessage ?? null) },
     communicationInboundEmailReview: { findUnique: jest.fn().mockResolvedValue(h.existingReview ?? null), create: reviewCreate },
-    communicationContact: { findMany: jest.fn().mockResolvedValue(h.contacts ?? [{ id: "contact-1" }]) },
+    communicationContact: {
+      findMany: jest.fn().mockResolvedValue(h.contacts ?? [{ id: "contact-1" }]),
+      findUnique: jest.fn().mockResolvedValue({ firstName: "Jordan", lastName: "Rivera" }),
+    },
     contactChannelPreference: { upsert: prefUpsert },
     $transaction: (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   } as unknown as PrismaService;
   const conversations = { findOrCreate: jest.fn().mockResolvedValue(h.conversation ?? CONVERSATION) } as unknown as SmsConversationService;
   const suppressions = { suppressSystem: jest.fn().mockResolvedValue(undefined), releaseSystem: jest.fn().mockResolvedValue(true) } as unknown as SuppressionsService;
   const audit = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditService;
-  return { svc: new InboundSmsService(prisma, conversations, suppressions, audit), messageCreate, conversationUpdate, reviewCreate, prefUpsert, suppressions, audit };
+  const raise = jest.fn().mockResolvedValue({ notificationId: "n-1", delivered: 1 });
+  const notifications = { raise } as unknown as NotificationsService;
+  const platformUsers = jest.fn().mockResolvedValue(h.recipients ?? ["user-1"]);
+  const audience = { platformUsers } as unknown as NotificationAudienceService;
+  return { svc: new InboundSmsService(prisma, conversations, suppressions, audit, notifications, audience), messageCreate, conversationUpdate, reviewCreate, prefUpsert, suppressions, audit, raise, platformUsers };
 }
 
 const inbound = (o: Partial<NormalizedInboundSms> = {}): NormalizedInboundSms => ({
@@ -143,5 +153,60 @@ describe("InboundSmsService STOP / START / HELP", () => {
     await svc.ingest(inbound({ body: "Please don't stop the service" }));
     expect(suppressions.suppressSystem).not.toHaveBeenCalled();
     expect(conversationUpdate.mock.calls[0]![0].data.lastInboundAt).not.toBeNull();
+  });
+});
+
+describe("InboundSmsService notifications", () => {
+  it("notifies inbox staff, deep-linking to the conversation", async () => {
+    const { svc, raise, platformUsers } = build();
+    await svc.ingest(inbound({ providerMessageId: "SM-notify", body: "Thanks, I'll call tomorrow" }));
+
+    expect(platformUsers).toHaveBeenCalledWith("communications.read");
+    expect(raise).toHaveBeenCalledTimes(1);
+    const arg = raise.mock.calls[0]![0];
+    expect(arg.type).toBe("message.inbound_sms");
+    expect(arg.route).toBe("/communications/inbox/conv-1");
+    expect(arg.entityId).toBe("conv-1");
+    expect(arg.recipientUserIds).toEqual(["user-1"]);
+    // The preview carries the contact's name, never the raw provider payload.
+    expect(arg.message).toBe("Jordan Rivera: Thanks, I'll call tomorrow");
+  });
+
+  it("keys the notification on the provider message id so a webhook retry cannot duplicate it", async () => {
+    const { svc, raise } = build();
+    await svc.ingest(inbound({ providerMessageId: "SM-dedupe" }));
+    expect(raise.mock.calls[0]![0].eventKey).toBe("message.inbound_sms:SM-dedupe");
+  });
+
+  it("does not notify for STOP / START / HELP keywords", async () => {
+    for (const body of ["STOP", "START", "HELP"]) {
+      const { svc, raise } = build();
+      await svc.ingest(inbound({ body }));
+      expect(raise).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not notify when the sender is unknown and the message is quarantined", async () => {
+    const { svc, raise, reviewCreate } = build({ contacts: [] });
+    const result = await svc.ingest(inbound());
+    expect(result).toEqual({ status: "review", reason: "UNKNOWN_PHONE" });
+    expect(reviewCreate).toHaveBeenCalled();
+    expect(raise).not.toHaveBeenCalled();
+  });
+
+  it("stores the message even when raising the notification throws", async () => {
+    // A notification outage must never make the webhook fail: Twilio would
+    // redeliver a message that is already stored.
+    const { svc, messageCreate, raise } = build();
+    raise.mockRejectedValueOnce(new Error("notifications down"));
+    const result = await svc.ingest(inbound());
+    expect(result).toEqual({ status: "linked", conversationId: "conv-1", optOutType: undefined });
+    expect(messageCreate).toHaveBeenCalled();
+  });
+
+  it("skips the notification entirely when nobody staffs the inbox", async () => {
+    const { svc, raise } = build({ recipients: [] });
+    await svc.ingest(inbound());
+    expect(raise).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { CurrentUser, RequirePermissions } from "../../auth/decorators";
 import type { RequestUser } from "../../auth/request-user";
 import { EmailDispatcherService } from "./email-dispatcher.service";
 import { ConversationService } from "./conversation.service";
-import { AttachmentUploadUrlDto, ListConversationsDto, ReplyDto } from "../dto/inbox.dto";
+import { AttachmentUploadUrlDto, ListConversationsDto, ListThreadMessagesDto, ReplyDto } from "../dto/inbox.dto";
 
 /**
  * Unified inbox conversations. `communications/conversations` is the channel-neutral
@@ -61,6 +61,16 @@ export class ConversationsController {
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
   get(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string) {
     return this.conversations.get(user, id);
+  }
+
+  /**
+   * Older messages in a thread. Separate from `GET :id` because opening a
+   * conversation marks it read, and paging backwards through history must not.
+   */
+  @Get(":id/messages")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
+  messages(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Query() query: ListThreadMessagesDto) {
+    return this.conversations.messages(user, id, { before: query.before, limit: query.limit });
   }
 
   @Post(":id/read")

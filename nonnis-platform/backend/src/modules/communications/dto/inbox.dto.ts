@@ -5,7 +5,7 @@ import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
 import { MAX_ATTACHMENTS } from "../email/attachment-policy";
 import { MAX_REPLY_CHARS as REPLY_LIMIT } from "../email/reply-format";
 
-const VIEWS = ["all", "unread", "needs_reply", "archived"] as const;
+const VIEWS = ["all", "unread", "needs_reply", "archived", "sent", "received", "failed"] as const;
 
 export class ListConversationsDto extends PaginationQueryDto {
   @IsOptional() @IsIn(VIEWS) view: (typeof VIEWS)[number] = "all";
@@ -14,6 +14,13 @@ export class ListConversationsDto extends PaginationQueryDto {
   /** Scope the list to a single contact (used by the contact detail history). */
   @IsOptional() @IsUUID() contactId?: string;
   @IsOptional() @IsString() @MaxLength(200) search?: string;
+}
+
+/** Cursor page of older messages in one thread. */
+export class ListThreadMessagesDto {
+  /** Id of the OLDEST message the client already holds; the page before it is returned. */
+  @IsOptional() @IsUUID() before?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
 }
 
 export class ReplyAttachmentDto {

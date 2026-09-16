@@ -528,6 +528,7 @@ model User {
   careSeekerAccess      CareSeekerCaseAccess[]   @relation("CareSeekerAccessUser")
   careSeekerGrants      CareSeekerCaseAccess[]   @relation("CareSeekerAccessGrantedBy")
   notifications         NotificationRecipient[]  @relation("UserNotifications")
+  communicationContact  CommunicationContact?    @relation("UserCommunicationContact")
 
   @@index([status])
   @@map("users")
@@ -1367,6 +1368,8 @@ enum CommunicationContactSource {
   PASTE_IMPORT
   CSV_IMPORT
   TXT_IMPORT
+  /// Created by a Discharge Professional completing their own contact setup.
+  SEEKER_ONBOARDING
 }
 
 enum CommunicationContactStatus {
@@ -1420,6 +1423,16 @@ enum CommunicationMessageStatus {
 model CommunicationContact {
   id String @id @default(uuid()) @db.Uuid
 
+  /// The platform account this contact IS, when the contact was created by a
+  /// signed-in user setting up their own communication preferences.
+  ///
+  /// Nullable because most contacts are imported marketing records that belong
+  /// to no account, and unique because one account is one person: this is what
+  /// makes the onboarding sync idempotent under concurrency rather than relying
+  /// on a read-then-write. SetNull so deleting an account never destroys the
+  /// consent record or the conversation history attached to it.
+  userId String? @unique @db.Uuid
+
   firstName String?
   lastName  String?
 
@@ -1443,6 +1456,7 @@ model CommunicationContact {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  user            User?                       @relation("UserCommunicationContact", fields: [userId], references: [id], onDelete: SetNull)
   preferences     ContactChannelPreference[]
   listMemberships CommunicationListMember[]
   tagAssignments  CommunicationContactTag[]

@@ -83,6 +83,9 @@ const PROVIDER_NAV: NavGroup[] = [
       { label: "Capacity", href: "/provider/capacity", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Team", href: "/provider/team", permission: PERMISSIONS.USERS_READ },
       { label: "Notifications", href: "/notifications", permission: PERMISSIONS.NOTIFICATIONS_READ },
+      // Managing your own mobile number and SMS answer. Gated on the same
+      // permission as Notifications so each portal's menu stays role-scoped.
+      { label: "Communication preferences", href: "/communication-preferences", permission: PERMISSIONS.NOTIFICATIONS_READ },
     ],
   },
 ];
@@ -111,6 +114,7 @@ const SEEKER_NAV: NavGroup[] = [
       { label: "Progress", href: "/seeker/progress", permission: PERMISSIONS.SEEKER_CASE_READ },
       { label: "Notifications", href: "/notifications", permission: PERMISSIONS.NOTIFICATIONS_READ },
       { label: "Account", href: "/seeker/account", permission: PERMISSIONS.SEEKER_CASE_READ },
+      { label: "Communication preferences", href: "/seeker/communication-preferences", permission: PERMISSIONS.SEEKER_CASE_READ },
     ],
   },
 ];

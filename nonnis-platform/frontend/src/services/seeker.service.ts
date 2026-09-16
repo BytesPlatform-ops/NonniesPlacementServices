@@ -6,6 +6,7 @@ import type {
   SeekerAppointment,
   SeekerCarePlan,
   SeekerCaseSummary,
+  SeekerCommunicationPreferences,
   SeekerDashboard,
   SeekerDocument,
   SeekerProgress,
@@ -99,6 +100,15 @@ export function listSeekerMessages(
 
 export function sendSeekerMessage(body: string, caseId?: string): Promise<MessageView> {
   return apiPost<MessageView>("/api/v1/seeker/messages", { body, caseId });
+}
+
+export function getSeekerCommunicationPreferences(): Promise<SeekerCommunicationPreferences> {
+  return apiGet<SeekerCommunicationPreferences>("/api/v1/communications/me/communication-preferences");
+}
+
+/** `smsConsent` omitted means "not answered" — the backend never reads that as consent. */
+export function updateSeekerCommunicationPreferences(input: { phone: string; smsConsent?: boolean }): Promise<SeekerCommunicationPreferences> {
+  return apiPatch<SeekerCommunicationPreferences>("/api/v1/communications/me/communication-preferences", input);
 }
 
 export function getSeekerAccount(): Promise<SeekerAccount> {

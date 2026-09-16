@@ -138,6 +138,7 @@ describe("navigation", () => {
       "Messages",
       "Progress",
       "Account",
+      "Communication preferences",
     ]);
     expect(groups.flatMap((g) => g.items.map((i) => i.href)).every((h) => h.startsWith("/seeker"))).toBe(true);
   });

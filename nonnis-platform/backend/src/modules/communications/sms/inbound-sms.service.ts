@@ -3,6 +3,10 @@ import { Prisma, type CommunicationInboundReviewReason } from "@prisma/client";
 import { PrismaService } from "../../../database/prisma.service";
 import { AuditService } from "../../audit/audit.service";
 import { SuppressionsService } from "../suppressions/suppressions.service";
+import { NotificationsService } from "../../notifications/notifications.service";
+import { NotificationAudienceService } from "../../notifications/notification-audience.service";
+import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../../notifications/notification-catalog";
+import { PERMISSIONS } from "../../../common/rbac";
 import { normalizePhoneE164 } from "../normalization";
 import type { InboundOptOutType, NormalizedInboundSms } from "../providers/sms-inbound-adapter";
 import { SmsConversationService } from "./sms-conversation.service";
@@ -34,6 +38,8 @@ export class InboundSmsService {
     private readonly conversations: SmsConversationService,
     private readonly suppressions: SuppressionsService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
+    private readonly audience: NotificationAudienceService,
   ) {}
 
   async ingest(input: NormalizedInboundSms): Promise<InboundSmsResult> {
@@ -65,7 +71,11 @@ export class InboundSmsService {
     if (optOutType) await this.applyOptOutEvent(contactId, fromPhone, optOutType);
 
     const conversationId = await this.appendInboundMessage(contactId, fromPhone, toPhone, input, optOutType);
-    return conversationId ? { status: "linked", conversationId, optOutType } : { status: "duplicate" };
+    if (!conversationId) return { status: "duplicate" };
+    // A STOP/START/HELP keyword is machine traffic, not a person waiting for a
+    // reply, so it never raises a notification.
+    if (!optOutType) await this.notifyInbound(conversationId, contactId, fromPhone, input);
+    return { status: "linked", conversationId, optOutType };
   }
 
   // --- opt-in / opt-out ------------------------------------------------------
@@ -100,6 +110,45 @@ export class InboundSmsService {
       return;
     }
     // HELP: provider already answered; record nothing beyond the stored message.
+  }
+
+  /**
+   * Tell the people who staff the inbox that a contact replied.
+   *
+   * Entirely best-effort: a notification failure must never roll back an inbound
+   * message that has already been stored, and must never make the webhook answer
+   * non-2xx, which would make Twilio redeliver a message we already hold.
+   *
+   * The audience is derived from the permission that actually governs the inbox,
+   * so it follows the role definitions rather than a second, drifting list. The
+   * event key is the provider message id, so webhook retries and any future
+   * reprocessing collapse onto one notification.
+   */
+  private async notifyInbound(conversationId: string, contactId: string, fromPhone: string, input: NormalizedInboundSms): Promise<void> {
+    try {
+      const recipients = await this.audience.platformUsers(PERMISSIONS.COMMUNICATIONS_READ);
+      if (recipients.length === 0) return;
+
+      const contact = await this.prisma.communicationContact.findUnique({
+        where: { id: contactId },
+        select: { firstName: true, lastName: true },
+      });
+      const name = [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || fromPhone;
+      const preview = (input.body ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+
+      await this.notifications.raise({
+        type: NOTIFICATION_TYPES.INBOUND_SMS_RECEIVED,
+        title: "New message",
+        message: preview ? `${name}: ${preview}` : `${name} sent a message.`,
+        recipientUserIds: recipients,
+        eventKey: eventKey(NOTIFICATION_TYPES.INBOUND_SMS_RECEIVED, input.providerMessageId),
+        route: ROUTES.inboxConversation(conversationId),
+        entityType: "CommunicationConversation",
+        entityId: conversationId,
+      });
+    } catch (err) {
+      this.logger.error(`Inbound SMS stored, but its notification could not be raised: ${err instanceof Error ? err.message : "unknown"}`);
+    }
   }
 
   // --- persistence -----------------------------------------------------------

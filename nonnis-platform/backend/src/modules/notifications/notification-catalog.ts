@@ -38,6 +38,8 @@ export const NOTIFICATION_TYPES = {
   // ---- messages ----
   FAMILY_MESSAGE_FROM_STAFF: "message.family_from_staff",
   FAMILY_MESSAGE_FROM_FAMILY: "message.family_from_family",
+  /// A contact replied to the business number — raised from the inbound SMS webhook.
+  INBOUND_SMS_RECEIVED: "message.inbound_sms",
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
@@ -74,6 +76,7 @@ export const NOTIFICATION_DEFINITIONS: Record<NotificationType, NotificationDefi
   [NOTIFICATION_TYPES.APPOINTMENT_SCHEDULED]: { priority: "NORMAL", source: "Appointments" },
   [NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_STAFF]: { priority: "NORMAL", source: "Messages" },
   [NOTIFICATION_TYPES.FAMILY_MESSAGE_FROM_FAMILY]: { priority: "NORMAL", source: "Messages" },
+  [NOTIFICATION_TYPES.INBOUND_SMS_RECEIVED]: { priority: "NORMAL", source: "Inbox" },
 };
 
 /**
@@ -93,6 +96,8 @@ export const ROUTES = {
   seekerMessages: () => "/seeker/messages",
   staffCase: (caseId: string) => `/cases/${caseId}`,
   staffTasks: () => "/operations/tasks",
+  /// Deep link straight to one conversation in the staff inbox.
+  inboxConversation: (conversationId: string) => `/communications/inbox/${conversationId}`,
 } as const;
 
 /**

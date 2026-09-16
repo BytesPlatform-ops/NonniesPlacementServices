@@ -1,4 +1,4 @@
-export type InboxView = "all" | "unread" | "needs_reply" | "archived";
+export type InboxView = "all" | "unread" | "needs_reply" | "archived" | "sent" | "received" | "failed";
 export type CommunicationChannel = "EMAIL" | "SMS";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 export type ConversationStatus = "OPEN" | "CLOSED" | "ARCHIVED";
@@ -88,7 +88,10 @@ export interface ConversationDetail {
   originCampaignId: string | null;
   originCampaignName: string | null;
   createdAt: string;
+  /** Newest page of the thread, oldest-first. Older pages come from `listThreadMessages`. */
   messages: MessageView[];
+  /** True when messages older than `messages[0]` exist. */
+  hasMoreMessages: boolean;
 }
 
 export interface InboundReviewView {

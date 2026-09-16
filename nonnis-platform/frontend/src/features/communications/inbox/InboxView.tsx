@@ -13,12 +13,16 @@ import { ConversationList } from "./ConversationList";
 import { ConversationThread } from "./ConversationThread";
 import { InboundReviewPanel } from "./InboundReviewPanel";
 import { InboxConfigBanner } from "./InboxConfigBanner";
+import { SmsSetupPrompt } from "@/features/communications/SmsSetupPrompt";
 
 type Tab = InboxViewKey | "review";
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
   { key: "needs_reply", label: "Needs Reply" },
+  { key: "received", label: "Received" },
+  { key: "sent", label: "Sent" },
+  { key: "failed", label: "Failed" },
   { key: "archived", label: "Archived" },
   { key: "review", label: "Needs Review" },
 ];
@@ -30,7 +34,12 @@ const CHANNELS: Array<{ key: CommunicationChannel | "ALL"; label: string }> = [
   { key: "SMS", label: "SMS" },
 ];
 
-export function InboxView() {
+/**
+ * `initialConversationId` comes from the /communications/inbox/:id route, which is
+ * where notifications deep-link. It only seeds the selection — the thread request
+ * is what actually decides whether this user may read the conversation.
+ */
+export function InboxView({ initialConversationId }: { initialConversationId?: string } = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -45,8 +54,9 @@ export function InboxView() {
   const [search, setSearch] = useState(params.get("q") ?? "");
   const [debounced, setDebounced] = useState(params.get("q") ?? "");
   const [page, setPage] = useState(initialPage);
-  const [selectedId, setSelectedId] = useState<string | null>(params.get("c"));
+  const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? params.get("c"));
 
+  useEffect(() => { if (initialConversationId) setSelectedId(initialConversationId); }, [initialConversationId]);
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 300); return () => clearTimeout(t); }, [search]);
   useEffect(() => setPage(1), [tab, debounced, channel]);
 
@@ -57,10 +67,14 @@ export function InboxView() {
     if (channel !== "ALL") next.set("channel", channel);
     if (debounced.trim()) next.set("q", debounced.trim());
     if (page > 1) next.set("page", String(page));
-    if (selectedId) next.set("c", selectedId);
+    // On the deep-link route the conversation already IS the path; adding ?c= as
+    // well would give one conversation two addresses.
+    const onDeepLinkRoute = !!initialConversationId && selectedId === initialConversationId;
+    if (selectedId && !onDeepLinkRoute) next.set("c", selectedId);
+    const base = onDeepLinkRoute ? pathname : pathname.replace(/\/[0-9a-f-]{36}$/i, "");
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [tab, channel, debounced, page, selectedId, pathname, router]);
+    router.replace(qs ? `${base}?${qs}` : base, { scroll: false });
+  }, [tab, channel, debounced, page, selectedId, pathname, router, initialConversationId]);
 
   const isReview = tab === "review";
   const filters = useMemo(
@@ -89,6 +103,7 @@ export function InboxView() {
     <div className="space-y-4">
       <PageHeading title="Inbox" description="Email and SMS conversations with your contacts — replies from campaigns and direct outreach, all in one place." />
       <InboxConfigBanner />
+      <SmsSetupPrompt />
 
       <div className="flex h-[calc(100vh-13rem)] min-h-[32rem] overflow-hidden rounded-lg border border-sage bg-ivory shadow-card">
         {/* LEFT: list + tabs */}
