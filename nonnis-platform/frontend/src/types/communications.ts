@@ -39,6 +39,8 @@ export interface ListView {
   description: string | null;
   active: boolean;
   memberCount: number;
+  /** Set when membership follows a rule (SMS consent) instead of hand-picked rows. */
+  systemKey: string | null;
   createdAt: string;
   updatedAt: string;
 }

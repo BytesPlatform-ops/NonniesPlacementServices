@@ -1487,9 +1487,22 @@ model ContactChannelPreference {
 }
 
 model CommunicationList {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String
-  description     String?
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  /// Stable code identifying a DERIVED audience, e.g. "SMS_OPTED_IN".
+  ///
+  /// Null for an ordinary curated list, whose members are the rows in
+  /// `members`. When set, `members` is ignored entirely and the audience is
+  /// resolved by query at preview and at queue time, so it can never disagree
+  /// with the consent it describes — there is no membership row to drift.
+  ///
+  /// Unique so exactly one list can back a given derived audience. When
+  /// Communications later becomes organization-scoped this becomes a composite
+  /// unique with the organization, and nothing else here has to change.
+  systemKey String? @unique
+
   active          Boolean  @default(true)
   createdByUserId String?  @db.Uuid
   updatedByUserId String?  @db.Uuid

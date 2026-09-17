@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Archive, ChevronLeft, Loader2, Send } from "lucide-react";
 import { ApiError } from "@/lib/api-client";
 import { useToast } from "@/providers/toast-provider";
@@ -25,6 +25,12 @@ const MERGE_FIELDS = ["firstName", "lastName", "fullName", "organizationName", "
 
 export function SmsTemplateEditor({ template }: { template?: SmsTemplateDetail }) {
   const router = useRouter();
+  // Set when the editor was opened from the campaign wizard, which keeps its own
+  // draft. Only an in-app path is honoured, so this can never become an open
+  // redirect to somewhere else.
+  const params = useSearchParams();
+  const rawReturn = params.get("returnTo");
+  const returnTo = rawReturn && /^\/[A-Za-z0-9\-_/]*$/.test(rawReturn) ? rawReturn : null;
   const toast = useToast();
   const { hasPermission } = useAuth();
   const canSend = hasPermission(PERMISSIONS.COMMUNICATIONS_SEND);
@@ -66,7 +72,7 @@ export function SmsTemplateEditor({ template }: { template?: SmsTemplateDetail }
       } else {
         const created = await createSmsTemplate({ name: name.trim(), description: description.trim() || undefined, body });
         toast.success("Template created");
-        router.replace(`/communications/sms-templates/${created.id}`);
+        router.replace(returnTo ?? `/communications/sms-templates/${created.id}`);
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the template.");
@@ -87,7 +93,11 @@ export function SmsTemplateEditor({ template }: { template?: SmsTemplateDetail }
     }
   };
 
-  const back = <Link href="/communications/sms-templates" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft className="h-4 w-4" aria-hidden /> SMS Templates</Link>;
+  const back = returnTo ? (
+    <Link href={returnTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft className="h-4 w-4" aria-hidden /> Back to SMS campaign</Link>
+  ) : (
+    <Link href="/communications/sms-templates" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft className="h-4 w-4" aria-hidden /> SMS Templates</Link>
+  );
 
   return (
     <div className="space-y-4">

@@ -69,6 +69,11 @@ export function createList(body: { name: string; description?: string }): Promis
 export function updateList(id: string, body: Record<string, unknown>): Promise<ListView> {
   return apiPatch(`/api/v1/communications/lists/${id}`, body);
 }
+/** Copy a list's current members into a new, editable list. The source is untouched. */
+export function duplicateList(id: string, name?: string): Promise<ListView> {
+  return apiPost(`/api/v1/communications/lists/${id}/duplicate`, name ? { name } : {});
+}
+
 export function addListMembers(id: string, contactIds: string[]): Promise<{ added: number }> {
   return apiPost(`/api/v1/communications/lists/${id}/members`, { contactIds });
 }

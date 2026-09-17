@@ -18,6 +18,8 @@ function contact(id: string, over: Record<string, unknown> = {}) {
 
 function makeService(contacts: Array<ReturnType<typeof contact>>, members: string[] = [], suppressedEmails: string[] = []) {
   const prisma = {
+    // Curated lists: systemKey null, so membership rows are what get read.
+    communicationList: { findMany: jest.fn().mockResolvedValue([{ id: "l1", systemKey: null }]) },
     communicationListMember: { findMany: jest.fn().mockResolvedValue(members.map((contactId) => ({ contactId }))) },
     communicationContact: { findMany: jest.fn().mockResolvedValue(contacts) },
   } as unknown as PrismaService;
@@ -63,6 +65,7 @@ describe("CampaignAudienceService.evaluate (marketing eligibility)", () => {
 describe("CampaignAudienceService.evaluateSms", () => {
   function build(contacts: Array<Record<string, unknown>>, suppressedPhones: string[] = []) {
     const prisma = {
+      communicationList: { findMany: jest.fn().mockResolvedValue([{ id: "l1", systemKey: null }, { id: "l2", systemKey: null }]) },
       communicationListMember: { findMany: jest.fn().mockResolvedValue(contacts.map((c) => ({ contactId: c.id }))) },
       communicationContact: { findMany: jest.fn().mockResolvedValue(contacts) },
     } as unknown as import("../../../database/prisma.service").PrismaService;
@@ -122,6 +125,7 @@ describe("CampaignAudienceService.evaluateSms", () => {
   it("dedupes a contact that appears in several selected lists", async () => {
     const one = contact("c1");
     const prisma = {
+      communicationList: { findMany: jest.fn().mockResolvedValue([{ id: "l1", systemKey: null }, { id: "l2", systemKey: null }]) },
       communicationListMember: { findMany: jest.fn().mockResolvedValue([{ contactId: "c1" }, { contactId: "c1" }]) },
       communicationContact: { findMany: jest.fn().mockResolvedValue([one]) },
     } as unknown as import("../../../database/prisma.service").PrismaService;

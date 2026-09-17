@@ -5,7 +5,7 @@ import { PERMISSIONS } from "../../../common/rbac";
 import { CurrentUser, RequirePermissions } from "../../auth/decorators";
 import type { RequestUser } from "../../auth/request-user";
 import { ListsService } from "./lists.service";
-import { AddMembersDto, CreateListDto, ListMembersQueryDto, UpdateListDto } from "../dto/lists.dto";
+import { AddMembersDto, CreateListDto, DuplicateListDto, ListMembersQueryDto, UpdateListDto } from "../dto/lists.dto";
 import { ListContactsDto } from "../dto/contacts.dto";
 
 class ListListsQueryDto extends ListMembersQueryDto {
@@ -50,6 +50,12 @@ export class ListsController {
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
   update(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: UpdateListDto) {
     return this.lists.update(user, id, dto);
+  }
+
+  @Post(":id/duplicate")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
+  duplicate(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: DuplicateListDto) {
+    return this.lists.duplicate(user, id, dto);
   }
 
   @Post(":id/members")

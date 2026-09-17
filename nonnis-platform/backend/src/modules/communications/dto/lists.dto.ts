@@ -12,6 +12,11 @@ export class UpdateListDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
+/** Copy a list's CURRENT members into a new editable list. */
+export class DuplicateListDto {
+  @IsOptional() @IsString() @MaxLength(160) name?: string;
+}
+
 export class ListMembersQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() @MaxLength(200) search?: string;
 }

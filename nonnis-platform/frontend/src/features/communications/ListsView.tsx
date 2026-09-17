@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ChevronLeft, Plus } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { ApiError } from "@/lib/api-client";
 import { useAsync } from "@/hooks/use-async";
@@ -22,10 +24,35 @@ const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-
 export function ListsView() {
   const [creating, setCreating] = useState(false);
   const [members, setMembers] = useState<ListView | null>(null);
+  const [autoOpened, setAutoOpened] = useState(false);
   const { data, loading, error, reload } = useAsync(() => listLists({ pageSize: 100 }), []);
+  // Arriving from the campaign wizard: open the list it asked about, and offer a
+  // way straight back. Only an in-app path is accepted, so this cannot be turned
+  // into a redirect off the platform.
+  const params = useSearchParams();
+  const rawReturn = params.get("returnTo");
+  const returnTo = rawReturn && /^\/[A-Za-z0-9\-_/]*$/.test(rawReturn) ? rawReturn : null;
+  const openId = params.get("open");
+
+  useEffect(() => {
+    if (autoOpened || !openId || !data) return;
+    const target = data.items.find((l) => l.id === openId);
+    if (target) setMembers(target);
+    // Only once, so closing the modal does not immediately reopen it.
+    setAutoOpened(true);
+  }, [autoOpened, openId, data]);
 
   const columns: Column<ListView>[] = [
-    { key: "name", header: "List", render: (l) => <button type="button" onClick={() => setMembers(l)} className="font-medium text-brand-800 hover:underline">{l.name}</button> },
+    {
+      key: "name",
+      header: "List",
+      render: (l) => (
+        <span className="flex flex-wrap items-center gap-1.5">
+          <button type="button" onClick={() => setMembers(l)} className="font-medium text-brand-800 hover:underline">{l.name}</button>
+          {l.systemKey ? <span className="rounded-full bg-sage/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-umber" title="Membership follows SMS consent automatically">auto</span> : null}
+        </span>
+      ),
+    },
     { key: "desc", header: "Description", render: (l) => <span className="text-slate-600">{l.description ?? "—"}</span> },
     { key: "count", header: "Members", align: "right", render: (l) => l.memberCount },
     { key: "status", header: "Status", render: (l) => <StatusBadge label={l.active ? "Active" : "Archived"} tone={l.active ? "positive" : "neutral"} /> },
@@ -56,6 +83,13 @@ export function ListsView() {
       <PageHeading
         title="Contact lists"
         description="Reusable audiences. One contact can belong to many lists."
+        breadcrumb={
+          returnTo ? (
+            <Link href={returnTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+              <ChevronLeft className="h-4 w-4" aria-hidden /> Back to SMS campaign
+            </Link>
+          ) : undefined
+        }
         actions={<button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"><Plus className="h-4 w-4" aria-hidden /> New list</button>}
       />
       <Panel title="Lists" description={data ? `${data.total} list${data.total === 1 ? "" : "s"}` : undefined}>
@@ -122,7 +156,13 @@ function MembersModal({ list, onClose }: { list: ListView; onClose: () => void }
   return (
     <Modal title={`Members · ${list.name}`} onClose={onClose} size="lg">
       <div className="space-y-4">
-        <div>
+        {list.systemKey ? (
+          <p className="rounded-md border border-sage bg-ivory px-3 py-2 text-sm text-slate-600">
+            This audience follows SMS consent automatically. People appear here the moment they opt in and drop out the moment they opt out, so
+            there is nothing to add or remove by hand.
+          </p>
+        ) : null}
+        <div className={list.systemKey ? "hidden" : undefined}>
           <label className="block"><span className="text-xs font-medium text-slate-600">Add contacts</span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contacts to add…" className={inputCls} />
           </label>
@@ -152,7 +192,7 @@ function MembersModal({ list, onClose }: { list: ListView; onClose: () => void }
                 {members.data.items.map((c) => (
                   <li key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span>{contactName(c)} <span className="text-slate-400">{c.email ?? c.phone}</span></span>
-                    <MutationButton variant="danger-link" action={() => remove(c)} successToast="Removed from list">Remove</MutationButton>
+                    {list.systemKey ? null : <MutationButton variant="danger-link" action={() => remove(c)} successToast="Removed from list">Remove</MutationButton>}
                   </li>
                 ))}
               </ul>

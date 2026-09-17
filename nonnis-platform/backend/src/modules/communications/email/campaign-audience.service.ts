@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../database/prisma.service";
 import { SuppressionsService } from "../suppressions/suppressions.service";
 import { evaluateChannelEligibility } from "../eligibility";
+import { isSystemAudienceKey, systemAudience, type SystemAudienceDefinition } from "../lists/system-audiences";
 
 export interface AudienceConfig {
   listIds: string[];
@@ -77,10 +78,37 @@ export class CampaignAudienceService {
   ) {}
 
   /** Union of contact ids from selected lists + explicitly selected contacts. */
+  /**
+   * Turn an audience selection into contact ids.
+   *
+   * The single choke point for both channels, and therefore where a derived
+   * audience is resolved: a list carrying a `systemKey` has no membership rows
+   * to read, so its members are fetched by running the audience's own predicate.
+   * Resolving here rather than in the campaign services means preview, queue and
+   * every future caller all see the same membership without knowing the
+   * difference between a curated list and a derived one.
+   */
   async resolveContactIds(audience: AudienceConfig): Promise<{ unique: string[]; rawCount: number }> {
-    const fromLists = audience.listIds.length
-      ? (await this.prisma.communicationListMember.findMany({ where: { listId: { in: audience.listIds } }, select: { contactId: true } })).map((m) => m.contactId)
-      : [];
+    const fromLists: string[] = [];
+
+    if (audience.listIds.length) {
+      const lists = await this.prisma.communicationList.findMany({
+        where: { id: { in: audience.listIds } },
+        select: { id: true, systemKey: true },
+      });
+      const curated = lists.filter((l) => !isSystemAudienceKey(l.systemKey)).map((l) => l.id);
+      const derived = lists.map((l) => systemAudience(l.systemKey)).filter((d): d is SystemAudienceDefinition => d !== null);
+
+      if (curated.length) {
+        const rows = await this.prisma.communicationListMember.findMany({ where: { listId: { in: curated } }, select: { contactId: true } });
+        fromLists.push(...rows.map((m) => m.contactId));
+      }
+      for (const definition of derived) {
+        const rows = await this.prisma.communicationContact.findMany({ where: definition.where, select: { id: true } });
+        fromLists.push(...rows.map((c) => c.id));
+      }
+    }
+
     const raw = [...fromLists, ...audience.contactIds];
     const unique = [...new Set(raw)];
     return { unique, rawCount: raw.length };
