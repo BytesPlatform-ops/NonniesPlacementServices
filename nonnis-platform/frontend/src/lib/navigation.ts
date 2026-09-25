@@ -59,6 +59,12 @@ const NAV: NavGroup[] = [
       { label: "Users", href: "/admin/users", permission: PERMISSIONS.USERS_READ },
       { label: "Facilities", href: "/admin/facilities", permission: PERMISSIONS.FACILITIES_READ },
       { label: "Service Categories", href: "/admin/service-categories", permission: PERMISSIONS.SERVICE_CATEGORIES_MANAGE },
+      // Billing a provider is Nonni's own administration, so it lives here and
+      // not in the provider portal. Reading is the gate; issuing and settling
+      // are separate permissions the screens check for themselves.
+      { label: "Invoices", href: "/admin/invoices", permission: PERMISSIONS.INVOICES_READ },
+      { label: "Payment history", href: "/admin/invoices/payments", permission: PERMISSIONS.INVOICES_READ },
+      { label: "Products", href: "/admin/products", permission: PERMISSIONS.INVOICES_READ },
     ],
   },
 ];
@@ -68,6 +74,7 @@ const PROVIDER_NAV: NavGroup[] = [
   {
     title: null,
     items: [
+      { label: "Invoices", href: "/provider/invoices", permission: PERMISSIONS.INVOICES_READ_OWN },
       { label: "Overview", href: "/provider", permission: PERMISSIONS.PROVIDERS_READ },
       { label: "Referrals", href: "/provider/referrals", permission: PERMISSIONS.REFERRALS_READ },
       // The marketplace is a parallel offering to referrals, not a replacement:

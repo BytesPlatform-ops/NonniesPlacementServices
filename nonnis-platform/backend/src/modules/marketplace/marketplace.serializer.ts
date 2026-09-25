@@ -91,6 +91,18 @@ export interface OrderView {
   declinedAt: string | null;
   cancelledAt: string | null;
   paidAt: string | null;
+  /** When the family said they sent the money — a claim, not a confirmation. */
+  paymentReportedAt: string | null;
+  /** Bank confirmation code the family supplied, if any. */
+  paymentReference: string | null;
+  /**
+   * Stripe's own last-known state, for support and display.
+   *
+   * The session and payment-intent ids are deliberately NOT projected: they are
+   * reconciliation handles for the Stripe dashboard, not something a browser or
+   * a provider needs.
+   */
+  stripePaymentStatus: string | null;
   completedAt: string | null;
   createdAt: string;
 }
@@ -175,8 +187,12 @@ export function toOrderView(row: OrderRow): OrderView {
     declinedAt: iso(row.declinedAt),
     cancelledAt: iso(row.cancelledAt),
     paidAt: iso(row.paidAt),
+    paymentReportedAt: iso(row.paymentReportedAt),
+    paymentReference: row.paymentReference,
+    stripePaymentStatus: row.stripePaymentStatus,
     completedAt: iso(row.completedAt),
     createdAt: row.createdAt.toISOString(),
-    // Never projected: seekerUserId, paidByUserId, quantityReleasedAt.
+    // Never projected: seekerUserId, paidByUserId, quantityReleasedAt,
+    // stripeCheckoutSessionId, stripePaymentIntentId.
   };
 }

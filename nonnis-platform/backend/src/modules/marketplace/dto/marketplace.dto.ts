@@ -1,21 +1,5 @@
 import { Type } from "class-transformer";
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsBoolean,
-  IsDateString,
-  IsEnum,
-  IsInt,
-  IsLatitude,
-  IsLongitude,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Max,
-  MaxLength,
-  Min,
-  MinLength,
-} from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsLatitude, IsLongitude, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
 
 export const LISTING_TYPES = ["BED", "PRIVATE_ROOM", "SHARED_ROOM", "UNIT", "OTHER"] as const;
@@ -179,3 +163,15 @@ export class OrdersQueryDto extends PaginationQueryDto {
 }
 
 export { MONEY };
+
+/**
+ * The family reporting that they have sent payment.
+ *
+ * `reference` is the confirmation code their bank shows for the transfer. It is
+ * free text on purpose — it is a reconciliation aid, never an instrument detail,
+ * and nothing in the system treats it as proof.
+ */
+export class ReportPaymentDto {
+  @IsIn(["ZELLE", "CASH"]) method!: "ZELLE" | "CASH";
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+}

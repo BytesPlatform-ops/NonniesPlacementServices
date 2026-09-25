@@ -2,7 +2,7 @@
   "name": "nonnis-platform-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Nonnis Digital Optimization Platform \u2014 backend API (modular monolith)",
+  "description": "Nonnis Digital Optimization Platform — backend API (modular monolith)",
   "scripts": {
     "build": "prisma generate && nest build",
     "postinstall": "prisma generate",
@@ -42,9 +42,11 @@
     "libphonenumber-js": "^1.13.12",
     "mjml": "^4.18.0",
     "nodemailer": "^9.0.6",
+    "pdfkit": "^0.20.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sanitize-html": "^2.12.1",
+    "stripe": "^22.6.2",
     "twilio": "^6.1.0"
   },
   "devDependencies": {
@@ -56,6 +58,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.6",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",

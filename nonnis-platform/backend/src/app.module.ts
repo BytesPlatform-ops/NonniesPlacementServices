@@ -22,6 +22,7 @@ import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { MarketplaceModule } from "./modules/marketplace/marketplace.module";
+import { InvoicesModule } from "./modules/invoices/invoices.module";
 import { CommunicationsModule } from "./modules/communications/communications.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { MessagesModule } from "./modules/messages/messages.module";
@@ -57,6 +58,7 @@ import { UsersModule } from "./modules/users/users.module";
     CommunicationsModule,
     NotificationsModule,
     MarketplaceModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {}

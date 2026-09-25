@@ -34,6 +34,9 @@ const INTENTIONALLY_PUBLIC = new Set([
   "POST /webhooks/communications/email/inbound",
   "POST /webhooks/communications/sms/inbound",
   "POST /webhooks/communications/sms/status",
+  // Stripe holds no session; the endpoint authenticates the RAW payload
+  // against the webhook signing secret before anything is read or written.
+  "POST /webhooks/marketplace/stripe",
   // Scheduler-driven dispatch pass. A cron has no user session, so this cannot
   // use Supabase auth; it is guarded by the same shared secret as the provider
   // webhooks, compared in constant time.
@@ -41,6 +44,12 @@ const INTENTIONALLY_PUBLIC = new Set([
   // Same handler over GET: Vercel Cron triggers jobs with an HTTP GET, and the
   // shared secret is required on both methods.
   "GET /internal/dispatch/run",
+  // The pay-by-card link from an invoice email or PDF. Whoever opens it is
+  // reading their mail, not signed into a portal, so the sealed token in the
+  // path IS the authorisation: it cannot be forged, it names exactly one
+  // invoice, and it grants nothing beyond opening that invoice's payment page
+  // while the invoice is still payable.
+  "GET /invoice-payments/:token",
 ]);
 
 /**

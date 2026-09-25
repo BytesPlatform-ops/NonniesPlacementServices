@@ -11,6 +11,7 @@ import { SuppressionsService } from "./suppressions/suppressions.service";
 import { ImportsController } from "./imports/imports.controller";
 import { ImportsService } from "./imports/imports.service";
 import { transportProviders } from "./providers/transport.providers";
+import { EMAIL_TRANSPORT } from "./providers/email-transport";
 import { EmailTemplatesController } from "./email/email-templates.controller";
 import { EmailTemplateService } from "./email/email-template.service";
 import { EmailCampaignsController } from "./email/email-campaigns.controller";
@@ -109,5 +110,9 @@ import { CommunicationsOperationsController } from "./operations/communications-
     CommunicationsStatusService,
     ...transportProviders,
   ],
+  // The email transport only. Other modules that need to send a transactional
+  // email (invoicing, for one) resolve the SAME configured transport rather
+  // than constructing a second one, so provider selection stays in one place.
+  exports: [EMAIL_TRANSPORT],
 })
 export class CommunicationsModule {}

@@ -1,7 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import { OrderPaymentPanel } from "./OrderPaymentPanel";
 import Link from "next/link";
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAsync } from "@/hooks/use-async";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
@@ -17,7 +20,16 @@ import type { MarketplaceOrder } from "@/types/marketplace";
 function nextStep(order: MarketplaceOrder): string | null {
   if (order.status === "REQUESTED") return "Waiting for the provider to answer. Nothing is reserved yet.";
   if (order.status === "ACCEPTED" && order.paymentStatus === "UNPAID") {
-    return "The provider accepted. Arrange the cash payment with them directly.";
+    // A card payment settles itself, so the instruction differs from the offline
+    // routes, which need the family to tell us they have sent the money.
+    if (order.paymentMethod === "STRIPE") {
+      return order.stripePaymentStatus === "paid"
+        ? "Your card payment is being confirmed."
+        : "The provider accepted. Pay by card below, or choose another method.";
+    }
+    return order.paymentReportedAt
+      ? "You reported your payment. Waiting for it to be confirmed."
+      : "The provider accepted. Pay below, then tell us you have sent it.";
   }
   if (order.status === "ACCEPTED" && order.paymentStatus === "PAID") return "Payment received. The provider will confirm the rest.";
   if (order.status === "ACTIVE") return "Your rental is active.";
@@ -29,17 +41,40 @@ function nextStep(order: MarketplaceOrder): string | null {
 export function SeekerOrdersView() {
   const state = useAsync(() => listMyMarketplaceOrders({ page: 1 }), []);
 
+  // Coming back from Stripe Checkout. The URL says what the BROWSER did, never
+  // what was paid — Stripe's webhook decides that, and it may land a moment
+  // after the redirect, so this reloads once rather than asserting anything.
+  const params = useSearchParams();
+  const outcome = params.get("payment");
+  useEffect(() => {
+    if (outcome !== "processing") return;
+    const t = setTimeout(() => state.reload(), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outcome]);
+
   return (
     <div className="space-y-6">
       <PageHeading
         title="My orders"
-        description="Your marketplace requests. Payment is arranged directly with the provider."
+        description="Your marketplace requests and their payments."
         actions={
           <Link href="/seeker/marketplace" className="text-sm font-medium text-brand-700 hover:underline">
             Browse the marketplace
           </Link>
         }
       />
+
+      {outcome === "processing" ? (
+        <div className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm text-brand-900">
+          Thanks — your card payment is being confirmed. This page updates on its own; it usually takes a few seconds.
+        </div>
+      ) : null}
+      {outcome === "cancelled" ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          Card payment was cancelled. Nothing has been charged — you can try again below or choose another method.
+        </div>
+      ) : null}
       <Panel title="Requests and orders">
         {state.loading ? (
           <LoadingState label="Loading your orders…" />
@@ -67,7 +102,10 @@ export function SeekerOrdersView() {
                       <p className="mt-1 text-sm text-slate-700">
                         {order.quantity} × {formatMoney(order.unitPrice, order.currency)} ={" "}
                         <span className="font-semibold">{formatMoney(order.totalAmount, order.currency)}</span>
-                        <span className="ml-2 text-xs text-slate-500">Cash · {order.paymentStatus === "PAID" ? "Paid" : "Unpaid"}</span>
+                        <span className="ml-2 text-xs text-slate-500">
+                          {order.paymentMethod === "STRIPE" ? "Card" : order.paymentMethod === "ZELLE" ? "Zelle" : "Cash"} ·{" "}
+                          {order.paymentStatus === "PAID" ? "Paid" : order.paymentReportedAt ? "Awaiting confirmation" : "Unpaid"}
+                        </span>
                       </p>
                       {order.requestedStartDate ? (
                         <p className="text-xs text-slate-500">
@@ -110,6 +148,9 @@ export function SeekerOrdersView() {
                       </span>
                     ) : null}
                   </div>
+                </div>
+                <div className="mt-3">
+                  <OrderPaymentPanel order={order} onReported={() => state.reload()} />
                 </div>
               </li>
             ))}

@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { json, urlencoded } from "express";
+import { json, raw, urlencoded } from "express";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory, Reflector } from "@nestjs/core";
@@ -32,6 +32,10 @@ async function bootstrap(): Promise<void> {
   // Provider webhooks are public: keep them tightly bounded.
   app.use("/api/v1/webhooks/communications/sms", urlencoded({ extended: false, limit: "128kb" }));
   app.use("/api/v1/webhooks/communications/email", json({ limit: "1mb" }));
+  // Stripe signs the RAW bytes: parsing to JSON and re-serializing changes them
+  // and every signature check would fail. This must stay ahead of the global
+  // json() below, which would otherwise consume the body first.
+  app.use("/api/v1/webhooks/marketplace/stripe", raw({ type: "application/json", limit: "256kb" }));
   app.use("/api/v1/communications/email/webhook", json({ limit: "512kb" }));
   // Ordinary authenticated CRM traffic.
   app.use(json({ limit: "2mb" }));

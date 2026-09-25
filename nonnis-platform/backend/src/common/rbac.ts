@@ -83,6 +83,19 @@ export const PERMISSIONS = {
   // extension of the referral permissions.
   MARKETPLACE_LISTINGS_MANAGE_OWN: "marketplace_listings.manage_own",
   MARKETPLACE_ORDERS_MANAGE_OWN: "marketplace_orders.manage_own",
+  // ---- Invoicing (Nonni's billing a provider) ----
+  INVOICES_READ: "invoices.read",
+  INVOICES_MANAGE: "invoices.manage",
+  /// Standing behind the FINAL amount before it reaches a provider. Separate
+  /// from writing the invoice: prices are negotiated per provider, so the
+  /// figure that leaves the building should have a name against it.
+  INVOICES_APPROVE: "invoices.approve",
+  /// Confirming that an offline payment actually arrived in the bank. Separate
+  /// from INVOICES_MANAGE on purpose: writing an invoice and asserting money was
+  /// received are different levels of trust.
+  INVOICES_VERIFY_PAYMENT: "invoices.verify_payment",
+  /// A provider seeing the invoices addressed to them, and paying them.
+  INVOICES_READ_OWN: "invoices.read_own",
   MARKETPLACE_ADMIN_READ: "marketplace_admin.read",
   MARKETPLACE_ADMIN_MANAGE: "marketplace_admin.manage",
 
@@ -154,6 +167,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionCode, string> = {
   [PERMISSIONS.SEEKER_MARKETPLACE_ORDER]: "Request to buy or rent a marketplace listing",
   [PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN]: "Create and manage marketplace listings for own provider",
   [PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN]: "Read and act on marketplace orders for own provider",
+  [PERMISSIONS.INVOICES_READ]: "Read invoices issued to providers",
+  [PERMISSIONS.INVOICES_MANAGE]: "Create, edit, send and cancel invoices",
+  [PERMISSIONS.INVOICES_APPROVE]: "Approve the final amount on an invoice before it is sent",
+  [PERMISSIONS.INVOICES_VERIFY_PAYMENT]: "Confirm that an offline invoice payment was received",
+  [PERMISSIONS.INVOICES_READ_OWN]: "Read and pay invoices addressed to your own organization",
   [PERMISSIONS.MARKETPLACE_ADMIN_READ]: "Read every marketplace listing and order",
   [PERMISSIONS.MARKETPLACE_ADMIN_MANAGE]: "Moderate marketplace listings and record offline payments",
   [PERMISSIONS.NOTIFICATIONS_READ]: "Read and manage own notifications",
@@ -201,6 +219,10 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.PROVIDER_CAPACITY_MANAGE,
       PERMISSIONS.FORM_SUBMISSIONS_READ,
       PERMISSIONS.FORM_SUBMISSIONS_MANAGE,
+      // Read-only on purpose. Issuing a bill and asserting money arrived are
+      // financial authority, so they stay with the administrator until the
+      // business decides otherwise.
+      PERMISSIONS.INVOICES_READ,
       PERMISSIONS.REFERRALS_READ,
       PERMISSIONS.REFERRALS_MANAGE,
       PERMISSIONS.REFERRALS_READ_ALL,
@@ -272,6 +294,9 @@ export const ROLE_DEFINITIONS: Record<RoleCode, RoleDefinition> = {
       PERMISSIONS.MESSAGES_SEND,
       PERMISSIONS.MARKETPLACE_LISTINGS_MANAGE_OWN,
       PERMISSIONS.MARKETPLACE_ORDERS_MANAGE_OWN,
+      // Billing is a commercial responsibility, so it sits with the
+      // administrator alongside listings — Provider Staff deliberately has none.
+      PERMISSIONS.INVOICES_READ_OWN,
       PERMISSIONS.NOTIFICATIONS_READ,
     ],
   },

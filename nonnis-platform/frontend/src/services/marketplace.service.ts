@@ -129,6 +129,26 @@ export function cancelMyMarketplaceOrder(id: string): Promise<MarketplaceOrder> 
   return apiPost<MarketplaceOrder>(`/api/v1/seeker/marketplace/orders/${id}/cancel`);
 }
 
+/**
+ * Start a card payment and get the Stripe Checkout URL to send the browser to.
+ *
+ * The body is empty on purpose — the amount comes from the stored order, so
+ * there is nothing here a client could tamper with.
+ */
+export function startMarketplaceCardPayment(id: string): Promise<{ url: string }> {
+  return apiPost<{ url: string }>(`/api/v1/seeker/marketplace/orders/${id}/checkout-session`);
+}
+
+/**
+ * Tell the provider the money has been sent.
+ *
+ * A claim, not a settlement: the order stays UNPAID until whoever receives the
+ * money confirms it.
+ */
+export function reportMyMarketplacePayment(id: string, body: { method: "ZELLE" | "CASH"; reference?: string }): Promise<MarketplaceOrder> {
+  return apiPost<MarketplaceOrder>(`/api/v1/seeker/marketplace/orders/${id}/report-payment`, body);
+}
+
 // ---- admin ------------------------------------------------------------------
 
 export function adminListListings(

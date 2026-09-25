@@ -1,5 +1,7 @@
 "use client";
 
+import { Clock } from "lucide-react";
+
 import Image from "next/image";
 import { useState } from "react";
 import { useAsync } from "@/hooks/use-async";
@@ -27,7 +29,10 @@ const rate = (o: MarketplaceOrder) =>
 function OrderCard({ order, onChanged }: { order: MarketplaceOrder; onChanged: () => void }) {
   const [reason, setReason] = useState("");
   const pending = order.status === "REQUESTED";
-  const awaitingCash = order.status === "ACCEPTED" && order.paymentStatus === "UNPAID";
+  // Card payments settle themselves through Stripe's webhook, so there is
+  // nothing for a provider to confirm — offering the button would invite them to
+  // assert a payment they cannot see.
+  const awaitingCash = order.status === "ACCEPTED" && order.paymentStatus === "UNPAID" && order.paymentMethod !== "STRIPE";
   const paid = order.paymentStatus === "PAID";
 
   return (
@@ -63,7 +68,10 @@ function OrderCard({ order, onChanged }: { order: MarketplaceOrder; onChanged: (
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <StatusBadge label={orderProgressLabel(order)} tone={orderStatusTone(order.status)} />
-          <span className="text-xs text-slate-500">Cash · {paid ? "Paid" : "Unpaid"}</span>
+          <span className="text-xs text-slate-500">
+            {order.paymentMethod === "STRIPE" ? "Card" : order.paymentMethod === "ZELLE" ? "Zelle" : "Cash"} ·{" "}
+            {paid ? "Paid" : order.paymentReportedAt ? "Reported" : "Unpaid"}
+          </span>
         </div>
       </div>
 
@@ -102,21 +110,33 @@ function OrderCard({ order, onChanged }: { order: MarketplaceOrder; onChanged: (
         </div>
       ) : null}
 
+      {awaitingCash && order.paymentReportedAt ? (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            The family reported sending {order.paymentMethod === "ZELLE" ? "a Zelle payment" : "payment"} on{" "}
+            {formatDateTime(order.paymentReportedAt)}
+            {order.paymentReference ? <> · reference <span className="font-medium">{order.paymentReference}</span></> : null}. Confirm below
+            once the money has actually arrived.
+          </span>
+        </div>
+      ) : null}
+
       {awaitingCash ? (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <MutationButton
             variant="primary"
             pendingLabel="Recording…"
             confirm={{
-              title: "Record the cash payment?",
-              description: `Confirms ${formatMoney(order.totalAmount, order.currency)} was received for ${order.orderNumber}.`,
-              confirmLabel: "Mark placement complete",
+              title: "Confirm the payment arrived?",
+              description: `Confirms ${formatMoney(order.totalAmount, order.currency)} was received for ${order.orderNumber}. Only do this once the money is actually in the account.`,
+              confirmLabel: "Confirm payment received",
             }}
             action={() => recordCashPayment(order.id)}
             successToast="Payment recorded"
             onSuccess={onChanged}
           >
-            Mark placement complete
+            Confirm payment received
           </MutationButton>
           <MutationButton
             variant="danger-link"

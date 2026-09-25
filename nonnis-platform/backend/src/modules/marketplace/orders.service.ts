@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import type { PaginatedResult } from "../../common/types/api-response";
@@ -9,7 +9,10 @@ import { NOTIFICATION_TYPES, ROUTES, eventKey } from "../notifications/notificat
 import { PERMISSIONS } from "../../common/rbac";
 import { MarketplaceAccessService, generateOrderNumber } from "./marketplace-access";
 import { orderInclude, toOrderView, type OrderView } from "./marketplace.serializer";
-import type { CreateOrderDto, DeclineOrderDto, OrdersQueryDto } from "./dto/marketplace.dto";
+import type { CreateOrderDto, DeclineOrderDto, OrdersQueryDto, ReportPaymentDto } from "./dto/marketplace.dto";
+import { ConfigService } from "@nestjs/config";
+import type { AppConfig } from "../../config/configuration";
+import { MarketplaceStripeService } from "./stripe.service";
 
 /**
  * Marketplace orders: a family's request to buy or rent a listing, and the
@@ -30,11 +33,15 @@ import type { CreateOrderDto, DeclineOrderDto, OrdersQueryDto } from "./dto/mark
  */
 @Injectable()
 export class MarketplaceOrdersService {
+  private readonly logger = new Logger("MarketplaceOrders");
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: MarketplaceAccessService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly config: ConfigService<AppConfig, true>,
+    private readonly stripe: MarketplaceStripeService,
   ) {}
 
   /**
@@ -272,6 +279,206 @@ export class MarketplaceOrdersService {
   // -------------------------------------------------------------------------
   // Provider side
   // -------------------------------------------------------------------------
+
+  /**
+   * The family reporting that they have sent payment.
+   *
+   * This records a CLAIM and nothing more. It deliberately does not touch
+   * `paymentStatus`: the money reaches Nonni's, not the provider, so only
+   * someone who can see the account may confirm receipt. Letting the payer mark
+   * their own order paid would let anyone take delivery without paying.
+   *
+   * Repeatable on purpose — someone who mistyped a reference should be able to
+   * correct it — but it can never move an order that is already settled.
+   */
+  async reportPayment(user: RequestUser, id: string, dto: ReportPaymentDto): Promise<OrderView> {
+    const existing = await this.prisma.marketplaceOrder.findFirst({
+      where: { id, seekerUserId: user.id },
+      select: { id: true, status: true, paymentStatus: true },
+    });
+    if (!existing) throw new NotFoundException(`Order ${id} not found`);
+    if (existing.paymentStatus === "PAID") {
+      throw new BadRequestException("This order is already marked as paid.");
+    }
+    if (existing.status !== "ACCEPTED" && existing.status !== "ACTIVE") {
+      throw new BadRequestException("You can report a payment once the provider has accepted your request.");
+    }
+
+    const now = new Date();
+    const updated = await this.prisma.marketplaceOrder.updateMany({
+      // Conditional on the state read above, so a provider confirming payment at
+      // the same moment wins rather than being overwritten.
+      where: { id, seekerUserId: user.id, paymentStatus: "UNPAID", status: { in: ["ACCEPTED", "ACTIVE"] } },
+      data: {
+        paymentMethod: dto.method,
+        paymentReportedAt: now,
+        paymentReportedByUserId: user.id,
+        paymentReference: dto.reference?.trim() || null,
+      },
+    });
+    if (updated.count !== 1) {
+      throw new ConflictException("This order has just been updated. Please reload and check its payment status.");
+    }
+
+    const row = await this.prisma.marketplaceOrder.findUniqueOrThrow({ where: { id }, include: orderInclude });
+    await this.audit.record({
+      action: "marketplace_order.payment_reported",
+      entityType: "MarketplaceOrder",
+      entityId: id,
+      actorUserId: user.id,
+      // The reference is a bank confirmation code, not instrument detail.
+      metadata: { method: dto.method, amount: row.totalAmount.toFixed(2), currency: row.currency, hasReference: !!row.paymentReference },
+    });
+    await this.notifyProvider(
+      row,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_PAYMENT_REPORTED,
+      "Payment reported",
+      `The family reported sending payment for ${row.orderNumber}. Confirm receipt once it lands.`,
+      user.id,
+    );
+    return toOrderView(row);
+  }
+
+  // ---- Stripe ---------------------------------------------------------------
+
+  /**
+   * Start a card payment for one of the caller's own accepted orders.
+   *
+   * Everything the charge is built from is read here, from the order row: the
+   * client sends an id and nothing else, so no price, quantity or currency can
+   * be supplied by the browser. Inventory is untouched — it was already taken
+   * when the provider accepted, and taking it again here would double-count.
+   *
+   * Re-runnable: someone who closed the Stripe tab gets the same session back
+   * rather than a second one, because the session is keyed on the order.
+   */
+  async createStripeCheckout(user: RequestUser, id: string): Promise<{ url: string }> {
+    const order = await this.prisma.marketplaceOrder.findFirst({
+      where: { id, seekerUserId: user.id },
+      select: {
+        id: true,
+        orderNumber: true,
+        listingTitle: true,
+        quantity: true,
+        unitPrice: true,
+        totalAmount: true,
+        currency: true,
+        status: true,
+        paymentStatus: true,
+      },
+    });
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    if (order.paymentStatus === "PAID") throw new BadRequestException("This order is already paid.");
+    if (order.status !== "ACCEPTED" && order.status !== "ACTIVE") {
+      throw new BadRequestException("You can pay once the provider has accepted your request.");
+    }
+
+    const base = this.config.get("frontendUrl", { infer: true }).replace(/\/$/, "");
+    const checkout = await this.stripe.createCheckoutSession(order, {
+      // The return pages report what the WEBHOOK has recorded; they never
+      // themselves decide that a payment succeeded.
+      successUrl: `${base}/seeker/orders?payment=processing&order=${order.id}`,
+      cancelUrl: `${base}/seeker/orders?payment=cancelled&order=${order.id}`,
+    });
+
+    await this.prisma.marketplaceOrder.updateMany({
+      // Still conditional: a provider confirming an offline payment in the same
+      // moment wins, and the family is told to reload rather than paying twice.
+      where: { id: order.id, seekerUserId: user.id, paymentStatus: "UNPAID" },
+      data: { paymentMethod: "STRIPE", stripeCheckoutSessionId: checkout.sessionId },
+    });
+
+    await this.audit.record({
+      action: "marketplace_order.stripe_checkout_started",
+      entityType: "MarketplaceOrder",
+      entityId: order.id,
+      actorUserId: user.id,
+      metadata: { amount: order.totalAmount.toFixed(2), currency: order.currency },
+    });
+    return { url: checkout.url };
+  }
+
+  /**
+   * Settle an order from a VERIFIED Stripe event.
+   *
+   * The webhook is the only thing that may mark a card order paid — returning to
+   * the success page proves nothing, since anyone can open that URL.
+   *
+   * Idempotent by construction: the transition is a conditional `updateMany` on
+   * the order still being UNPAID, so Stripe's at-least-once delivery settles the
+   * order exactly once however many copies of the event arrive. Inventory is not
+   * touched here at all.
+   */
+  async applyStripePaid(input: {
+    sessionId: string;
+    paymentIntentId: string | null;
+    stripeStatus: string | null;
+  }): Promise<{ applied: boolean }> {
+    const order = await this.prisma.marketplaceOrder.findUnique({
+      where: { stripeCheckoutSessionId: input.sessionId },
+      select: { id: true, orderNumber: true, paymentStatus: true, providerId: true, listingTitle: true },
+    });
+    if (!order) {
+      // A session we do not recognise: acknowledged, never guessed at.
+      this.logger.warn("Stripe reported a paid session that matches no order.");
+      return { applied: false };
+    }
+
+    const settled = await this.prisma.marketplaceOrder.updateMany({
+      where: { id: order.id, paymentStatus: "UNPAID" },
+      data: {
+        paymentStatus: "PAID",
+        paidAt: new Date(),
+        // No human confirmed this one; leaving paidByUserId null says so.
+        stripePaymentIntentId: input.paymentIntentId,
+        stripePaymentStatus: input.stripeStatus,
+      },
+    });
+    if (settled.count !== 1) {
+      // Already paid — a duplicate delivery, which is expected, not an error.
+      return { applied: false };
+    }
+
+    await this.audit.record({
+      action: "marketplace_order.payment_recorded",
+      entityType: "MarketplaceOrder",
+      entityId: order.id,
+      actorRef: "system:stripe-webhook",
+      metadata: { method: "STRIPE" },
+    });
+    await this.notifySeekerFor(
+      order.id,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_PAYMENT_RECORDED,
+      "Payment received",
+      (o) => `Your card payment for ${o.orderNumber} was received.`,
+      // No human actor: a webhook settled this. The empty id matches nobody, so
+      // the notification service drops no one from the audience.
+      "",
+    );
+    await this.notifyProvider(
+      order,
+      NOTIFICATION_TYPES.MARKETPLACE_ORDER_PAYMENT_RECORDED,
+      "Payment received",
+      `Card payment for ${order.orderNumber} has cleared.`,
+      "",
+    );
+    return { applied: true };
+  }
+
+  /**
+   * Record that a card payment did not go through.
+   *
+   * It only annotates: the order stays UNPAID and fully payable, because a
+   * declined card is a reason to try again, not a reason to close an order the
+   * provider has already accepted.
+   */
+  async applyStripeFailed(input: { sessionId: string; stripeStatus: string | null }): Promise<{ applied: boolean }> {
+    const updated = await this.prisma.marketplaceOrder.updateMany({
+      where: { stripeCheckoutSessionId: input.sessionId, paymentStatus: "UNPAID" },
+      data: { stripePaymentStatus: input.stripeStatus ?? "failed" },
+    });
+    return { applied: updated.count === 1 };
+  }
 
   async listForProvider(user: RequestUser, query: OrdersQueryDto): Promise<PaginatedResult<OrderView>> {
     const provider = await this.access.requireOwnProvider(user);

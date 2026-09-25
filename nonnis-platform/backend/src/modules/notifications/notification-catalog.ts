@@ -18,9 +18,14 @@ export const NOTIFICATION_TYPES = {
   MARKETPLACE_ORDER_REQUESTED: "marketplace_order.requested",
   MARKETPLACE_ORDER_CANCELLED_BY_SEEKER: "marketplace_order.cancelled_by_seeker",
   MARKETPLACE_LISTING_MODERATED: "marketplace_listing.moderated",
+  // ---- invoicing: the provider being billed ----
+  INVOICE_SENT: "invoice.sent",
+  INVOICE_PAYMENT_VERIFIED: "invoice.payment_verified",
   // ---- marketplace: family side ----
   MARKETPLACE_ORDER_ACCEPTED: "marketplace_order.accepted",
   MARKETPLACE_ORDER_DECLINED: "marketplace_order.declined",
+  /// The family says they have sent the money — a claim awaiting confirmation.
+  MARKETPLACE_ORDER_PAYMENT_REPORTED: "marketplace_order.payment_reported",
   MARKETPLACE_ORDER_PAYMENT_RECORDED: "marketplace_order.payment_recorded",
   MARKETPLACE_ORDER_RENTAL_STARTED: "marketplace_order.rental_started",
   MARKETPLACE_ORDER_COMPLETED: "marketplace_order.completed",
@@ -57,7 +62,11 @@ export interface NotificationDefinition {
  * keeps its meaning when something really does go wrong.
  */
 export const NOTIFICATION_DEFINITIONS: Record<NotificationType, NotificationDefinition> = {
+  // Money owed, with a due date attached: worth interrupting for.
+  [NOTIFICATION_TYPES.INVOICE_SENT]: { priority: "HIGH", source: "Invoicing" },
+  [NOTIFICATION_TYPES.INVOICE_PAYMENT_VERIFIED]: { priority: "NORMAL", source: "Invoicing" },
   [NOTIFICATION_TYPES.MARKETPLACE_ORDER_REQUESTED]: { priority: "HIGH", source: "Marketplace" },
+  [NOTIFICATION_TYPES.MARKETPLACE_ORDER_PAYMENT_REPORTED]: { priority: "HIGH", source: "Marketplace" },
   [NOTIFICATION_TYPES.MARKETPLACE_ORDER_CANCELLED_BY_SEEKER]: { priority: "NORMAL", source: "Marketplace" },
   [NOTIFICATION_TYPES.MARKETPLACE_LISTING_MODERATED]: { priority: "HIGH", source: "Marketplace" },
   [NOTIFICATION_TYPES.MARKETPLACE_ORDER_ACCEPTED]: { priority: "HIGH", source: "Marketplace" },
@@ -90,6 +99,7 @@ export const ROUTES = {
   providerOrder: () => "/provider/marketplace-orders",
   providerListings: () => "/provider/listings",
   providerReferral: (referralId: string) => `/provider/referrals/${referralId}`,
+  providerInvoice: (invoiceId: string) => `/provider/invoices/${invoiceId}`,
   seekerOrders: () => "/seeker/orders",
   seekerDocuments: () => "/seeker/documents",
   seekerAppointments: () => "/seeker/appointments",

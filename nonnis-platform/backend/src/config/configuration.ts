@@ -69,6 +69,16 @@ export interface AppConfig {
   communicationsTwilioWebhookBaseUrl: string | undefined;
   /** Explicit operator acknowledgement of A2P 10DLC registration — NOT verified with Twilio. */
   twilioA2pApproved: boolean;
+  /// Stripe (marketplace card payments). Absent means card payment is simply
+  /// unavailable — nothing else in the marketplace changes.
+  stripeSecretKey: string | undefined;
+  /// Signing secret for the Stripe webhook endpoint. Without it no Stripe event
+  /// is ever trusted, so card payments can be taken but never confirmed.
+  stripeWebhookSecret: string | undefined;
+  /// Signing key for the payment links that go out in invoice emails and PDFs.
+  /// Absent means those links cannot be minted; the signed-in provider portal is
+  /// unaffected, because that route authenticates the caller instead.
+  invoicePaymentLinkSecret: string | undefined;
   smsDispatchEnabled: boolean;
   smsDispatchBatchSize: number;
   smsDispatchConcurrency: number;
@@ -122,6 +132,13 @@ export function loadConfiguration(): AppConfig {
     twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER,
     communicationsTwilioWebhookBaseUrl: process.env.COMMUNICATIONS_TWILIO_WEBHOOK_BASE_URL?.replace(/\/$/, ""),
     twilioA2pApproved: String(process.env.TWILIO_A2P_APPROVED ?? "false").toLowerCase() === "true",
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    // Falls back to secrets that already exist wherever invoicing runs, so a
+    // working deployment does not need a new variable before links work. The key
+    // is derived, never used directly, so no secret is reused for two purposes.
+    invoicePaymentLinkSecret:
+      process.env.INVOICE_PAYMENT_LINK_SECRET ?? process.env.COMMUNICATIONS_UNSUBSCRIBE_SECRET ?? process.env.STRIPE_WEBHOOK_SECRET,
     smsDispatchEnabled: String(process.env.SMS_DISPATCH_ENABLED ?? "true").toLowerCase() === "true",
     smsDispatchBatchSize: Number.parseInt(process.env.SMS_DISPATCH_BATCH_SIZE ?? "20", 10) || 20,
     smsDispatchConcurrency: Number.parseInt(process.env.SMS_DISPATCH_CONCURRENCY ?? "3", 10) || 3,

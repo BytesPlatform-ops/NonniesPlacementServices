@@ -9,6 +9,7 @@ import type { RequestUser } from "../auth/request-user";
 import { PERMISSIONS } from "../../common/rbac";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { NotificationAudienceService } from "../notifications/notification-audience.service";
+import type { MarketplaceStripeService } from "./stripe.service";
 
 // ---------------------------------------------------------------------------
 // Actors
@@ -113,13 +114,27 @@ function harness(over: Record<string, unknown> = {}) {
     } as unknown as NotificationAudienceService,
   } as unknown as NotificationsService;
   const typed = prisma as unknown as PrismaService;
+  const stripe = {
+    configured: true,
+    webhookConfigured: true,
+    createCheckoutSession: jest.fn().mockResolvedValue({ sessionId: "cs_test_1", url: "https://checkout.stripe.test/cs_test_1" }),
+    verifyEvent: jest.fn(),
+  } as unknown as MarketplaceStripeService;
   const access = new MarketplaceAccessService(typed);
   return {
     prisma,
     audit,
     notifications,
+    stripe,
     listings: new MarketplaceListingsService(typed, access, audit, notifications),
-    orders: new MarketplaceOrdersService(typed, access, audit, notifications),
+    orders: new MarketplaceOrdersService(
+      typed,
+      access,
+      audit,
+      notifications,
+      { get: () => "http://localhost:3001" } as unknown as ConstructorParameters<typeof MarketplaceOrdersService>[4],
+      stripe,
+    ),
     listingUpdateMany,
     listingUpdate,
     orderUpdateMany,
@@ -659,5 +674,138 @@ describe("Marketplace orders — fulfilment guards", () => {
     await h.orders.startRental(providerAdmin(), "order-1").catch(() => undefined);
     const where = (h.prisma.marketplaceOrder as { updateMany: jest.Mock }).updateMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ status: "ACCEPTED", transactionType: "RENT", paymentStatus: "PAID" });
+  });
+});
+
+describe("MarketplaceOrdersService.reportPayment — a claim, never a confirmation", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  /** An accepted, unpaid order belonging to seeker-1. */
+  function reportHarness(over: Record<string, unknown> = {}, orderOver: Record<string, unknown> = {}) {
+    const row = {
+      id: "order-1",
+      orderNumber: "MKT-2026-000001",
+      listingId: "listing-1",
+      providerId: "provider-a",
+      listingTitle: "Private room",
+      transactionType: "SALE",
+      quantity: 1,
+      unitPrice: dec("1200.00"),
+      totalAmount: dec("1200.00"),
+      currency: "USD",
+      billingPeriod: null,
+      requestedStartDate: null,
+      requestedEndDate: null,
+      paymentMethod: "ZELLE",
+      paymentStatus: "UNPAID",
+      status: "ACCEPTED",
+      seekerNote: null,
+      declineReason: null,
+      caseId: null,
+      acceptedAt: new Date(),
+      declinedAt: null,
+      cancelledAt: null,
+      paidAt: null,
+      paymentReportedAt: new Date(),
+      paymentReference: "Z-9911",
+      completedAt: null,
+      createdAt: new Date(),
+      provider: { id: "provider-a", displayName: "Sunrise Home", city: null, state: null, phone: null },
+      listing: { listingType: "PRIVATE_ROOM", images: [] },
+    };
+    return harness({
+      marketplaceOrder: {
+        findFirst: jest.fn().mockResolvedValue({ id: "order-1", status: "ACCEPTED", paymentStatus: "UNPAID", ...orderOver }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(row),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
+      ...over,
+    });
+  }
+
+  it("records the report WITHOUT marking the order paid", async () => {
+    // The money reaches Nonni's, not the provider. Letting the payer settle
+    // their own order would let anyone take delivery without paying.
+    const h = reportHarness();
+    await h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE", reference: "Z-9911" });
+
+    const data = (h.prisma.marketplaceOrder as { updateMany: jest.Mock }).updateMany.mock.calls[0][0].data;
+    expect(data.paymentReportedAt).toBeInstanceOf(Date);
+    expect(data.paymentReportedByUserId).toBe("seeker-1");
+    expect(data.paymentMethod).toBe("ZELLE");
+    expect(data.paymentReference).toBe("Z-9911");
+    expect(data).not.toHaveProperty("paymentStatus");
+    expect(data).not.toHaveProperty("paidAt");
+    expect(data).not.toHaveProperty("paidByUserId");
+  });
+
+  it("scopes the write to the caller's own order and to it still being unpaid", async () => {
+    const h = reportHarness();
+    await h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE" });
+    const where = (h.prisma.marketplaceOrder as { updateMany: jest.Mock }).updateMany.mock.calls[0][0].where;
+    expect(where.seekerUserId).toBe("seeker-1");
+    expect(where.paymentStatus).toBe("UNPAID");
+  });
+
+  it("404s another family's order", async () => {
+    const h = reportHarness({
+      marketplaceOrder: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findUniqueOrThrow: jest.fn(),
+        create: jest.fn(),
+        updateMany: jest.fn(),
+      },
+    });
+    await expect(h.orders.reportPayment(seeker("seeker-2"), "order-1", { method: "ZELLE" })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("refuses once the order is already settled", async () => {
+    const h = reportHarness({}, { paymentStatus: "PAID" });
+    await expect(h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuses before the provider has accepted", async () => {
+    const h = reportHarness({}, { status: "REQUESTED" });
+    await expect(h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("allows reporting against a running rental", async () => {
+    const h = reportHarness({}, { status: "ACTIVE" });
+    await expect(h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE" })).resolves.toBeDefined();
+  });
+
+  it("yields to a provider confirming payment at the same moment", async () => {
+    const h = reportHarness({}, {});
+    (h.prisma.marketplaceOrder as { updateMany: jest.Mock }).updateMany.mockResolvedValue({ count: 0 });
+    await expect(h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE" })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("stores an empty reference as null rather than blank text", async () => {
+    const h = reportHarness();
+    await h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE", reference: "   " });
+    expect((h.prisma.marketplaceOrder as { updateMany: jest.Mock }).updateMany.mock.calls[0][0].data.paymentReference).toBeNull();
+  });
+
+  it("tells the provider, and never puts the reference in the audit trail", async () => {
+    const h = reportHarness();
+    await h.orders.reportPayment(seeker("seeker-1"), "order-1", { method: "ZELLE", reference: "Z-9911" });
+
+    expect(h.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "marketplace_order.payment_reported",
+        metadata: expect.objectContaining({ method: "ZELLE", hasReference: true }),
+      }),
+    );
+    expect(JSON.stringify((h.audit.record as jest.Mock).mock.calls)).not.toContain("Z-9911");
+    expect(h.notifications.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "marketplace_order.payment_reported" }),
+    );
   });
 });

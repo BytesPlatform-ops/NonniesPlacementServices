@@ -7,17 +7,7 @@ import { MediaService } from "../content/media.service";
 import { MarketplaceListingsService } from "./listings.service";
 import { MarketplaceOrdersService } from "./orders.service";
 import type { ListingView, OrderView } from "./marketplace.serializer";
-import {
-  AddListingImageDto,
-  CreateListingDto,
-  CreateOrderDto,
-  DeclineOrderDto,
-  ListingStatusDto,
-  ListingImageUploadUrlDto,
-  ListingsQueryDto,
-  OrdersQueryDto,
-  UpdateListingDto,
-} from "./dto/marketplace.dto";
+import { AddListingImageDto, CreateListingDto, CreateOrderDto, DeclineOrderDto, ListingImageUploadUrlDto, ListingStatusDto, ListingsQueryDto, OrdersQueryDto, ReportPaymentDto, UpdateListingDto } from "./dto/marketplace.dto";
 
 /**
  * A provider's own marketplace listings.
@@ -230,6 +220,31 @@ export class SeekerMarketplaceController {
   @HttpCode(HttpStatus.OK)
   cancelOrder(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string): Promise<OrderView> {
     return this.orders.cancelOwn(user, id);
+  }
+
+  /**
+   * Begin a card payment. Returns the Stripe Checkout URL to redirect to.
+   *
+   * The body is empty on purpose: the amount, currency and quantity all come
+   * from the stored order, so there is nothing a client could tamper with.
+   */
+  @Post("orders/:id/checkout-session")
+  @RequirePermissions(PERMISSIONS.SEEKER_MARKETPLACE_ORDER)
+  @HttpCode(HttpStatus.OK)
+  createCheckoutSession(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string): Promise<{ url: string }> {
+    return this.orders.createStripeCheckout(user, id);
+  }
+
+  /** The family telling the provider they have sent the money. */
+  @Post("orders/:id/report-payment")
+  @RequirePermissions(PERMISSIONS.SEEKER_MARKETPLACE_ORDER)
+  @HttpCode(HttpStatus.OK)
+  reportPayment(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ReportPaymentDto,
+  ): Promise<OrderView> {
+    return this.orders.reportPayment(user, id, dto);
   }
 }
 

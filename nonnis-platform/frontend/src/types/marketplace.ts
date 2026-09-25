@@ -62,6 +62,11 @@ export interface MarketplaceOrder {
   declinedAt: string | null;
   cancelledAt: string | null;
   paidAt: string | null;
+  /** When the family said they sent the money — a claim, not a confirmation. */
+  paymentReportedAt: string | null;
+  paymentReference: string | null;
+  /** Stripe's own last-known state, for display only. Never an authority. */
+  stripePaymentStatus: string | null;
   completedAt: string | null;
   createdAt: string;
 }
