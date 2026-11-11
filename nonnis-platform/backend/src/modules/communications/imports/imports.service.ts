@@ -11,6 +11,7 @@ import { classifyContactMatch, type ExistingLookup } from "../duplicate";
 import { isSupportedCountry, toEmailValue, toPhoneValue } from "../normalization";
 import { IMPORT_MAX_BYTES, IMPORT_MAX_ROWS, parseCsvContent, parseTxtLines, splitPasted } from "../import-parse";
 import type { CsvInspectDto, ImportCommitDto, ImportPreviewDto } from "../dto/imports.dto";
+import { consentFields, mayApplyConsent, parseConsentCell, resolveImportConsent, type ExplicitConsent } from "../consent";
 
 export type ImportRowStatus = "NEW" | "DUPLICATE" | "INVALID" | "CONFLICT" | "SUPPRESSED";
 
@@ -21,8 +22,19 @@ export interface ImportRowResult {
   email: string | null;
   phone: string | null;
   organization: string | null;
+  /** Consent this import will record for the row (null = leaves it as it is). */
+  emailConsent: ExplicitConsent | null;
+  smsConsent: ExplicitConsent | null;
   status: ImportRowStatus;
   issue: string | null;
+}
+
+/** How many consent statements the import carries (preview) or recorded (commit). */
+export interface ImportConsentCounts {
+  emailOptedIn: number;
+  emailOptedOut: number;
+  smsOptedIn: number;
+  smsOptedOut: number;
 }
 
 export interface ImportCounts {
@@ -39,6 +51,7 @@ export interface ImportPreviewResult {
   counts: ImportCounts;
   sampleRows: ImportRowResult[];
   problemRows: ImportRowResult[];
+  consentCounts: ImportConsentCounts;
   truncated: boolean;
 }
 
@@ -47,6 +60,8 @@ export interface ImportCommitResult extends ImportCounts {
   importedCount: number;
   listId: string | null;
   tagIds: string[];
+  /** Consent actually written — an opt-in never replaces an existing opt-out. */
+  consentApplied: ImportConsentCounts;
 }
 
 interface ProcessedRow extends ImportRowResult {
@@ -89,18 +104,28 @@ export class ImportsService {
       counts,
       sampleRows: rows.slice(0, SAMPLE_LIMIT).map(strip),
       problemRows: problemRows.map(strip),
+      consentCounts: countConsent(rows),
       truncated: rows.length > SAMPLE_LIMIT,
     };
   }
 
   async commit(user: RequestUser, dto: ImportCommitDto): Promise<ImportCommitResult> {
+    // `smsConsentSource` is the earlier, SMS-only form of `consent`; read it the same way.
+    const legacySource = dto.smsConsentSource?.trim();
+    if (legacySource && !dto.consent) dto = { ...dto, consent: { sms: true, source: legacySource } };
     // Re-validate server-side — never trust the preview as authoritative.
     const { rows, counts } = await this.process(dto);
     const newRows = rows.filter((r) => r.status === "NEW");
     const source = SOURCE_MAP[dto.sourceType];
 
-    const smsConsentSource = dto.smsConsentSource?.trim() || null;
-    const { ids: createdIds, smsConsentRecorded } = await this.insertNewContacts(user, newRows, source, smsConsentSource);
+    const createdIds = await this.insertNewContacts(user, newRows, source);
+    // Runs after the insert so new contacts and existing duplicates go through
+    // the same rule: an opt-in fills UNKNOWN only, an opt-out always records.
+    const consentApplied = await this.applyConsent(
+      user,
+      rows.filter((r) => r.status === "NEW" || r.status === "DUPLICATE"),
+      consentSourceLabel(dto),
+    );
 
     // Optional update-empty-only for existing duplicates.
     if (dto.updateEmptyOnly) {
@@ -147,11 +172,12 @@ export class ImportsService {
         sourceType: source,
         ...counts,
         imported: createdIds.length,
-        ...(smsConsentSource ? { smsConsentRecorded, smsConsentSource } : {}),
+        consentSource: hasConsent(consentApplied) ? consentSourceLabel(dto) : null,
+        consentApplied: { ...consentApplied },
       },
     });
 
-    return { batchId: batch.id, importedCount: createdIds.length, listId, tagIds, ...counts };
+    return { batchId: batch.id, importedCount: createdIds.length, listId, tagIds, consentApplied, ...counts };
   }
 
   // ---- internals ----
@@ -174,6 +200,8 @@ export class ImportsService {
       throw new BadRequestException(`Import exceeds the ${IMPORT_MAX_ROWS.toLocaleString()} row limit. Split the file and try again.`);
     }
     const country = this.country(dto);
+    const attestEmail = dto.consent?.email === true;
+    const attestSms = dto.consent?.sms === true;
 
     // First pass: normalize + row-level validity.
     const rows: ProcessedRow[] = raw.map((r, i) => {
@@ -201,6 +229,8 @@ export class ImportsService {
         email: emailVal?.display ?? (r.email?.trim() || null),
         phone: phoneVal?.display ?? (r.phone?.trim() || null),
         organization: r.organization?.trim() || null,
+        emailConsent: emailVal ? resolveImportConsent(parseConsentCell(r.emailConsent), attestEmail) : null,
+        smsConsent: phoneVal ? resolveImportConsent(parseConsentCell(r.smsConsent), attestSms) : null,
         status,
         issue,
         normalizedEmail: emailVal?.normalized ?? null,
@@ -244,6 +274,13 @@ export class ImportsService {
       if (r.normalizedPhoneE164) seenPhones.add(r.normalizedPhoneE164);
     }
 
+    // Recording an opt-in needs to say how that consent was collected; an
+    // opt-out read from the file needs no justification.
+    const recordsOptIn = rows.some((r) => r.status !== "INVALID" && (r.emailConsent === "OPTED_IN" || r.smsConsent === "OPTED_IN"));
+    if (recordsOptIn && !dto.consent?.source?.trim()) {
+      throw new BadRequestException("Say how consent was collected before importing contacts as opted in.");
+    }
+
     const counts: ImportCounts = {
       total: rows.length,
       new: rows.filter((r) => r.status === "NEW").length,
@@ -255,7 +292,7 @@ export class ImportsService {
     return { rows, counts };
   }
 
-  private parseRaw(dto: ImportPreviewDto): Array<{ firstName?: string; lastName?: string; email?: string; phone?: string; organization?: string }> {
+  private parseRaw(dto: ImportPreviewDto): RawRow[] {
     if (dto.sourceType === "CSV") {
       const parsed = parseCsvContent(dto.content);
       const m = dto.mapping ?? {};
@@ -269,6 +306,8 @@ export class ImportsService {
         email: at(cols, m.email),
         phone: at(cols, m.phone),
         organization: at(cols, m.organization),
+        emailConsent: at(cols, m.emailConsent),
+        smsConsent: at(cols, m.smsConsent),
       }));
     }
     // PASTE / TXT: one value per line/token, interpreted as email or phone.
@@ -292,13 +331,8 @@ export class ImportsService {
     return { emailToContactId, phoneToContactId };
   }
 
-  private async insertNewContacts(
-    user: RequestUser,
-    newRows: ProcessedRow[],
-    source: CommunicationContactSource,
-    smsConsentSource: string | null,
-  ): Promise<{ ids: string[]; smsConsentRecorded: number }> {
-    if (newRows.length === 0) return { ids: [], smsConsentRecorded: 0 };
+  private async insertNewContacts(user: RequestUser, newRows: ProcessedRow[], source: CommunicationContactSource): Promise<string[]> {
+    if (newRows.length === 0) return [];
     for (const chunk of chunked(newRows, CHUNK)) {
       await this.prisma.communicationContact.createMany({
         data: chunk.map((r) => ({
@@ -324,24 +358,80 @@ export class ImportsService {
       select: { id: true, normalizedEmail: true, normalizedPhoneE164: true },
     });
     const ids: string[] = [];
-    const now = new Date();
-    const smsConsent = smsConsentSource
-      ? { consentStatus: "OPTED_IN" as const, consentSource: smsConsentSource, consentAt: now, updatedByUserId: user.id }
-      : {};
-    let smsConsentRecorded = 0;
-    const prefData: Array<{ contactId: string; channel: CommunicationChannel } & typeof smsConsent> = [];
+    const prefData: Array<{ contactId: string; channel: CommunicationChannel }> = [];
     for (const c of created) {
       ids.push(c.id);
       if (c.normalizedEmail) prefData.push({ contactId: c.id, channel: "EMAIL" });
-      if (c.normalizedPhoneE164) {
-        prefData.push({ contactId: c.id, channel: "SMS", ...smsConsent });
-        if (smsConsentSource) smsConsentRecorded++;
-      }
+      if (c.normalizedPhoneE164) prefData.push({ contactId: c.id, channel: "SMS" });
     }
     for (const chunk of chunked(prefData, CHUNK)) {
       await this.prisma.contactChannelPreference.createMany({ data: chunk, skipDuplicates: true });
     }
-    return { ids, smsConsentRecorded };
+    return ids;
+  }
+
+  /**
+   * Records the consent the import carries on the contacts it matched. Rows
+   * naming the same address are merged first (an opt-out among them wins), then
+   * each is compared with what is on file: an opt-in only fills UNKNOWN.
+   */
+  private async applyConsent(user: RequestUser, rows: ProcessedRow[], source: string): Promise<ImportConsentCounts> {
+    const applied = emptyConsentCounts();
+    const wanted = new Map<string, ExplicitConsent>();
+    const merge = (key: string, value: ExplicitConsent | null) => {
+      if (!value) return;
+      if (wanted.get(key) !== "OPTED_OUT") wanted.set(key, value);
+    };
+    for (const r of rows) {
+      if (r.normalizedEmail) merge(`EMAIL:${r.normalizedEmail}`, r.emailConsent);
+      if (r.normalizedPhoneE164) merge(`SMS:${r.normalizedPhoneE164}`, r.smsConsent);
+    }
+    if (wanted.size === 0) return applied;
+
+    const emails = [...wanted.keys()].filter((k) => k.startsWith("EMAIL:")).map((k) => k.slice(6));
+    const phones = [...wanted.keys()].filter((k) => k.startsWith("SMS:")).map((k) => k.slice(4));
+    const contacts = await this.prisma.communicationContact.findMany({
+      where: { OR: [...(emails.length ? [{ normalizedEmail: { in: emails } }] : []), ...(phones.length ? [{ normalizedPhoneE164: { in: phones } }] : [])] },
+      select: { id: true, normalizedEmail: true, normalizedPhoneE164: true, preferences: { select: { id: true, channel: true, consentStatus: true } } },
+    });
+
+    // Group writes by (channel, status) so each group is one statement.
+    const updates = new Map<string, string[]>();
+    const creates: Array<{ contactId: string; channel: CommunicationChannel; status: ExplicitConsent }> = [];
+    for (const c of contacts) {
+      for (const channel of ["EMAIL", "SMS"] as const) {
+        const address = channel === "EMAIL" ? c.normalizedEmail : c.normalizedPhoneE164;
+        const next = address ? wanted.get(`${channel}:${address}`) : undefined;
+        if (!next) continue;
+        const pref = c.preferences.find((p) => p.channel === channel);
+        if (!mayApplyConsent(pref?.consentStatus, next)) continue;
+        if (pref) {
+          const key = `${channel}:${next}`;
+          updates.set(key, [...(updates.get(key) ?? []), pref.id]);
+        } else {
+          creates.push({ contactId: c.id, channel, status: next });
+        }
+        applied[counterKey(channel, next)] += 1;
+      }
+    }
+
+    const now = new Date();
+    for (const [key, ids] of updates) {
+      const status = key.split(":")[1] as ExplicitConsent;
+      for (const chunk of chunked(ids, CHUNK)) {
+        await this.prisma.contactChannelPreference.updateMany({
+          where: { id: { in: chunk } },
+          data: { ...consentFields(status, source, now), updatedByUserId: user.id },
+        });
+      }
+    }
+    for (const chunk of chunked(creates, CHUNK)) {
+      await this.prisma.contactChannelPreference.createMany({
+        data: chunk.map((c) => ({ contactId: c.contactId, channel: c.channel, ...consentFields(c.status, source, now), updatedByUserId: user.id })),
+        skipDuplicates: true,
+      });
+    }
+    return applied;
   }
 
   private async updateEmptyFields(duplicateRows: ProcessedRow[]): Promise<void> {
@@ -376,8 +466,58 @@ export class ImportsService {
   }
 }
 
+interface RawRow {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  organization?: string;
+  emailConsent?: string;
+  smsConsent?: string;
+}
+
 function strip(r: ProcessedRow): ImportRowResult {
-  return { row: r.row, firstName: r.firstName, lastName: r.lastName, email: r.email, phone: r.phone, organization: r.organization, status: r.status, issue: r.issue };
+  return {
+    row: r.row,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    email: r.email,
+    phone: r.phone,
+    organization: r.organization,
+    emailConsent: r.emailConsent,
+    smsConsent: r.smsConsent,
+    status: r.status,
+    issue: r.issue,
+  };
+}
+
+function emptyConsentCounts(): ImportConsentCounts {
+  return { emailOptedIn: 0, emailOptedOut: 0, smsOptedIn: 0, smsOptedOut: 0 };
+}
+
+function counterKey(channel: CommunicationChannel, status: ExplicitConsent): keyof ImportConsentCounts {
+  return `${channel === "EMAIL" ? "email" : "sms"}${status === "OPTED_IN" ? "OptedIn" : "OptedOut"}`;
+}
+
+/** What the import asks to record, over the rows it will actually touch. */
+function countConsent(rows: ProcessedRow[]): ImportConsentCounts {
+  const counts = emptyConsentCounts();
+  for (const r of rows) {
+    if (r.status !== "NEW" && r.status !== "DUPLICATE") continue;
+    if (r.emailConsent) counts[counterKey("EMAIL", r.emailConsent)] += 1;
+    if (r.smsConsent) counts[counterKey("SMS", r.smsConsent)] += 1;
+  }
+  return counts;
+}
+
+function hasConsent(c: ImportConsentCounts): boolean {
+  return c.emailOptedIn + c.emailOptedOut + c.smsOptedIn + c.smsOptedOut > 0;
+}
+
+/** Stored on each preference so anyone reading a contact sees where its consent came from. */
+function consentSourceLabel(dto: ImportPreviewDto): string {
+  const source = dto.consent?.source?.trim();
+  return source ? `Import: ${source}` : "Import file";
 }
 
 function chunked<T>(arr: T[], size: number): T[][] {

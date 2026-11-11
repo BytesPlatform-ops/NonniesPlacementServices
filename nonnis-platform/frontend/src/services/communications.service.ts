@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import type { PaginatedResult } from "@/types/api";
 import type {
+  BulkConsentResult,
   Channel,
   ConsentStatus,
   ContactCounts,
@@ -44,6 +45,18 @@ export function updateContact(id: string, body: Record<string, unknown>): Promis
 }
 export function setContactConsent(id: string, channel: Channel, consentStatus: ConsentStatus, consentSource?: string): Promise<ContactView> {
   return apiPost(`/api/v1/communications/contacts/${id}/consent`, { channel, consentStatus, consentSource });
+}
+/**
+ * Records consent on every contact matching `filters`. Opt-outs and suppressed
+ * addresses are skipped server-side; `dryRun` returns the counts without writing.
+ */
+export function bulkSetContactConsent(
+  filters: ContactFilters,
+  body: { channel: Channel; consentStatus: "OPTED_IN" | "OPTED_OUT"; consentSource?: string; dryRun?: boolean },
+): Promise<BulkConsentResult> {
+  const { page: _page, pageSize: _pageSize, ...rest } = filters;
+  const clean = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== ""));
+  return apiPost(`/api/v1/communications/contacts/consent/bulk`, { ...clean, ...body });
 }
 export function archiveContact(id: string): Promise<ContactView> {
   return apiPost(`/api/v1/communications/contacts/${id}/archive`, {});

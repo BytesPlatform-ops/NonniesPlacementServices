@@ -12,8 +12,8 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { commitImport, inspectCsv, listOptions, previewImport } from "@/services/communications.service";
-import type { CsvMapping, ImportCommitResult, ImportPreviewResult, ImportRequest, ImportSourceType } from "@/types/communications";
-import { IMPORT_STATUS_LABEL, importStatusTone } from "./labels";
+import type { CsvMapping, ImportCommitResult, ImportConsentCounts, ImportPreviewResult, ImportRequest, ImportSourceType } from "@/types/communications";
+import { CONSENT_SOURCES, IMPORT_STATUS_LABEL, importStatusTone } from "./labels";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const COUNTRIES = [{ code: "US", label: "United States (+1)" }, { code: "CA", label: "Canada (+1)" }, { code: "GB", label: "United Kingdom (+44)" }, { code: "AU", label: "Australia (+61)" }, { code: "MX", label: "Mexico (+52)" }];
@@ -24,9 +24,11 @@ const MAP_FIELDS: Array<{ key: keyof CsvMapping; label: string }> = [
   { key: "phone", label: "Phone" },
   { key: "organization", label: "Organization" },
 ];
+const CONSENT_FIELDS: Array<{ key: keyof CsvMapping; label: string }> = [
+  { key: "smsConsent", label: "SMS consent column" },
+  { key: "emailConsent", label: "Email consent column" },
+];
 const MAX_BYTES = 5 * 1024 * 1024;
-/** Same sources the contact page offers when consent is recorded by hand. */
-const SMS_CONSENT_SOURCES = ["Verbal consent (phone call)", "Written consent", "Website opt-in", "Existing customer consent", "Imported consent record", "Other"];
 
 export function ImportWizard() {
   const toast = useToast();
@@ -46,8 +48,9 @@ export function ImportWizard() {
   const [newListName, setNewListName] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [updateEmptyOnly, setUpdateEmptyOnly] = useState(false);
-  const [smsConsent, setSmsConsent] = useState(false);
-  const [smsConsentSource, setSmsConsentSource] = useState("");
+  const [attestSms, setAttestSms] = useState(false);
+  const [attestEmail, setAttestEmail] = useState(false);
+  const [consentSource, setConsentSource] = useState("");
   const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [result, setResult] = useState<ImportCommitResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,7 @@ export function ImportWizard() {
 
   const reset = () => {
     setStep(1); setSourceType("PASTE"); setMode("EMAIL"); setContent(""); setFilename(null); setCsvHeaders([]); setMapping({});
-    setListChoice("none"); setListId(""); setNewListName(""); setTagsText(""); setUpdateEmptyOnly(false); setSmsConsent(false); setSmsConsentSource(""); setPreview(null); setResult(null); setError(null);
+    setListChoice("none"); setListId(""); setNewListName(""); setTagsText(""); setUpdateEmptyOnly(false); setAttestSms(false); setAttestEmail(false); setConsentSource(""); setPreview(null); setResult(null); setError(null);
   };
 
   const readFile = (file: File) => {
@@ -79,9 +82,12 @@ export function ImportWizard() {
     if (sourceType !== "CSV") req.mode = mode;
     if (sourceType === "CSV") {
       const m: CsvMapping = {};
-      for (const f of MAP_FIELDS) if (mapping[f.key] !== undefined && mapping[f.key] !== "") m[f.key] = Number(mapping[f.key]);
+      for (const f of [...MAP_FIELDS, ...CONSENT_FIELDS]) if (mapping[f.key] !== undefined && mapping[f.key] !== "") m[f.key] = Number(mapping[f.key]);
       req.mapping = m;
     }
+    if (importsPhones && attestSms) req.consent = { ...req.consent, sms: true };
+    if (importsEmails && attestEmail) req.consent = { ...req.consent, email: true };
+    if (consentSource) req.consent = { ...req.consent, source: consentSource };
     return req;
   };
 
@@ -109,7 +115,6 @@ export function ImportWizard() {
       if (listChoice === "new" && newListName.trim()) req.newListName = newListName.trim();
       const tagNames = tagsText.split(",").map((t) => t.trim()).filter(Boolean);
       if (tagNames.length) req.tagNames = tagNames;
-      if (hasPhones && smsConsent && smsConsentSource) req.smsConsentSource = smsConsentSource;
       const r = await commitImport(req);
       setResult(r);
       setStep(4);
@@ -124,10 +129,15 @@ export function ImportWizard() {
     downloadCsv("nonnis-contact-import-errors.csv", toCsv(["Row", "First", "Last", "Email", "Phone", "Organization", "Status", "Reason"], rows));
   };
 
+  const mapped = (k: keyof CsvMapping) => mapping[k] !== undefined && mapping[k] !== "";
+  const importsPhones = sourceType === "CSV" ? mapped("phone") : mode === "PHONE";
+  const importsEmails = sourceType === "CSV" ? mapped("email") : mode === "EMAIL";
+  const consentColumnMapped = sourceType === "CSV" && (mapped("smsConsent") || mapped("emailConsent"));
+  const claimsConsent = (importsPhones && attestSms) || (importsEmails && attestEmail) || consentColumnMapped;
+  const consentOk = !claimsConsent || consentSource !== "";
+
   const canConfigure = sourceType === "PASTE" ? content.trim().length > 0 : content.length > 0 && (sourceType !== "CSV" || csvHeaders.length > 0);
-  const csvMappedOk = sourceType !== "CSV" || mapping.email !== undefined || mapping.phone !== undefined;
-  const hasPhones = (sourceType === "CSV" && mapping.phone !== undefined && mapping.phone !== "") || (sourceType !== "CSV" && mode === "PHONE");
-  const smsConsentOk = !hasPhones || !smsConsent || smsConsentSource !== "";
+  const csvMappedOk = sourceType !== "CSV" || mapped("email") || mapped("phone");
 
   return (
     <div className="space-y-4">
@@ -195,7 +205,7 @@ export function ImportWizard() {
             </div>
           )}
 
-          {hasPhones ? (
+          {(sourceType === "CSV" && mapping.phone !== undefined) || (sourceType !== "CSV" && mode === "PHONE") ? (
             <label className="mt-3 block max-w-xs">
               <span className="text-xs font-medium text-slate-600">Default country (for numbers without a prefix)</span>
               <select value={defaultCountry} onChange={(e) => setDefaultCountry(e.target.value)} className={`${inputCls} bg-white`}>
@@ -203,6 +213,51 @@ export function ImportWizard() {
               </select>
             </label>
           ) : null}
+
+          <div className="mt-5 rounded-lg border border-sage bg-white p-4">
+            <p className="text-sm font-semibold text-umber">Consent</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Campaigns only go to contacts who opted in. Without consent here, imported contacts start as Unknown and are left out of SMS and email campaigns.
+              An opt-out already on file, or a &ldquo;no&rdquo; in the file, is never overridden.
+            </p>
+            {sourceType === "CSV" ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {CONSENT_FIELDS.map((f) => (
+                  <label key={f.key} className="block">
+                    <span className="text-xs font-medium text-slate-600">{f.label} <span className="font-normal text-slate-400">(yes / no)</span></span>
+                    <select value={mapping[f.key] ?? ""} onChange={(e) => setMapping((m) => ({ ...m, [f.key]: e.target.value }))} className={`${inputCls} bg-white`}>
+                      <option value="">— None —</option>
+                      {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-3 space-y-2">
+              {importsPhones ? (
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={attestSms} onChange={(e) => setAttestSms(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600" />
+                  <span>Every phone number in this import agreed to receive text messages from Nonnis Placement.</span>
+                </label>
+              ) : null}
+              {importsEmails ? (
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={attestEmail} onChange={(e) => setAttestEmail(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600" />
+                  <span>Every email address in this import agreed to receive emails from Nonnis Placement.</span>
+                </label>
+              ) : null}
+            </div>
+            {claimsConsent ? (
+              <label className="mt-3 block max-w-sm">
+                <span className="text-xs font-medium text-slate-600">How was consent collected? <span className="text-rose-600">*</span></span>
+                <select value={consentSource} onChange={(e) => setConsentSource(e.target.value)} className={`${inputCls} bg-white`}>
+                  <option value="">Select…</option>
+                  {CONSENT_SOURCES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <span className="mt-1 block text-xs text-slate-500">Saved on each contact and in the audit log, with your name and the date.</span>
+              </label>
+            ) : null}
+          </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
@@ -230,32 +285,9 @@ export function ImportWizard() {
             </label>
           </div>
 
-          {hasPhones ? (
-            <div className="mt-5 rounded-lg border border-sage bg-white p-4">
-              <label className="flex items-start gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600" />
-                <span>
-                  <span className="font-medium text-umber">These contacts agreed to receive text messages</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">
-                    Records SMS consent for the new contacts in this import, so they are included in SMS campaigns. Only tick this if every person agreed (for example on a call, in writing, or through the website). US texting law requires it, and the import is logged with your name. Existing contacts are not changed.
-                  </span>
-                </span>
-              </label>
-              {smsConsent ? (
-                <label className="mt-3 block max-w-xs">
-                  <span className="text-xs font-medium text-slate-600">How did they agree?</span>
-                  <select value={smsConsentSource} onChange={(e) => setSmsConsentSource(e.target.value)} className={`${inputCls} bg-white`}>
-                    <option value="">Select…</option>
-                    {SMS_CONSENT_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-          ) : null}
-
           <div className="mt-5 flex justify-between">
             <button type="button" onClick={() => setStep(1)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Back</button>
-            <button type="button" disabled={busy || !csvMappedOk || !smsConsentOk} onClick={() => void runPreview()} className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? "Validating…" : "Preview"}</button>
+            <button type="button" disabled={busy || !csvMappedOk || !consentOk} onClick={() => void runPreview()} className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? "Validating…" : "Preview"}</button>
           </div>
         </Panel>
       ) : null}
@@ -271,10 +303,12 @@ export function ImportWizard() {
             <Counter label="Suppressed" value={preview.counts.suppressed} tone="text-amber-700" />
           </div>
 
+          <ConsentSummary counts={preview.consentCounts} verb="Consent to record" />
+
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead>
-                <tr>{["Row", "Name", "Email", "Phone", "Organization", "Status", "Issue"].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>)}</tr>
+                <tr>{["Row", "Name", "Email", "Phone", "Organization", "Consent", "Status", "Issue"].map((h) => <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {preview.sampleRows.map((r) => (
@@ -284,6 +318,7 @@ export function ImportWizard() {
                     <td className="px-3 py-2">{r.email ?? "—"}</td>
                     <td className="px-3 py-2">{r.phone ?? "—"}</td>
                     <td className="px-3 py-2">{r.organization ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{rowConsent(r.smsConsent, r.emailConsent)}</td>
                     <td className="px-3 py-2"><StatusBadge label={IMPORT_STATUS_LABEL[r.status]} tone={importStatusTone(r.status)} /></td>
                     <td className="px-3 py-2 text-slate-500">{r.issue ?? ""}</td>
                   </tr>
@@ -315,6 +350,7 @@ export function ImportWizard() {
             <Counter label="Conflict" value={result.conflict} tone="text-amber-700" />
             <Counter label="Suppressed" value={result.suppressed} tone="text-amber-700" />
           </div>
+          <ConsentSummary counts={result.consentApplied} verb="Consent recorded" />
           <div className="mt-5 flex gap-2">
             <Link href="/communications/contacts" className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">View contacts</Link>
             <button type="button" onClick={reset} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Import another</button>
@@ -373,5 +409,26 @@ function Counter({ label, value, tone }: { label: string; value: number; tone?: 
       <p className={`text-xl font-semibold tabular-nums ${tone ?? "text-umber"}`}>{value}</p>
       <p className="text-xs text-slate-500">{label}</p>
     </div>
+  );
+}
+
+function rowConsent(sms: "OPTED_IN" | "OPTED_OUT" | null, email: "OPTED_IN" | "OPTED_OUT" | null): string {
+  const label = (v: "OPTED_IN" | "OPTED_OUT") => (v === "OPTED_IN" ? "opted in" : "opted out");
+  const parts = [sms ? `SMS ${label(sms)}` : null, email ? `Email ${label(email)}` : null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "—";
+}
+
+function ConsentSummary({ counts, verb }: { counts: ImportConsentCounts; verb: string }) {
+  const parts = [
+    counts.smsOptedIn ? `${counts.smsOptedIn} SMS opted in` : null,
+    counts.smsOptedOut ? `${counts.smsOptedOut} SMS opted out` : null,
+    counts.emailOptedIn ? `${counts.emailOptedIn} email opted in` : null,
+    counts.emailOptedOut ? `${counts.emailOptedOut} email opted out` : null,
+  ].filter(Boolean);
+  return (
+    <p className="mt-4 rounded-md border border-sage bg-white px-3 py-2 text-sm text-slate-600">
+      <span className="font-medium text-umber">{verb}:</span>{" "}
+      {parts.length ? parts.join(" · ") : "none — these contacts keep consent Unknown and won't receive campaigns until consent is recorded."}
+    </p>
   );
 }

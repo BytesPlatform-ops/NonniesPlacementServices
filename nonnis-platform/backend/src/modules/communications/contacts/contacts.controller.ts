@@ -3,9 +3,9 @@ import { PERMISSIONS } from "../../../common/rbac";
 import type { PaginatedResult } from "../../../common/types/api-response";
 import { CurrentUser, RequirePermissions } from "../../auth/decorators";
 import type { RequestUser } from "../../auth/request-user";
-import { ContactsService, type ContactCounts } from "./contacts.service";
+import { ContactsService, type BulkConsentResult, type ContactCounts } from "./contacts.service";
 import type { ContactView } from "../communications.serializer";
-import { CreateContactDto, ListContactsDto, SetConsentDto, UpdateContactDto } from "../dto/contacts.dto";
+import { BulkConsentDto, CreateContactDto, ListContactsDto, SetConsentDto, UpdateContactDto } from "../dto/contacts.dto";
 
 @Controller("communications/contacts")
 export class ContactsController {
@@ -21,6 +21,13 @@ export class ContactsController {
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
   counts(): Promise<ContactCounts> {
     return this.contacts.counts();
+  }
+
+  /** Declared before ":id" routes so "consent" is never read as a contact id. */
+  @Post("consent/bulk")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
+  bulkSetConsent(@CurrentUser() user: RequestUser, @Body() dto: BulkConsentDto): Promise<BulkConsentResult> {
+    return this.contacts.bulkSetConsent(user, dto);
   }
 
   @Get(":id")

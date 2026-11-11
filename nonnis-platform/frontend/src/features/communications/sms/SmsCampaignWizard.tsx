@@ -300,6 +300,14 @@ export function SmsCampaignWizard() {
               <li>Archived: {preview.exclusions.CONTACT_ARCHIVED}</li>
               <li>Duplicates removed: {preview.duplicatesRemoved}</li>
             </ul>
+            {preview.exclusions.CONSENT_UNKNOWN > 0 ? (
+              <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {preview.exclusions.CONSENT_UNKNOWN} contact{preview.exclusions.CONSENT_UNKNOWN === 1 ? " has" : "s have"} no recorded SMS consent, so {preview.exclusions.CONSENT_UNKNOWN === 1 ? "it is" : "they are"} left out.
+                If they agreed to receive texts, record it on{" "}
+                <Link href="/communications/contacts" className="font-medium underline">Contacts → Update consent</Link>{" "}
+                (filter by this list first), then come back. Contacts who text START to your number are opted in automatically.
+              </p>
+            ) : null}
           </div>
 
           {blocked ? <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{blocked}</p> : null}

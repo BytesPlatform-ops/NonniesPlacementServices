@@ -20,6 +20,20 @@ export class CsvMappingDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) email?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) phone?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) organization?: number;
+  /** Optional per-row consent columns (yes/no style values). */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) emailConsent?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) smsConsent?: number;
+}
+
+/**
+ * The importer's statement that everyone in the file agreed to be contacted on
+ * a channel. `source` says how that consent was collected and is required
+ * whenever consent is recorded (validated in the service).
+ */
+export class ImportConsentDto {
+  @IsOptional() @IsBoolean() email?: boolean;
+  @IsOptional() @IsBoolean() sms?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) source?: string;
 }
 
 export class ImportPreviewDto {
@@ -35,6 +49,8 @@ export class ImportPreviewDto {
 
   @IsOptional() @ValidateNested() @Type(() => CsvMappingDto) mapping?: CsvMappingDto;
 
+  @IsOptional() @ValidateNested() @Type(() => ImportConsentDto) consent?: ImportConsentDto;
+
   @IsOptional() @IsBoolean() skipExisting?: boolean;
   @IsOptional() @IsBoolean() updateEmptyOnly?: boolean;
 }
@@ -44,11 +60,7 @@ export class ImportCommitDto extends ImportPreviewDto {
   @IsOptional() @IsString() @MaxLength(160) newListName?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) tagNames?: string[];
   @IsOptional() @IsString() @MaxLength(260) originalFilename?: string;
-  /**
-   * Set only when the importer confirms every NEW contact with a phone agreed
-   * to receive texts; records SMS consent OPTED_IN with this as the source.
-   * Never applied to existing (duplicate) contacts.
-   */
+  /** @deprecated Use `consent: { sms: true, source }`. Read as exactly that. */
   @IsOptional() @IsString() @MaxLength(200) smsConsentSource?: string;
 }
 

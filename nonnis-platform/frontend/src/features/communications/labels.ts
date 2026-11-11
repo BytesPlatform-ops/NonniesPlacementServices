@@ -48,3 +48,6 @@ export function contactName(c: { firstName: string | null; lastName: string | nu
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   return name || c.email || c.phone || "Unnamed contact";
 }
+
+/** How consent was collected — required whenever a contact is marked as opted in. */
+export const CONSENT_SOURCES = ["Website opt-in", "Existing customer consent", "Written consent", "Imported consent record", "Other"];

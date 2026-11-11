@@ -4,7 +4,7 @@ import type { SuppressionsService } from "../suppressions/suppressions.service";
 import type { ListsService } from "../lists/lists.service";
 import type { TagsService } from "../tags/tags.service";
 import { ImportsService } from "./imports.service";
-import type { ImportPreviewDto } from "../dto/imports.dto";
+import type { ImportCommitDto, ImportPreviewDto } from "../dto/imports.dto";
 
 function makeService(opts: { existing?: Array<{ id: string; normalizedEmail: string | null; normalizedPhoneE164: string | null }>; suppressedEmails?: string[] } = {}) {
   const findMany = jest.fn().mockResolvedValue(opts.existing ?? []);
@@ -68,47 +68,66 @@ describe("ImportsService.preview (CSV)", () => {
   });
 });
 
-describe("ImportsService.commit (SMS consent)", () => {
-  const user = { id: "staff-1" } as never;
-  const phones = { sourceType: "PASTE", mode: "PHONE", content: "(212) 736-5000", defaultCountry: "US" } as ImportPreviewDto;
+describe("ImportsService consent", () => {
+  const csv = "Name,Phone,SMS ok\nAda,(202) 456-1111,yes\nBen,(202) 456-2222,no\nCal,(202) 456-3333,";
 
-  function commitHarness() {
-    const contactFindMany = jest
+  it("reads a consent column and requires a source before recording opt-ins", async () => {
+    const { svc } = makeService();
+    const dto = { sourceType: "CSV", content: csv, mapping: { firstName: 0, phone: 1, smsConsent: 2 } } as ImportPreviewDto;
+    await expect(svc.preview(dto)).rejects.toThrow(/how consent was collected/i);
+    const res = await svc.preview({ ...dto, consent: { source: "Website opt-in" } } as ImportPreviewDto);
+    expect(res.consentCounts).toEqual({ emailOptedIn: 0, emailOptedOut: 0, smsOptedIn: 1, smsOptedOut: 1 });
+    expect(res.sampleRows.map((r) => r.smsConsent)).toEqual(["OPTED_IN", "OPTED_OUT", null]);
+  });
+
+  it("applies a whole-file attestation but keeps a per-row opt-out", async () => {
+    const { svc } = makeService();
+    const res = await svc.preview({
+      sourceType: "CSV",
+      content: csv,
+      mapping: { firstName: 0, phone: 1, smsConsent: 2 },
+      consent: { sms: true, source: "Written consent" },
+    } as ImportPreviewDto);
+    expect(res.sampleRows.map((r) => r.smsConsent)).toEqual(["OPTED_IN", "OPTED_OUT", "OPTED_IN"]);
+  });
+
+  it("does not need a source when the file only records opt-outs", async () => {
+    const { svc } = makeService();
+    const res = await svc.preview({ sourceType: "CSV", content: "Phone,SMS\n(202) 456-2222,stop", mapping: { phone: 0, smsConsent: 1 } } as ImportPreviewDto);
+    expect(res.consentCounts.smsOptedOut).toBe(1);
+  });
+});
+
+describe("ImportsService.commit (legacy smsConsentSource)", () => {
+  it("records SMS consent on the imported contact, with the given source", async () => {
+    const findMany = jest
       .fn()
-      .mockResolvedValueOnce([]) // duplicate lookup: nothing exists yet
-      .mockResolvedValueOnce([{ id: "c1", normalizedEmail: null, normalizedPhoneE164: "+12127365000" }]);
-    const contactCreateMany = jest.fn().mockResolvedValue({ count: 1 });
-    const prefCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+      .mockResolvedValueOnce([]) // duplicate lookup
+      .mockResolvedValueOnce([{ id: "c1", normalizedEmail: null, normalizedPhoneE164: "+12127365000" }]) // created ids
+      .mockResolvedValueOnce([{ id: "c1", normalizedEmail: null, normalizedPhoneE164: "+12127365000", preferences: [{ id: "p1", channel: "SMS", consentStatus: "UNKNOWN" }] }]);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const audit = { record: jest.fn() };
     const prisma = {
-      communicationContact: { findMany: contactFindMany, createMany: contactCreateMany },
-      contactChannelPreference: { createMany: prefCreateMany },
+      communicationContact: { findMany, createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      contactChannelPreference: { createMany: jest.fn().mockResolvedValue({ count: 1 }), updateMany },
       communicationImportBatch: { create: jest.fn().mockResolvedValue({ id: "batch-1" }) },
     } as unknown as PrismaService;
     const suppressions = { flagsFor: jest.fn().mockResolvedValue({ emails: new Set(), phones: new Set() }) } as unknown as SuppressionsService;
     const svc = new ImportsService(prisma, audit as unknown as AuditService, suppressions, {} as ListsService, {} as TagsService);
-    return { svc, prefCreateMany, audit };
-  }
 
-  it("records SMS consent on new contacts when the importer confirms it", async () => {
-    const { svc, prefCreateMany, audit } = commitHarness();
-    await svc.commit(user, { ...phones, smsConsentSource: "Written consent" });
-    expect(prefCreateMany.mock.calls[0][0].data[0]).toMatchObject({
-      contactId: "c1",
-      channel: "SMS",
-      consentStatus: "OPTED_IN",
-      consentSource: "Written consent",
-      updatedByUserId: "staff-1",
-    });
-    expect(audit.record.mock.calls[0][0]).toMatchObject({
-      actorUserId: "staff-1",
-      metadata: { smsConsentRecorded: 1, smsConsentSource: "Written consent" },
-    });
-  });
+    const res = await svc.commit({ id: "staff-1" } as never, {
+      sourceType: "PASTE",
+      mode: "PHONE",
+      content: "(212) 736-5000",
+      defaultCountry: "US",
+      smsConsentSource: "Written consent",
+    } as ImportCommitDto);
 
-  it("leaves SMS consent unknown when it is not confirmed", async () => {
-    const { svc, prefCreateMany } = commitHarness();
-    await svc.commit(user, phones);
-    expect(prefCreateMany.mock.calls[0][0].data[0]).toEqual({ contactId: "c1", channel: "SMS" });
+    expect(res.consentApplied.smsOptedIn).toBe(1);
+    expect(updateMany.mock.calls[0][0]).toMatchObject({
+      where: { id: { in: ["p1"] } },
+      data: { consentStatus: "OPTED_IN", consentSource: "Import: Written consent", updatedByUserId: "staff-1" },
+    });
+    expect(audit.record.mock.calls[0][0].metadata).toMatchObject({ consentSource: "Import: Written consent" });
   });
 });

@@ -72,6 +72,8 @@ export interface ImportRowResult {
   email: string | null;
   phone: string | null;
   organization: string | null;
+  emailConsent: "OPTED_IN" | "OPTED_OUT" | null;
+  smsConsent: "OPTED_IN" | "OPTED_OUT" | null;
   status: ImportRowStatus;
   issue: string | null;
 }
@@ -90,6 +92,7 @@ export interface ImportPreviewResult {
   counts: ImportCounts;
   sampleRows: ImportRowResult[];
   problemRows: ImportRowResult[];
+  consentCounts: ImportConsentCounts;
   truncated: boolean;
 }
 
@@ -98,6 +101,7 @@ export interface ImportCommitResult extends ImportCounts {
   importedCount: number;
   listId: string | null;
   tagIds: string[];
+  consentApplied: ImportConsentCounts;
 }
 
 export interface CsvInspectResult {
@@ -111,6 +115,32 @@ export interface CsvMapping {
   email?: number;
   phone?: number;
   organization?: number;
+  emailConsent?: number;
+  smsConsent?: number;
+}
+
+/** The importer's statement that everyone in the file consented on a channel. */
+export interface ImportConsent {
+  email?: boolean;
+  sms?: boolean;
+  source?: string;
+}
+
+export interface ImportConsentCounts {
+  emailOptedIn: number;
+  emailOptedOut: number;
+  smsOptedIn: number;
+  smsOptedOut: number;
+}
+
+export interface BulkConsentResult {
+  dryRun: boolean;
+  matched: number;
+  updated: number;
+  alreadySet: number;
+  skippedOptedOut: number;
+  skippedSuppressed: number;
+  skippedNoAddress: number;
 }
 
 export interface ImportRequest {
@@ -119,11 +149,10 @@ export interface ImportRequest {
   content: string;
   defaultCountry?: string;
   mapping?: CsvMapping;
+  consent?: ImportConsent;
   updateEmptyOnly?: boolean;
   listId?: string;
   newListName?: string;
   tagNames?: string[];
   originalFilename?: string;
-  /** Records SMS consent (OPTED_IN, with this source) on new contacts with a phone. */
-  smsConsentSource?: string;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import { useAsync } from "@/hooks/use-async";
@@ -17,6 +17,7 @@ import type { ContactView } from "@/types/communications";
 import { channelConsent, contactName, contactStatusTone } from "./labels";
 import { ContactForm } from "./ContactForm";
 import { TagManager } from "./TagManager";
+import { BulkConsentDialog } from "./BulkConsentDialog";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const CONSENT_OPTS = [
@@ -39,6 +40,7 @@ export function ContactsView() {
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ContactView | null>(null);
+  const [bulkConsent, setBulkConsent] = useState(false);
 
   const counts = useAsync(() => getContactCounts(), []);
   const lists = useAsync(() => listLists({ activeOnly: true, pageSize: 100 }), []);
@@ -146,9 +148,14 @@ export function ContactsView() {
         title="Contacts"
         description="Your marketing/outreach contact database. Separate from patients and cases."
         actions={
+          <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setBulkConsent(true)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <ShieldCheck className="h-4 w-4" aria-hidden /> Update consent
+          </button>
           <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">
             <Plus className="h-4 w-4" aria-hidden /> New contact
           </button>
+          </div>
         }
       />
 
@@ -248,6 +255,14 @@ export function ContactsView() {
 
       {creating ? <ContactForm onClose={() => setCreating(false)} onSaved={() => { setCreating(false); refreshAll(); }} /> : null}
       {editing ? <ContactForm contact={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refreshAll(); }} /> : null}
+      {bulkConsent ? (
+        <BulkConsentDialog
+          filters={filters}
+          total={data?.total ?? 0}
+          onClose={() => setBulkConsent(false)}
+          onDone={() => { setBulkConsent(false); refreshAll(); }}
+        />
+      ) : null}
       {managingTags ? (
         <TagManager
           tags={tags.data ?? []}

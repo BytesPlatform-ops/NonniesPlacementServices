@@ -8,7 +8,8 @@ import type { RequestUser } from "../../auth/request-user";
 import { SuppressionsService } from "../suppressions/suppressions.service";
 import { isSupportedCountry, toEmailValue, toPhoneValue, type EmailValue, type PhoneValue } from "../normalization";
 import { contactDetailInclude, toContactView, type ContactView } from "../communications.serializer";
-import type { CreateContactDto, ListContactsDto, SetConsentDto, UpdateContactDto } from "../dto/contacts.dto";
+import type { BulkConsentDto, ContactFilterDto, CreateContactDto, ListContactsDto, SetConsentDto, UpdateContactDto } from "../dto/contacts.dto";
+import { consentFields, mayApplyConsent } from "../consent";
 
 export interface ContactCounts {
   totalActive: number;
@@ -16,6 +17,20 @@ export interface ContactCounts {
   smsContacts: number;
   suppressed: number;
 }
+
+/** Outcome of a bulk consent change — every skipped contact is counted by why. */
+export interface BulkConsentResult {
+  dryRun: boolean;
+  matched: number;
+  updated: number;
+  alreadySet: number;
+  skippedOptedOut: number;
+  skippedSuppressed: number;
+  skippedNoAddress: number;
+}
+
+/** Upper bound for one bulk consent change; larger sets are narrowed with filters. */
+export const BULK_CONSENT_MAX = 10_000;
 
 @Injectable()
 export class ContactsService {
@@ -56,38 +71,7 @@ export class ContactsService {
   }
 
   async list(query: ListContactsDto): Promise<PaginatedResult<ContactView>> {
-    const and: Prisma.CommunicationContactWhereInput[] = [];
-    and.push({ status: query.status ?? "ACTIVE" });
-    if (query.hasEmail !== undefined) and.push({ normalizedEmail: query.hasEmail ? { not: null } : null });
-    if (query.hasPhone !== undefined) and.push({ normalizedPhoneE164: query.hasPhone ? { not: null } : null });
-    if (query.emailConsent) and.push({ preferences: { some: { channel: "EMAIL", consentStatus: query.emailConsent } } });
-    if (query.smsConsent) and.push({ preferences: { some: { channel: "SMS", consentStatus: query.smsConsent } } });
-    if (query.listId) and.push({ listMemberships: { some: { listId: query.listId } } });
-    if (query.tagId) and.push({ tagAssignments: { some: { tagId: query.tagId } } });
-    if (query.search) {
-      const s = query.search.trim();
-      and.push({
-        OR: [
-          { firstName: { contains: s, mode: "insensitive" } },
-          { lastName: { contains: s, mode: "insensitive" } },
-          { email: { contains: s, mode: "insensitive" } },
-          { phone: { contains: s, mode: "insensitive" } },
-          { organizationName: { contains: s, mode: "insensitive" } },
-        ],
-      });
-    }
-    if (query.suppressed) {
-      // Bounded suppression filter (foundation-scale): match against active addresses.
-      const rows = await this.prisma.communicationSuppression.findMany({
-        where: { active: true, channel: query.suppressed },
-        select: { normalizedAddress: true },
-        take: 10_000,
-      });
-      const addresses = rows.map((r) => r.normalizedAddress);
-      and.push(query.suppressed === "EMAIL" ? { normalizedEmail: { in: addresses } } : { normalizedPhoneE164: { in: addresses } });
-    }
-
-    const where: Prisma.CommunicationContactWhereInput = { AND: and };
+    const where = await this.buildWhere(query);
     const sortField = query.sort && ["updatedAt", "createdAt", "organizationName"].includes(query.sort) ? query.sort : "updatedAt";
     const order = query.order === "asc" ? "asc" : "desc";
 
@@ -231,9 +215,49 @@ export class ContactsService {
     return this.findOne(id);
   }
 
+  /** The contact filters shared by the list view and bulk actions, so a bulk change hits exactly what is on screen. */
+  private async buildWhere(query: ContactFilterDto): Promise<Prisma.CommunicationContactWhereInput> {
+    const and: Prisma.CommunicationContactWhereInput[] = [];
+
+    and.push({ status: query.status ?? "ACTIVE" });
+    if (query.hasEmail !== undefined) and.push({ normalizedEmail: query.hasEmail ? { not: null } : null });
+    if (query.hasPhone !== undefined) and.push({ normalizedPhoneE164: query.hasPhone ? { not: null } : null });
+    if (query.emailConsent) and.push({ preferences: { some: { channel: "EMAIL", consentStatus: query.emailConsent } } });
+    if (query.smsConsent) and.push({ preferences: { some: { channel: "SMS", consentStatus: query.smsConsent } } });
+    if (query.listId) and.push({ listMemberships: { some: { listId: query.listId } } });
+    if (query.tagId) and.push({ tagAssignments: { some: { tagId: query.tagId } } });
+    if (query.search) {
+      const s = query.search.trim();
+      and.push({
+        OR: [
+          { firstName: { contains: s, mode: "insensitive" } },
+          { lastName: { contains: s, mode: "insensitive" } },
+          { email: { contains: s, mode: "insensitive" } },
+          { phone: { contains: s, mode: "insensitive" } },
+          { organizationName: { contains: s, mode: "insensitive" } },
+        ],
+      });
+    }
+    if (query.suppressed) {
+      // Bounded suppression filter (foundation-scale): match against active addresses.
+      const rows = await this.prisma.communicationSuppression.findMany({
+        where: { active: true, channel: query.suppressed },
+        select: { normalizedAddress: true },
+        take: 10_000,
+      });
+      const addresses = rows.map((r) => r.normalizedAddress);
+      and.push(query.suppressed === "EMAIL" ? { normalizedEmail: { in: addresses } } : { normalizedPhoneE164: { in: addresses } });
+    }
+
+    return { AND: and };
+  }
+
   async setConsent(user: RequestUser, id: string, dto: SetConsentDto): Promise<ContactView> {
     const existing = await this.prisma.communicationContact.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Contact not found");
+    if (dto.consentStatus === "OPTED_IN" && !dto.consentSource?.trim()) {
+      throw new BadRequestException("Say how consent was collected before marking a contact as opted in.");
+    }
     const now = new Date();
     await this.prisma.contactChannelPreference.upsert({
       where: { contactId_channel: { contactId: id, channel: dto.channel } },
@@ -262,6 +286,73 @@ export class ContactsService {
       metadata: { channel: dto.channel, consentStatus: dto.consentStatus },
     });
     return this.findOne(id);
+  }
+
+  /**
+   * Records consent on every contact matching the filters. Opting in fills
+   * UNKNOWN only: an opted-out or suppressed contact is skipped and counted, so
+   * a bulk action can never undo a STOP reply or an unsubscribe. `dryRun`
+   * returns the same counts without writing, for the confirmation step.
+   */
+  async bulkSetConsent(user: RequestUser, dto: BulkConsentDto): Promise<BulkConsentResult> {
+    const source = dto.consentSource?.trim() ?? "";
+    if (dto.consentStatus === "OPTED_IN" && !source) {
+      throw new BadRequestException("Say how consent was collected before marking contacts as opted in.");
+    }
+    const where = await this.buildWhere(dto);
+    const matched = await this.prisma.communicationContact.count({ where });
+    if (matched > BULK_CONSENT_MAX) {
+      throw new BadRequestException(`${matched.toLocaleString()} contacts match. Narrow the filters to ${BULK_CONSENT_MAX.toLocaleString()} or fewer.`);
+    }
+
+    const contacts = await this.prisma.communicationContact.findMany({
+      where,
+      select: {
+        id: true,
+        normalizedEmail: true,
+        normalizedPhoneE164: true,
+        preferences: { where: { channel: dto.channel }, select: { id: true, consentStatus: true } },
+      },
+    });
+    const addressOf = (c: (typeof contacts)[number]) => (dto.channel === "EMAIL" ? c.normalizedEmail : c.normalizedPhoneE164);
+    const addresses = contacts.map(addressOf).filter((a): a is string => !!a);
+    const flags = await this.suppressions.flagsFor(dto.channel === "EMAIL" ? addresses : [], dto.channel === "SMS" ? addresses : []);
+    const suppressed = dto.channel === "EMAIL" ? flags.emails : flags.phones;
+
+    const result: BulkConsentResult = { dryRun: !!dto.dryRun, matched, updated: 0, alreadySet: 0, skippedOptedOut: 0, skippedSuppressed: 0, skippedNoAddress: 0 };
+    const updateIds: string[] = [];
+    const createFor: string[] = [];
+    for (const c of contacts) {
+      const address = addressOf(c);
+      if (!address) { result.skippedNoAddress += 1; continue; }
+      const current = c.preferences[0]?.consentStatus ?? "UNKNOWN";
+      if (current === dto.consentStatus) { result.alreadySet += 1; continue; }
+      if (dto.consentStatus === "OPTED_IN" && suppressed.has(address)) { result.skippedSuppressed += 1; continue; }
+      if (!mayApplyConsent(current, dto.consentStatus)) { result.skippedOptedOut += 1; continue; }
+      if (c.preferences[0]) updateIds.push(c.preferences[0].id);
+      else createFor.push(c.id);
+      result.updated += 1;
+    }
+    if (dto.dryRun || result.updated === 0) return result;
+
+    const now = new Date();
+    const data = { ...consentFields(dto.consentStatus, source || "Bulk update", now), updatedByUserId: user.id };
+    await this.prisma.$transaction([
+      this.prisma.contactChannelPreference.updateMany({ where: { id: { in: updateIds } }, data }),
+      this.prisma.contactChannelPreference.createMany({
+        data: createFor.map((contactId) => ({ contactId, channel: dto.channel, ...data })),
+        skipDuplicates: true,
+      }),
+    ]);
+    await this.audit.record({
+      action: "communication.consent.bulk_updated",
+      entityType: "CommunicationContact",
+      entityId: "bulk",
+      actorUserId: user.id,
+      // Counts and the stated source only — never the contacts themselves.
+      metadata: { channel: dto.channel, consentStatus: dto.consentStatus, consentSource: source || null, ...result },
+    });
+    return result;
   }
 
   /** Reject an update/create that would collide with, or conflict across, existing contacts. */

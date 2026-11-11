@@ -15,11 +15,10 @@ import { ErrorState, LoadingState } from "@/components/ui/states";
 import { assignTag, getContact, setContactConsent, unassignTag } from "@/services/communications.service";
 import { listConversations } from "@/services/communications-inbox.service";
 import type { Channel, ConsentStatus, ContactView } from "@/types/communications";
-import { channelConsent, contactName } from "./labels";
+import { CONSENT_SOURCES, channelConsent, contactName } from "./labels";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
 const CONSENT: ConsentStatus[] = ["UNKNOWN", "OPTED_IN", "OPTED_OUT"];
-const SOURCES = ["Website opt-in", "Existing customer consent", "Written consent", "Imported consent record", "Other"];
 
 export function ContactDetail({ contactId }: { contactId: string }) {
   const { data, loading, error, reload } = useAsync(() => getContact(contactId), [contactId]);
@@ -123,11 +122,11 @@ function ConsentCard({ contactId, channel, hasChannel, consent, source, suppress
               <span className="text-xs font-medium text-slate-600">Consent source</span>
               <select value={src} onChange={(e) => setSrc(e.target.value)} className={`${inputCls} bg-white`}>
                 <option value="">Select…</option>
-                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {CONSENT_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
           ) : null}
-          <button type="button" disabled={busy} onClick={() => void save()} className="mt-3 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+          <button type="button" disabled={busy || (value === "OPTED_IN" && !src)} onClick={() => void save()} className="mt-3 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
             {busy ? "Saving…" : "Update consent"}
           </button>
         </>
