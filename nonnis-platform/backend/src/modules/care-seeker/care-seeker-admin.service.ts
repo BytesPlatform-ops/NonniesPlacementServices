@@ -358,7 +358,7 @@ export class CareSeekerAdminService {
         throw new ServiceUnavailableException(
           error.rateLimited
             ? `${prefix} was not sent: the email provider's sending rate limit was reached. Wait a few minutes, then resend it.`
-            : `${prefix} could not be sent. Please resend it.`,
+            : `${prefix} could not be sent (${error.reason}). Please resend it.`,
         );
       }
       throw error;

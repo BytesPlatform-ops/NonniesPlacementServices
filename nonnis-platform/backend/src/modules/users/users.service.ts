@@ -279,7 +279,7 @@ export class UsersService {
         throw new ServiceUnavailableException(
           error.rateLimited
             ? `${prefix} was not sent: the email provider's sending rate limit was reached. Wait a few minutes and try again.`
-            : `${prefix} could not be sent. Please retry.`,
+            : `${prefix} could not be sent (${error.reason}). Please retry.`,
         );
       }
       throw error;

@@ -152,7 +152,7 @@ export class InvitationService {
     if (!outcome.ok) {
       // Never log the link: it is a sign-in credential.
       this.logger.warn(`Invitation email for user ${userId} was not sent via Brevo: ${outcome.code}`);
-      throw new InvitationEmailError(outcome.message, outcome.classification === "RATE_LIMIT");
+      throw new InvitationEmailError(`Brevo ${outcome.code}: ${outcome.message}`, outcome.classification === "RATE_LIMIT");
     }
     return kind;
   }
