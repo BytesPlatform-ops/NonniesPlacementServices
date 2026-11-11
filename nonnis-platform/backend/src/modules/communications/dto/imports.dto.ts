@@ -44,6 +44,12 @@ export class ImportCommitDto extends ImportPreviewDto {
   @IsOptional() @IsString() @MaxLength(160) newListName?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) tagNames?: string[];
   @IsOptional() @IsString() @MaxLength(260) originalFilename?: string;
+  /**
+   * Set only when the importer confirms every NEW contact with a phone agreed
+   * to receive texts; records SMS consent OPTED_IN with this as the source.
+   * Never applied to existing (duplicate) contacts.
+   */
+  @IsOptional() @IsString() @MaxLength(200) smsConsentSource?: string;
 }
 
 export class CsvInspectDto {

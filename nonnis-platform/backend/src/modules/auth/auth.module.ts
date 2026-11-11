@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { BrevoEmailTransport } from "../communications/providers/brevo-email-transport";
 import { AuthContextService } from "./auth-context.service";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
@@ -23,6 +24,8 @@ import { TOKEN_VERIFIER } from "./token-verifier";
     AuthContextService,
     AuthService,
     InvitationService,
+    // Invitation emails go out through Brevo when it is configured.
+    BrevoEmailTransport,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],

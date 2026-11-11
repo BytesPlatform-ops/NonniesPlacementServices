@@ -99,7 +99,8 @@ export class ImportsService {
     const newRows = rows.filter((r) => r.status === "NEW");
     const source = SOURCE_MAP[dto.sourceType];
 
-    const createdIds = await this.insertNewContacts(user, newRows, source);
+    const smsConsentSource = dto.smsConsentSource?.trim() || null;
+    const { ids: createdIds, smsConsentRecorded } = await this.insertNewContacts(user, newRows, source, smsConsentSource);
 
     // Optional update-empty-only for existing duplicates.
     if (dto.updateEmptyOnly) {
@@ -142,7 +143,12 @@ export class ImportsService {
       entityId: batch.id,
       actorUserId: user.id,
       // Safe summary only — never the contact list itself.
-      metadata: { sourceType: source, ...counts, imported: createdIds.length },
+      metadata: {
+        sourceType: source,
+        ...counts,
+        imported: createdIds.length,
+        ...(smsConsentSource ? { smsConsentRecorded, smsConsentSource } : {}),
+      },
     });
 
     return { batchId: batch.id, importedCount: createdIds.length, listId, tagIds, ...counts };
@@ -286,8 +292,13 @@ export class ImportsService {
     return { emailToContactId, phoneToContactId };
   }
 
-  private async insertNewContacts(user: RequestUser, newRows: ProcessedRow[], source: CommunicationContactSource): Promise<string[]> {
-    if (newRows.length === 0) return [];
+  private async insertNewContacts(
+    user: RequestUser,
+    newRows: ProcessedRow[],
+    source: CommunicationContactSource,
+    smsConsentSource: string | null,
+  ): Promise<{ ids: string[]; smsConsentRecorded: number }> {
+    if (newRows.length === 0) return { ids: [], smsConsentRecorded: 0 };
     for (const chunk of chunked(newRows, CHUNK)) {
       await this.prisma.communicationContact.createMany({
         data: chunk.map((r) => ({
@@ -313,16 +324,24 @@ export class ImportsService {
       select: { id: true, normalizedEmail: true, normalizedPhoneE164: true },
     });
     const ids: string[] = [];
-    const prefData: Array<{ contactId: string; channel: CommunicationChannel }> = [];
+    const now = new Date();
+    const smsConsent = smsConsentSource
+      ? { consentStatus: "OPTED_IN" as const, consentSource: smsConsentSource, consentAt: now, updatedByUserId: user.id }
+      : {};
+    let smsConsentRecorded = 0;
+    const prefData: Array<{ contactId: string; channel: CommunicationChannel } & typeof smsConsent> = [];
     for (const c of created) {
       ids.push(c.id);
       if (c.normalizedEmail) prefData.push({ contactId: c.id, channel: "EMAIL" });
-      if (c.normalizedPhoneE164) prefData.push({ contactId: c.id, channel: "SMS" });
+      if (c.normalizedPhoneE164) {
+        prefData.push({ contactId: c.id, channel: "SMS", ...smsConsent });
+        if (smsConsentSource) smsConsentRecorded++;
+      }
     }
     for (const chunk of chunked(prefData, CHUNK)) {
       await this.prisma.contactChannelPreference.createMany({ data: chunk, skipDuplicates: true });
     }
-    return ids;
+    return { ids, smsConsentRecorded };
   }
 
   private async updateEmptyFields(duplicateRows: ProcessedRow[]): Promise<void> {

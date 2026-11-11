@@ -71,6 +71,31 @@ export class SupabaseService implements TokenVerifier {
   }
 
   /**
+   * Create the sign-in link an invitation (or, for an already registered
+   * address, a password reset) carries — WITHOUT Supabase sending any email, so
+   * the platform can deliver it through its own mail provider.
+   *
+   * The link is the same one Supabase's own email would contain, so it lands on
+   * `/auth/callback` exactly as before. It is a credential: never log it.
+   */
+  async generateAuthLink(
+    kind: "invite" | "recovery",
+    email: string,
+    redirectTo: string,
+  ): Promise<{ actionLink: string; supabaseUserId: string | null }> {
+    const { data, error } = await this.getAdminClient().auth.admin.generateLink({
+      type: kind,
+      email,
+      options: { redirectTo },
+    });
+    const actionLink = data?.properties?.action_link;
+    if (error || !actionLink) {
+      throw new Error(error?.message ?? "Supabase could not create the sign-in link.");
+    }
+    return { actionLink, supabaseUserId: data.user?.id ?? null };
+  }
+
+  /**
    * Email an existing user a link for setting a password.
    *
    * The counterpart to `inviteByEmail` for an address that is already

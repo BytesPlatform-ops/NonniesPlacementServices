@@ -67,3 +67,48 @@ describe("ImportsService.preview (CSV)", () => {
     await expect(svc.preview({ sourceType: "CSV", content: "A,B\n1,2", mapping: { firstName: 0 } } as ImportPreviewDto)).rejects.toThrow(/Map at least/i);
   });
 });
+
+describe("ImportsService.commit (SMS consent)", () => {
+  const user = { id: "staff-1" } as never;
+  const phones = { sourceType: "PASTE", mode: "PHONE", content: "(212) 736-5000", defaultCountry: "US" } as ImportPreviewDto;
+
+  function commitHarness() {
+    const contactFindMany = jest
+      .fn()
+      .mockResolvedValueOnce([]) // duplicate lookup: nothing exists yet
+      .mockResolvedValueOnce([{ id: "c1", normalizedEmail: null, normalizedPhoneE164: "+12127365000" }]);
+    const contactCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prefCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const audit = { record: jest.fn() };
+    const prisma = {
+      communicationContact: { findMany: contactFindMany, createMany: contactCreateMany },
+      contactChannelPreference: { createMany: prefCreateMany },
+      communicationImportBatch: { create: jest.fn().mockResolvedValue({ id: "batch-1" }) },
+    } as unknown as PrismaService;
+    const suppressions = { flagsFor: jest.fn().mockResolvedValue({ emails: new Set(), phones: new Set() }) } as unknown as SuppressionsService;
+    const svc = new ImportsService(prisma, audit as unknown as AuditService, suppressions, {} as ListsService, {} as TagsService);
+    return { svc, prefCreateMany, audit };
+  }
+
+  it("records SMS consent on new contacts when the importer confirms it", async () => {
+    const { svc, prefCreateMany, audit } = commitHarness();
+    await svc.commit(user, { ...phones, smsConsentSource: "Written consent" });
+    expect(prefCreateMany.mock.calls[0][0].data[0]).toMatchObject({
+      contactId: "c1",
+      channel: "SMS",
+      consentStatus: "OPTED_IN",
+      consentSource: "Written consent",
+      updatedByUserId: "staff-1",
+    });
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      actorUserId: "staff-1",
+      metadata: { smsConsentRecorded: 1, smsConsentSource: "Written consent" },
+    });
+  });
+
+  it("leaves SMS consent unknown when it is not confirmed", async () => {
+    const { svc, prefCreateMany } = commitHarness();
+    await svc.commit(user, phones);
+    expect(prefCreateMany.mock.calls[0][0].data[0]).toEqual({ contactId: "c1", channel: "SMS" });
+  });
+});

@@ -124,4 +124,6 @@ export interface ImportRequest {
   newListName?: string;
   tagNames?: string[];
   originalFilename?: string;
+  /** Records SMS consent (OPTED_IN, with this source) on new contacts with a phone. */
+  smsConsentSource?: string;
 }
