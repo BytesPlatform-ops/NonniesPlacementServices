@@ -6,7 +6,10 @@ import { PrismaService } from "../../../database/prisma.service";
 import type { PaginatedResult } from "../../../common/types/api-response";
 import { AuditService } from "../../audit/audit.service";
 import type { RequestUser } from "../../auth/request-user";
-import { EMAIL_TRANSPORT, type EmailTransport } from "../providers/email-transport";
+import { EMAIL_TRANSPORT, type EmailTransport, type OutboundEmailAttachment } from "../providers/email-transport";
+import { AttachmentStorageService } from "./attachment-storage.service";
+import { buildAttachmentPath, validateAttachment } from "./attachment-policy";
+import { designWithAttachments, readTemplateAttachments, validateTemplateAttachments, type TemplateAttachment } from "./template-attachments";
 import { assertMergeTokensAllowed, validateDesign } from "./template-design";
 import { compileDesign, renderForRecipient } from "./email-compiler";
 import { publicSiteUrl, resolveSender } from "./email-config";
@@ -30,7 +33,52 @@ export class EmailTemplateService {
     private readonly audit: AuditService,
     private readonly config: ConfigService<AppConfig, true>,
     @Inject(EMAIL_TRANSPORT) private readonly transport: EmailTransport,
+    private readonly storage: AttachmentStorageService,
   ) {}
+
+  // --- attachments -----------------------------------------------------------
+
+  /** Validates a file and returns a short-lived signed URL the browser uploads it to. */
+  async createAttachmentUploadUrl(fileName: string, mimeType: string, sizeBytes: number): Promise<{ path: string; token: string; signedUrl: string; fileName: string; mimeType: string; sizeBytes: number }> {
+    validateAttachment(fileName, mimeType, sizeBytes);
+    const ticket = await this.storage.createSignedUploadUrl(buildAttachmentPath(mimeType));
+    return { ...ticket, fileName, mimeType, sizeBytes };
+  }
+
+  /**
+   * Validates a submitted attachment list. Files the template did not already
+   * carry must actually have been uploaded, so a template can never point at
+   * nothing and fail every send later.
+   */
+  private async resolveAttachments(input: TemplateAttachment[], existing: TemplateAttachment[] = []): Promise<TemplateAttachment[]> {
+    const validated = validateTemplateAttachments(input);
+    const known = new Set(existing.map((a) => a.path));
+    for (const a of validated) {
+      if (known.has(a.path)) continue;
+      if (!(await this.storage.objectExists(a.path))) throw new BadRequestException(`Attachment "${a.fileName}" was not uploaded.`);
+    }
+    return validated;
+  }
+
+  /** Short-lived signed URL for downloading one of a template's attachments. */
+  async attachmentDownloadUrl(id: string, path: string): Promise<{ url: string; fileName: string }> {
+    const t = await this.prisma.communicationEmailTemplate.findUnique({ where: { id }, select: { designJson: true } });
+    if (!t) throw new NotFoundException("Template not found");
+    const attachment = readTemplateAttachments(t.designJson).find((a) => a.path === path);
+    if (!attachment) throw new NotFoundException("Attachment not found");
+    return { url: await this.storage.createSignedDownloadUrl(attachment.path, attachment.fileName), fileName: attachment.fileName };
+  }
+
+  private async loadAttachmentContent(attachments: TemplateAttachment[]): Promise<OutboundEmailAttachment[] | undefined> {
+    if (attachments.length === 0) return undefined;
+    const out: OutboundEmailAttachment[] = [];
+    for (const a of attachments) {
+      const buf = await this.storage.downloadBuffer(a.path);
+      if (!buf) throw new BadRequestException(`Attachment "${a.fileName}" could not be read from storage.`);
+      out.push({ fileName: a.fileName, mimeType: a.mimeType, contentBase64: buf.toString("base64") });
+    }
+    return out;
+  }
 
   private async names(ids: Array<string | null>): Promise<Map<string, string | null>> {
     const unique = [...new Set(ids.filter((x): x is string => !!x))];
@@ -68,20 +116,21 @@ export class EmailTemplateService {
 
   async create(user: RequestUser, dto: CreateEmailTemplateDto): Promise<EmailTemplateDetail> {
     const { html, text } = this.compile(dto.designJson, dto.preheaderDefault, false);
+    const attachments = await this.resolveAttachments(dto.attachments ?? []);
     const created = await this.prisma.communicationEmailTemplate.create({
       data: {
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
         subjectDefault: dto.subjectDefault?.trim() || null,
         preheaderDefault: dto.preheaderDefault?.trim() || null,
-        designJson: dto.designJson as Prisma.InputJsonValue,
+        designJson: designWithAttachments(dto.designJson, attachments) as Prisma.InputJsonValue,
         compiledHtml: html,
         compiledText: text,
         createdByUserId: user.id,
         updatedByUserId: user.id,
       },
     });
-    await this.audit.record({ action: "communication.email_template.created", entityType: "CommunicationEmailTemplate", entityId: created.id, actorUserId: user.id, metadata: { name: created.name } });
+    await this.audit.record({ action: "communication.email_template.created", entityType: "CommunicationEmailTemplate", entityId: created.id, actorUserId: user.id, metadata: { name: created.name, attachmentCount: attachments.length } });
     return this.findOne(created.id);
   }
 
@@ -97,9 +146,15 @@ export class EmailTemplateService {
     if (dto.designJson !== undefined) {
       const preheader = dto.preheaderDefault ?? existing.preheaderDefault ?? undefined;
       const { html, text } = this.compile(dto.designJson, preheader, false);
-      data.designJson = dto.designJson as Prisma.InputJsonValue;
       data.compiledHtml = html;
       data.compiledText = text;
+    }
+    if (dto.designJson !== undefined || dto.attachments !== undefined) {
+      // The attachment list rides on designJson, so either change rewrites it:
+      // a new design keeps the current files, a new file list keeps the design.
+      const current = readTemplateAttachments(existing.designJson);
+      const attachments = dto.attachments !== undefined ? await this.resolveAttachments(dto.attachments, current) : current;
+      data.designJson = designWithAttachments(dto.designJson ?? existing.designJson, attachments) as Prisma.InputJsonValue;
     }
     await this.prisma.communicationEmailTemplate.update({ where: { id }, data });
     await this.audit.record({ action: "communication.email_template.updated", entityType: "CommunicationEmailTemplate", entityId: id, actorUserId: user.id, metadata: { fields: Object.keys(dto) } });
@@ -158,6 +213,7 @@ export class EmailTemplateService {
     const compiled = { html: t.compiledHtml, text: t.compiledText };
     const sampleUrl = `${publicSiteUrl(this.config)}/unsubscribe/email?token=sample`;
     const rendered = renderForRecipient(compiled, { firstName: dto.sampleValues?.firstName ?? "Alex", lastName: dto.sampleValues?.lastName ?? "Rivera", organizationName: dto.sampleValues?.organizationName ?? "Sample Org", email: dto.toEmail }, sampleUrl);
+    const attachments = await this.loadAttachmentContent(readTemplateAttachments(t.designJson));
     const sender = resolveSender(this.config);
     const outcome = await this.transport.sendEmail({
       internalMessageId: `test-${id}-${Date.now()}`,
@@ -168,6 +224,7 @@ export class EmailTemplateService {
       html: rendered.html,
       text: rendered.text,
       tags: ["nonnis-test"],
+      attachments,
     });
     await this.audit.record({ action: "communication.email_template.test_sent", entityType: "CommunicationEmailTemplate", entityId: id, actorUserId: user.id, metadata: { provider: this.transport.name } });
     const mock = this.transport.name === "mock";

@@ -63,7 +63,7 @@ interface UploadTicket {
   sizeBytes: number;
 }
 
-function putSignedUrl(signedUrl: string, file: File): Promise<void> {
+export function putSignedUrl(signedUrl: string, file: File): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", signedUrl);

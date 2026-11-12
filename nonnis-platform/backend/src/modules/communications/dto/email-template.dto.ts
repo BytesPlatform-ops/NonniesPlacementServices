@@ -1,7 +1,16 @@
-import { IsEmail, IsEnum, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsEmail, IsEnum, IsInt, IsMimeType, IsObject, IsOptional, IsString, MaxLength, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { CommunicationEmailTemplateStatus } from "@prisma/client";
 import { PaginationQueryDto } from "../../../common/dto/pagination.dto";
+import { MAX_ATTACHMENTS } from "../email/attachment-policy";
+
+/** A file already uploaded through the template attachment upload URL. */
+export class TemplateAttachmentDto {
+  @IsString() @MaxLength(300) path!: string;
+  @IsString() @MaxLength(300) fileName!: string;
+  @IsMimeType() mimeType!: string;
+  @Type(() => Number) @IsInt() @Min(1) sizeBytes!: number;
+}
 
 export class CreateEmailTemplateDto {
   @IsString() @MaxLength(160) name!: string;
@@ -10,6 +19,8 @@ export class CreateEmailTemplateDto {
   @IsOptional() @IsString() @MaxLength(300) preheaderDefault?: string;
   /** Block design JSON — deeply validated + compiled server-side. */
   @IsObject() designJson!: Record<string, unknown>;
+  /** Files sent with every email built from this template. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_ATTACHMENTS) @ValidateNested({ each: true }) @Type(() => TemplateAttachmentDto) attachments?: TemplateAttachmentDto[];
 }
 
 export class UpdateEmailTemplateDto {
@@ -19,6 +30,8 @@ export class UpdateEmailTemplateDto {
   @IsOptional() @IsString() @MaxLength(300) preheaderDefault?: string;
   @IsOptional() @IsObject() designJson?: Record<string, unknown>;
   @IsOptional() @IsEnum(CommunicationEmailTemplateStatus) status?: CommunicationEmailTemplateStatus;
+  /** Replaces the template's attachment list; omitted leaves it unchanged. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_ATTACHMENTS) @ValidateNested({ each: true }) @Type(() => TemplateAttachmentDto) attachments?: TemplateAttachmentDto[];
 }
 
 export class SampleValues {

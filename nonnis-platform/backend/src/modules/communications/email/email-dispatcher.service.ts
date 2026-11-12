@@ -14,8 +14,17 @@ import { isTransientInfrastructureError } from "../transient-error";
 import { classifySendResult } from "../dispatch/send-outcome";
 import { DeliveryMaintenanceService } from "../dispatch/delivery-maintenance.service";
 import { AttachmentStorageService } from "./attachment-storage.service";
+import { readTemplateAttachments, type TemplateAttachment } from "./template-attachments";
 
 const LEASE_MS = 5 * 60_000;
+/** How long a campaign's downloaded attachments are reused across recipients. */
+const CAMPAIGN_ATTACHMENT_CACHE_MS = 5 * 60_000;
+
+interface CampaignAttachments {
+  refs: TemplateAttachment[];
+  content: OutboundEmailAttachment[] | undefined;
+  expiresAt: number;
+}
 
 /**
  * Communications email delivery worker (NOT a generic automation engine). One
@@ -30,6 +39,8 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger("EmailDispatcher");
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  /** Per-campaign attachment bytes, so a campaign downloads each file once, not once per recipient. */
+  private readonly campaignAttachments = new Map<string, CampaignAttachments>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -144,6 +155,18 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       token = generateUnsubscribeToken();
       await this.prisma.communicationContact.update({ where: { id: contact.id }, data: { unsubscribeToken: token } });
     }
+    let campaignFiles: CampaignAttachments;
+    try {
+      campaignFiles = await this.loadCampaignAttachments(campaign.id, campaign.templateId);
+    } catch {
+      // Storage or database trouble reading the template's files. Nothing has
+      // been handed to the provider yet, so this is always safe to retry; a
+      // file that is truly gone fails once the retry budget is spent.
+      const action = classifySendResult({ ok: false, classification: "TEMPORARY", code: "ATTACHMENT_UNAVAILABLE", message: "A template attachment could not be retrieved; retrying." }, recipient.attemptCount);
+      await this.applyRecipientFailure(recipient.id, action as Exclude<ReturnType<typeof classifySendResult>, { kind: "sent" }>);
+      return;
+    }
+
     const unsub = unsubscribeUrl(this.config, token);
     const rendered = renderForRecipient({ html: campaign.htmlSnapshot, text: campaign.textSnapshot ?? "" }, { firstName: contact.firstName, lastName: contact.lastName, organizationName: contact.organizationName, email: contact.email }, unsub);
     const sender = resolveSender(this.config);
@@ -167,17 +190,48 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       text: rendered.text,
       headers: { "Message-Id": internetMessageId, "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
       tags: [`campaign:${campaign.id}`],
+      attachments: campaignFiles.content,
     });
 
     const action = classifySendResult(outcome, recipient.attemptCount);
     if (action.kind === "sent") {
-      await this.markRecipientSent(recipient, campaign.id, campaign.subjectSnapshot ?? "", rendered.html, rendered.text, action.providerMessageId, internetMessageId, replyTo, sender.email);
+      await this.markRecipientSent(recipient, campaign.id, campaign.subjectSnapshot ?? "", rendered.html, rendered.text, action.providerMessageId, internetMessageId, replyTo, sender.email, campaignFiles.refs);
       return;
     }
     await this.applyRecipientFailure(recipient.id, action);
   }
 
-  private async markRecipientSent(recipient: CommunicationEmailCampaignRecipient, campaignId: string, subject: string, html: string, text: string, providerMessageId: string, internetMessageId: string, replyTo: string, fromAddress: string): Promise<void> {
+  /**
+   * The files of the campaign's template, read once and reused for a few
+   * minutes. A campaign without a template, or a template without files, sends
+   * none.
+   */
+  private async loadCampaignAttachments(campaignId: string, templateId: string | null): Promise<CampaignAttachments> {
+    const now = Date.now();
+    const cached = this.campaignAttachments.get(campaignId);
+    if (cached && cached.expiresAt > now) return cached;
+    for (const [key, entry] of this.campaignAttachments) if (entry.expiresAt <= now) this.campaignAttachments.delete(key);
+
+    let refs: TemplateAttachment[] = [];
+    if (templateId) {
+      const template = await this.prisma.communicationEmailTemplate.findUnique({ where: { id: templateId }, select: { designJson: true } });
+      refs = readTemplateAttachments(template?.designJson);
+    }
+    let content: OutboundEmailAttachment[] | undefined;
+    if (refs.length > 0) {
+      content = [];
+      for (const a of refs) {
+        const buf = await this.attachments.downloadBuffer(a.path);
+        if (!buf) throw new Error(`attachment ${a.fileName} unavailable`);
+        content.push({ fileName: a.fileName, mimeType: a.mimeType, contentBase64: buf.toString("base64") });
+      }
+    }
+    const entry = { refs, content, expiresAt: now + CAMPAIGN_ATTACHMENT_CACHE_MS };
+    this.campaignAttachments.set(campaignId, entry);
+    return entry;
+  }
+
+  private async markRecipientSent(recipient: CommunicationEmailCampaignRecipient, campaignId: string, subject: string, html: string, text: string, providerMessageId: string, internetMessageId: string, replyTo: string, fromAddress: string, attachments: TemplateAttachment[] = []): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const conversation = await tx.communicationConversation.create({
         data: { contactId: recipient.contactId, channel: "EMAIL", subject, lastMessageAt: new Date(), lastOutboundAt: new Date(), latestDirection: "OUTBOUND", threadToken: recipient.threadToken, originCampaignId: campaignId, previewText: subject },
@@ -185,6 +239,11 @@ export class EmailDispatcherService implements OnModuleInit, OnModuleDestroy {
       const message = await tx.communicationMessage.create({
         data: { conversationId: conversation.id, channel: "EMAIL", direction: "OUTBOUND", status: "SENT", subject, htmlBody: html, textBody: text, messageId: internetMessageId, providerMessageId, fromAddress, toAddress: recipient.emailSnapshot, replyToAddress: replyTo, sentAt: new Date() },
       });
+      if (attachments.length > 0) {
+        // Shown on the sent message in the inbox; the rows point at the same
+        // stored objects the template uses, which are never overwritten.
+        await tx.communicationMessageAttachment.createMany({ data: attachments.map((a) => ({ messageId: message.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, storagePath: a.path })) });
+      }
       await tx.communicationEmailCampaignRecipient.update({
         where: { id: recipient.id },
         data: { deliveryStatus: "SENT", sentAt: new Date(), providerMessageId, attemptCount: { increment: 1 }, claimToken: null, leaseExpiresAt: null, conversationId: conversation.id, messageId: message.id, lastErrorCode: null, lastErrorMessageSafe: null },

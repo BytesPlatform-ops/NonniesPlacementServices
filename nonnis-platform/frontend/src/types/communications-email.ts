@@ -49,7 +49,17 @@ export interface EmailTemplateDetail extends EmailTemplateSummary {
   description: string | null;
   preheaderDefault: string | null;
   designJson: EmailDesign;
+  /** Files sent with every email built from this template. */
+  attachments: TemplateAttachment[];
   createdAt: string;
+}
+
+/** A file attached to an email template (stored privately; never a public link). */
+export interface TemplateAttachment {
+  path: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export type CampaignStatus = "DRAFT" | "READY" | "QUEUED" | "SENDING" | "COMPLETED" | "PARTIALLY_FAILED" | "CANCELLED";

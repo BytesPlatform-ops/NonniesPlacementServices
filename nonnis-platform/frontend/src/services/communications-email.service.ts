@@ -1,4 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
+import { putSignedUrl } from "./communications-inbox.service";
 import type { PaginatedResult } from "@/types/api";
 import type {
   AudienceEvaluation,
@@ -9,6 +10,7 @@ import type {
   EmailStatus,
   EmailTemplateDetail,
   EmailTemplateSummary,
+  TemplateAttachment,
 } from "@/types/communications-email";
 
 function qs(f: Record<string, string | number | undefined>): string {
@@ -24,13 +26,24 @@ export function getEmailStatus(): Promise<EmailStatus> {
 }
 
 // ---- Templates ----
+/** Validate on the backend, then upload the file straight to private storage. */
+export async function uploadTemplateAttachment(file: File): Promise<TemplateAttachment> {
+  const ticket = await apiPost<{ path: string; signedUrl: string; fileName: string; mimeType: string; sizeBytes: number }>(`/api/v1/communications/email/templates/attachments/upload-url`, { fileName: file.name, mimeType: file.type, sizeBytes: file.size });
+  await putSignedUrl(ticket.signedUrl, file);
+  return { path: ticket.path, fileName: ticket.fileName, mimeType: ticket.mimeType, sizeBytes: ticket.sizeBytes };
+}
+/** Open a saved template attachment through a short-lived signed URL. */
+export async function downloadTemplateAttachment(templateId: string, path: string): Promise<void> {
+  const { url } = await apiGet<{ url: string }>(`/api/v1/communications/email/templates/${templateId}/attachments/download?path=${encodeURIComponent(path)}`);
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 export function listTemplates(f: Record<string, string | number | undefined>): Promise<PaginatedResult<EmailTemplateSummary>> {
   return apiGet(`/api/v1/communications/email/templates${qs(f)}`);
 }
 export function getTemplate(id: string): Promise<EmailTemplateDetail> {
   return apiGet(`/api/v1/communications/email/templates/${id}`);
 }
-export function createTemplate(body: { name: string; description?: string; subjectDefault?: string; preheaderDefault?: string; designJson: EmailDesign }): Promise<EmailTemplateDetail> {
+export function createTemplate(body: { name: string; description?: string; subjectDefault?: string; preheaderDefault?: string; designJson: EmailDesign; attachments?: TemplateAttachment[] }): Promise<EmailTemplateDetail> {
   return apiPost(`/api/v1/communications/email/templates`, body);
 }
 export function updateTemplate(id: string, body: Record<string, unknown>): Promise<EmailTemplateDetail> {

@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { PERMISSIONS } from "../../../common/rbac";
 import { CurrentUser, RequirePermissions } from "../../auth/decorators";
 import type { RequestUser } from "../../auth/request-user";
 import { EmailTemplateService } from "./email-template.service";
+import { AttachmentUploadUrlDto } from "../dto/inbox.dto";
 import { CreateEmailTemplateDto, ListEmailTemplatesDto, PreviewDesignDto, TestSendDto, UpdateEmailTemplateDto } from "../dto/email-template.dto";
 
 @Controller("communications/email/templates")
@@ -19,6 +20,19 @@ export class EmailTemplatesController {
   @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
   preview(@Body() dto: PreviewDesignDto) {
     return this.templates.previewDesign(dto);
+  }
+
+  @Post("attachments/upload-url")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_MANAGE)
+  attachmentUploadUrl(@Body() dto: AttachmentUploadUrlDto) {
+    return this.templates.createAttachmentUploadUrl(dto.fileName, dto.mimeType, dto.sizeBytes);
+  }
+
+  @Get(":id/attachments/download")
+  @RequirePermissions(PERMISSIONS.COMMUNICATIONS_READ)
+  attachmentDownload(@Param("id", new ParseUUIDPipe()) id: string, @Query("path") path?: string) {
+    if (!path || path.length > 300) throw new BadRequestException("An attachment path is required.");
+    return this.templates.attachmentDownloadUrl(id, path);
   }
 
   @Get(":id")

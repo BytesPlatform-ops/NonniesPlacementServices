@@ -6,6 +6,7 @@ import type {
   CommunicationEmailTemplate,
   CommunicationEmailTemplateStatus,
 } from "@prisma/client";
+import { designWithoutAttachments, readTemplateAttachments, type TemplateAttachment } from "./template-attachments";
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
@@ -22,6 +23,8 @@ export interface EmailTemplateDetail extends EmailTemplateSummary {
   description: string | null;
   preheaderDefault: string | null;
   designJson: unknown;
+  /** Files sent with every email built from this template. */
+  attachments: TemplateAttachment[];
   createdAt: string;
 }
 
@@ -41,7 +44,8 @@ export function toTemplateDetail(t: CommunicationEmailTemplate, names: Map<strin
     ...toTemplateSummary(t, names),
     description: t.description,
     preheaderDefault: t.preheaderDefault,
-    designJson: t.designJson,
+    designJson: designWithoutAttachments(t.designJson),
+    attachments: readTemplateAttachments(t.designJson),
     createdAt: t.createdAt.toISOString(),
   };
 }

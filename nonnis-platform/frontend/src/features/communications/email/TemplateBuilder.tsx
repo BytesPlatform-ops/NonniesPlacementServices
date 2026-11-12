@@ -1,21 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft, ChevronUp, Eye, Send, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, Eye, Loader2, Paperclip, Send, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
 import { useToast } from "@/providers/toast-provider";
 import { Modal } from "@/components/ui/Modal";
 import { MediaUpload } from "@/features/content/MediaUpload";
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES } from "@/services/media.service";
-import { createTemplate, previewTemplate, testSendTemplate, updateTemplate } from "@/services/communications-email.service";
-import type { Align, Block, EmailDesign, EmailTemplateDetail, SimpleBlock } from "@/types/communications-email";
+import { createTemplate, downloadTemplateAttachment, previewTemplate, testSendTemplate, updateTemplate, uploadTemplateAttachment } from "@/services/communications-email.service";
+import type { Align, Block, EmailDesign, EmailTemplateDetail, SimpleBlock, TemplateAttachment } from "@/types/communications-email";
+import { formatBytes } from "../inbox/inbox-format";
 import { EMAIL_FONTS, MERGE_FIELDS } from "@/types/communications-email";
 import { BLOCK_LABEL, blockId, defaultDesign, newBlock, type BlockType } from "./design-helpers";
 
 const inputCls = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600";
+const ATTACHMENT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.webp";
+const MAX_ATTACHMENTS = 5;
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const PALETTE: BlockType[] = ["text", "heading", "image", "button", "columns", "divider", "spacer"];
 
 export function TemplateBuilder({ template }: { template?: EmailTemplateDetail }) {
@@ -32,6 +36,9 @@ export function TemplateBuilder({ template }: { template?: EmailTemplateDetail }
   const [preview, setPreview] = useState<{ html: string } | null>(null);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [testOpen, setTestOpen] = useState(false);
+  const [attachments, setAttachments] = useState<TemplateAttachment[]>(template?.attachments ?? []);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const touch = () => setDirty(true);
   const selected = design.blocks.find((b) => b.id === selectedId) ?? null;
@@ -52,10 +59,34 @@ export function TemplateBuilder({ template }: { template?: EmailTemplateDetail }
   const remove = (id: string) => { setBlocks(design.blocks.filter((b) => b.id !== id)); if (selectedId === id) setSelectedId(null); };
   const setSettings = (patch: Partial<EmailDesign["settings"]>) => { setDesign((d) => ({ ...d, settings: { ...d.settings, ...patch } })); touch(); };
 
+  const onPickFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (room <= 0) { toast.error(`Up to ${MAX_ATTACHMENTS} attachments per template.`); return; }
+    setUploading(true);
+    try {
+      let total = attachments.reduce((sum, a) => sum + a.sizeBytes, 0);
+      for (const file of Array.from(files).slice(0, room)) {
+        if (total + file.size > MAX_TOTAL_BYTES) { toast.error("Attachments can total at most 20 MB."); break; }
+        const ref = await uploadTemplateAttachment(file);
+        total += ref.sizeBytes;
+        setAttachments((prev) => [...prev, ref]);
+        touch();
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Attachment upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  const removeAttachment = (path: string) => { setAttachments((prev) => prev.filter((a) => a.path !== path)); touch(); };
+  const savedPaths = new Set(template?.attachments.map((a) => a.path) ?? []);
+
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const body = { name: name.trim(), subjectDefault: subject.trim() || undefined, preheaderDefault: preheader.trim() || undefined, designJson: design };
+      const body = { name: name.trim(), subjectDefault: subject.trim() || undefined, preheaderDefault: preheader.trim() || undefined, designJson: design, attachments };
       if (template) { await updateTemplate(template.id, body); toast.success("Template saved"); setDirty(false); }
       else { const created = await createTemplate(body); toast.success("Template created"); router.replace(`/communications/email-templates/${created.id}`); }
     } catch (e) { setError(e instanceof ApiError ? e.message : "Could not save the template."); }
@@ -122,6 +153,35 @@ export function TemplateBuilder({ template }: { template?: EmailTemplateDetail }
             setBlocks(design.blocks.map((b) => (b.id === selected.id ? { ...selected, columns: cols } : b)));
           }} /> : <SettingsPanel design={design} onChange={setSettings} subject={subject} setSubject={(v) => { setSubject(v); touch(); }} preheader={preheader} setPreheader={(v) => { setPreheader(v); touch(); }} />}
         </div>
+      </div>
+
+      {/* Attachments */}
+      <div className="rounded-lg border border-sage bg-ivory p-4 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-umber">Attachments</p>
+            <p className="text-xs text-slate-500">Sent with every email from this template, including test emails and campaigns. Up to {MAX_ATTACHMENTS} files, 10 MB each, 20 MB total. PDF, Word, Excel, text, CSV or images.</p>
+          </div>
+          <button type="button" disabled={uploading || attachments.length >= MAX_ATTACHMENTS} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Paperclip className="h-4 w-4" aria-hidden />} {uploading ? "Uploading…" : "Attach file"}
+          </button>
+          <input ref={fileRef} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => void onPickFiles(e.target.files)} />
+        </div>
+        {attachments.length > 0 ? (
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {attachments.map((a) => (
+              <li key={a.path} className="inline-flex items-center gap-1.5 rounded-md border border-sage bg-white px-2 py-1 text-xs text-slate-700">
+                <Paperclip className="h-3.5 w-3.5" aria-hidden />
+                {template && savedPaths.has(a.path) ? (
+                  <button type="button" onClick={() => void downloadTemplateAttachment(template.id, a.path).catch(() => toast.error("Could not open the file."))} className="max-w-[14rem] truncate hover:underline">{a.fileName}</button>
+                ) : <span className="max-w-[14rem] truncate">{a.fileName}</span>}
+                <span className="text-slate-400">{formatBytes(a.sizeBytes)}</span>
+                <button type="button" onClick={() => removeAttachment(a.path)} className="text-slate-400 hover:text-rose-600" aria-label={`Remove ${a.fileName}`}><X className="h-3.5 w-3.5" aria-hidden /></button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="mt-2 text-xs text-slate-400">No files attached.</p>}
+        {attachments.length > 0 && dirty ? <p className="mt-2 text-xs text-amber-700">Save the template so new or removed files apply to test emails and campaigns.</p> : null}
       </div>
 
       {preview ? (
